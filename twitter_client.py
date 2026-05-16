@@ -346,7 +346,7 @@ class TwitterClient:
                 if best_url:
                     item["video_url"] = best_url
             q_media.append(item)
-        return {
+        result = {
             "id": quoted_raw.get("rest_id", ""),
             "text": q_legacy.get("full_text", ""),
             "user": {
@@ -356,6 +356,18 @@ class TwitterClient:
             },
             "media": q_media,
         }
+        # Extract article metadata from quoted tweet
+        q_art = quoted_raw.get("article", {})
+        q_art_result = q_art.get("article_results", {}).get("result", {}) if q_art else {}
+        if q_art_result:
+            q_cover = q_art_result.get("cover_media", {}).get("media_info", {})
+            result["article"] = {
+                "title": q_art_result.get("title", ""),
+                "preview_text": q_art_result.get("preview_text", ""),
+                "cover_url": q_cover.get("original_img_url", ""),
+                "rest_id": q_art_result.get("rest_id", ""),
+            }
+        return result
 
     async def search_user(self, query: str):
         await self.ensure_ready()

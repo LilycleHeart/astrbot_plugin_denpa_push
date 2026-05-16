@@ -392,6 +392,17 @@ class TwitterMonitorPlugin(Star):
             except Exception as e:
                 logger.warning(f"Failed to fetch quoted tweet data: {e}")
 
+        # 如果引推也有文章（NoteTweet），获取引推文章全文
+        q_data = data.get("quoted_tweet", {})
+        q_article = q_data.get("article", {}) if q_data else {}
+        if q_article and q_article.get("rest_id") and q_data.get("id"):
+            try:
+                q_art_full = await self.twitter.get_full_article_text(q_data["id"])
+                if q_art_full:
+                    q_article["full_text"] = q_art_full
+            except Exception as e:
+                logger.warning(f"Quoted article fetch failed: {e}")
+
         translated_text = data.get("text", "")
         try:
             translated_text = await self._translate_text(data)
@@ -407,6 +418,12 @@ class TwitterMonitorPlugin(Star):
         q_user_name = quoted_user.get("name", "")
         q_screen_name = quoted_user.get("screen_name", "")
         q_avatar = quoted_user.get("avatar_url", "")
+
+        # 引用推文的文章数据
+        q_article_data = quoted.get("article", {}) if quoted else {}
+        q_article_title = q_article_data.get("title", "") if q_article_data else ""
+        q_article_text = q_article_data.get("full_text", "") if q_article_data else ""
+        q_article_preview = q_article_data.get("preview_text", "") if q_article_data else ""
 
         image_translations = None
         images, gifs, videos = TwitterClient.extract_tweet_media(data)
@@ -475,6 +492,10 @@ class TwitterMonitorPlugin(Star):
             "quoted_text": quoted.get("text", ""),
             "quoted_thumbnail_urls": quoted_thumbnails,
             "has_quoted_tweet": bool(quoted and quoted.get("text")),
+            "q_article_title": q_article_title,
+            "q_article_text": q_article_text,
+            "q_article_preview": q_article_preview,
+            "has_q_article": bool(q_article_title or q_article_text),
         }
 
         card_img_url = await self._render_card(template, card_data)

@@ -70,6 +70,12 @@ body{
 .quote-name{font-size:14px;font-weight:600;color:#1C1B1F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .quote-handle{font-size:12px;color:#79747E}
 .quote-text{font-size:14px;line-height:1.5;color:#1C1B1F;white-space:pre-wrap;overflow-wrap:break-word}
+.q-article-card{border:1px solid #DED7E6;border-radius:8px;background:#FFFFFF;overflow:hidden}
+.q-article-title{font-weight:600;font-size:13px;color:#1C1B1F;padding:8px 10px 0;line-height:1.4}
+.q-article-body{font-size:12px;color:#625B71;padding:4px 10px 8px;line-height:1.5}
+.q-article-body p{margin-bottom:4px}
+.q-article-body ul{padding-left:16px;margin-bottom:4px}
+.q-article-body li{margin-bottom:2px}
 .quote-media{display:flex;gap:4px;flex-wrap:wrap}
 .quote-media img{width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #E7E0EC}
 </style>
@@ -127,6 +133,16 @@ body{
         </div>
       </div>
       <div class="quote-text">{{ quoted_text }}</div>
+      {% if has_q_article %}
+      <div class="q-article-card">
+        <div class="q-article-title">{{ q_article_title }}</div>
+        {% if q_article_text %}
+        <div class="q-article-body">{{ q_article_text | safe }}</div>
+        {% elif q_article_preview %}
+        <div class="q-article-body">{{ q_article_preview }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
       {% if quoted_thumbnail_urls %}
       <div class="quote-media">
         {% for url in quoted_thumbnail_urls %}
