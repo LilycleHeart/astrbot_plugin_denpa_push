@@ -1,0 +1,6 @@
+name: astrbot_plugin_twitter_monitor
+display_name: Twitter Monitor
+desc: 关注并推送指定 Twitter/X 账号的最新推文，支持翻译、图片 OCR 和 MD3 卡片渲染。
+version: v1.0.0
+author: astrbot_user
+repo: https://github.com/LilycleHeart/astrbot_plugin_twitter_monitor

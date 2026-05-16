@@ -1,0 +1,43 @@
+{
+  "twitter_auth_token": {
+    "description": "Twitter/X 的 auth_token",
+    "type": "string",
+    "hint": "浏览器 DevTools → Application → Cookies → x.com → 复制 auth_token 的值"
+  },
+  "twitter_ct0": {
+    "description": "Twitter/X 的 ct0",
+    "type": "string",
+    "hint": "浏览器 DevTools → Application → Cookies → x.com → 复制 ct0 的值"
+  },
+  "poll_interval": {
+    "description": "轮询间隔（分钟）",
+    "type": "int",
+    "default": 5,
+    "hint": "每隔多少分钟检查一次新推文"
+  },
+  "text_translate_provider": {
+    "description": "文字翻译使用的 AI 提供商",
+    "_special": "select_provider",
+    "type": "string",
+    "hint": "选择用于翻译推文文字的 AI 模型"
+  },
+  "image_translate_provider": {
+    "description": "图片翻译使用的 AI 提供商",
+    "_special": "select_provider",
+    "type": "string",
+    "hint": "选择用于图片 OCR/翻译的 AI 模型（需要多模态能力）"
+  },
+  "image_translate_mode": {
+    "description": "图片翻译模式",
+    "type": "string",
+    "options": ["multimodal", "text_extraction"],
+    "default": "multimodal",
+    "hint": "multimodal=多模态直接翻译; text_extraction=提取文字后再翻译（需安装 easyocr）"
+  },
+  "translation_language": {
+    "description": "翻译目标语言",
+    "type": "string",
+    "default": "中文",
+    "hint": "例如: 中文、English、日本語"
+  }
+}
