@@ -389,6 +389,12 @@ class TwitterMonitorPlugin(Star):
 
         image_translations = None
         images, gifs, videos = TwitterClient.extract_tweet_media(data)
+        # 合并引用推文的媒体到待推送列表
+        if quoted:
+            q_imgs, q_gifs, q_vids = TwitterClient.extract_tweet_media(quoted)
+            images.extend(q_imgs)
+            gifs.extend(q_gifs)
+            videos.extend(q_vids)
         # 翻译时跳过链接预览图：推文全文只有链接时，图片都是预览图
         raw_text = data.get("text", "").strip()
         urls = data.get("urls", [])
