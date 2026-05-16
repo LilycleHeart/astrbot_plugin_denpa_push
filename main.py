@@ -31,8 +31,6 @@ class TwitterMonitorPlugin(Star):
         self.monitor_task = None
         self._running = False
         self._data_path = self._get_data_path()
-        self._playwright = None
-        self._browser = None
 
     def _get_data_path(self):
         root = getattr(self.context, "astrbot_root", os.getcwd())
@@ -48,13 +46,6 @@ class TwitterMonitorPlugin(Star):
             )
         self._apply_twitter_credentials()
         self._load_data()
-        try:
-            from playwright.async_api import async_playwright
-            self._playwright = await async_playwright().__aenter__()
-            self._browser = await self._playwright.chromium.launch(headless=True)
-            logger.info("Playwright browser started")
-        except Exception as e:
-            logger.warning(f"Playwright browser init failed: {e}")
         auto_monitor = True
         if self.tracked_users and auto_monitor:
             self._start_monitor()
@@ -71,18 +62,6 @@ class TwitterMonitorPlugin(Star):
         if self.monitor_task:
             self.monitor_task.cancel()
             self.monitor_task = None
-        if self._browser:
-            try:
-                await self._browser.close()
-            except Exception:
-                pass
-            self._browser = None
-        if self._playwright:
-            try:
-                await self._playwright.__aexit__(None, None, None)
-            except Exception:
-                pass
-            self._playwright = None
         self._save_data()
 
     def _load_data(self):
@@ -491,30 +470,29 @@ class TwitterMonitorPlugin(Star):
         }
 
     async def _render_card(self, template: str, card_data: dict) -> str:
-        """本地 Playwright 渲染 HTML → PNG，复用持久浏览器实例。"""
+        """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
         import tempfile, os as _os
-        from jinja2 import Template
+        from playwright.async_api import async_playwright
 
         html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.html")
         png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.png")
         try:
+            from jinja2 import Template
             html = Template(template).render(card_data)
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html)
-
-            browser = self._browser
-            if not browser:
-                raise RuntimeError("Playwright browser not available, fallback to remote render")
-            ctx = await browser.new_context(device_scale_factor=2)
-            page = await ctx.new_page()
-            await page.set_viewport_size({"width": 620, "height": 100})
-            await page.goto(f"file:///{html_path.replace(chr(92), '/')}", wait_until="domcontentloaded")
-            await page.wait_for_timeout(2000)
-            h = await page.evaluate("document.body.scrollHeight")
-            await page.set_viewport_size({"width": 620, "height": h})
-            await page.wait_for_timeout(500)
-            await page.screenshot(path=png_path, full_page=True)
-            await ctx.close()
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(headless=True)
+                ctx = await browser.new_context(device_scale_factor=2)
+                page = await ctx.new_page()
+                await page.set_viewport_size({"width": 620, "height": 100})
+                await page.goto(f"file:///{html_path.replace(chr(92), '/')}", wait_until="networkidle")
+                await page.wait_for_timeout(2000)
+                h = await page.evaluate("document.body.scrollHeight")
+                await page.set_viewport_size({"width": 620, "height": h})
+                await page.wait_for_timeout(500)
+                await page.screenshot(path=png_path, full_page=True)
+                await browser.close()
             return png_path
         except Exception as e:
             logger.error(f"Local card render failed: {e}")
@@ -538,8 +516,9 @@ class TwitterMonitorPlugin(Star):
 
         info = await self._build_card_data(data)
 
-        async def _push_one(session_umo):
+        for session_umo in target_sessions:
             try:
+                # 主消息：卡片 + 推主注明
                 chain = MessageChain()
                 if info["card_img_url"]:
                     url = info["card_img_url"]
@@ -554,8 +533,10 @@ class TwitterMonitorPlugin(Star):
                     chain.message(f"📢 @{info['screen_name']} 新推文")
 
                 if chain.chain:
+                    logger.info(f"[Push] Card to {session_umo} ({len(chain.chain)} components)")
                     await self.context.send_message(session_umo, chain)
 
+                # 图片合并到一条群合并转发消息
                 from astrbot.api.message_components import Node, Plain
                 img_contents = []
                 for img in info.get("images", []):
@@ -570,24 +551,29 @@ class TwitterMonitorPlugin(Star):
                     )
                     fwd_chain = MessageChain()
                     fwd_chain.chain.append(node)
+                    logger.info(f"[Push] Images forward to {session_umo}")
                     await self.context.send_message(session_umo, fwd_chain)
+                    await asyncio.sleep(0.5)
 
+                # GIF/视频直接发送
                 for gif in info.get("gifs", []):
                     gurl = gif.get("video_url", gif.get("media_url", ""))
                     if gurl:
                         gif_chain = MessageChain()
                         gif_chain.chain.append(CompVideo.fromURL(gurl))
+                        logger.info(f"[Push] GIF to {session_umo}")
                         await self.context.send_message(session_umo, gif_chain)
+                        await asyncio.sleep(0.5)
                 for vid in info.get("videos", []):
                     vurl = vid.get("video_url", vid.get("media_url", ""))
                     if vurl:
                         vid_chain = MessageChain()
                         vid_chain.chain.append(CompVideo.fromURL(vurl))
+                        logger.info(f"[Push] Video to {session_umo}")
                         await self.context.send_message(session_umo, vid_chain)
+                        await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"[Push] Failed to push to {session_umo}: {e}")
-
-        await asyncio.gather(*[_push_one(s) for s in target_sessions])
 
     async def _get_provider_id(self) -> str:
         pid = self.config.get("text_translate_provider", "")
