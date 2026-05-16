@@ -41,11 +41,13 @@ class TwitterMonitorPlugin(Star):
     async def initialize(self):
         try:
             import twikit
+            try:
+                from . import patch_twikit
+                patch_twikit.main()
+            except Exception:
+                pass
         except ImportError:
-            logger.error(
-                "twikit 未安装。请手动安装: "
-                "D:\\AstrBot\\backend\\python\\python.exe -m pip install twikit==2.1.3"
-            )
+            logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
         self._load_data()
         try:
