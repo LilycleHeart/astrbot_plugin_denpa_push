@@ -362,6 +362,15 @@ class TwitterMonitorPlugin(Star):
             except Exception as e:
                 logger.warning(f"Full article fetch failed: {e}")
 
+        # 如果推文是引用推文但未提取到数据（twikit get_tweet_by_id 不返回 quoted_status_result），单独获取
+        if data.get("is_quote") and not data.get("quoted_tweet"):
+            try:
+                q = await self.twitter.fetch_quoted_tweet_data(data["id"])
+                if q:
+                    data["quoted_tweet"] = q
+            except Exception as e:
+                logger.warning(f"Failed to fetch quoted tweet data: {e}")
+
         translated_text = data.get("text", "")
         try:
             translated_text = await self._translate_text(data)

@@ -234,10 +234,11 @@ class TwitterClient:
                 "rest_id": art_result.get("rest_id", ""),
             }
 
+        # Extract quoted tweet if present in the raw data (available from TweetResultByRestId but not from twikit's get_tweet_by_id)
         quoted_raw = raw.get("quoted_status_result", {}).get("result", {})
         if quoted_raw:
             q_legacy = quoted_raw.get("legacy", {})
-            q_core = quoted_raw.get("core", {}).get("user_result", {}).get("result", {}).get("legacy", {})
+            q_core = quoted_raw.get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {})
             q_media = []
             for m in q_legacy.get("extended_entities", {}).get("media", []):
                 mtype = m.get("type", "unknown")
@@ -276,6 +277,85 @@ class TwitterClient:
         gifs = [m for m in media if m.get("type") == "animated_gif"]
         videos = [m for m in media if m.get("type") == "video"]
         return images, gifs, videos
+
+    async def fetch_quoted_tweet_data(self, tweet_id: str) -> dict:
+        """Fetch quoted tweet data via TweetResultByRestId which includes quoted_status_result."""
+        await self.ensure_ready()
+        import httpx, json as _json
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
+            "X-Csrf-Token": self._ct0,
+            "Content-Type": "application/json",
+        }
+        cookies = {"auth_token": self._auth_token, "ct0": self._ct0}
+        variables = _json.dumps({
+            "tweetId": tweet_id, "withCommunity": False,
+            "includePromotedContent": False, "withVoice": False,
+        })
+        features = _json.dumps({
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "communities_web_enable_tweet_community_results_fetch": True,
+            "c9s_tweet_anatomy_moderator_badge_enabled": True,
+            "articles_preview_enabled": True,
+            "responsive_web_twitter_article_tweet_consumption_enabled": True,
+            "longform_notetweets_consumption_enabled": True,
+            "longform_notetweets_rich_text_read_enabled": True,
+            "longform_notetweets_inline_media_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+        })
+        field_toggles = _json.dumps({
+            "withArticleRichContentState": True, "withArticlePlainText": True, "withGrokAnalyze": False,
+        })
+        url = "https://x.com/i/api/graphql/Xl5pC_lBk_gcO2ItU39DQw/TweetResultByRestId"
+        params = {"variables": variables, "features": features, "fieldToggles": field_toggles}
+        async with httpx.AsyncClient(cookies=cookies, headers=headers, timeout=30) as c:
+            r = await c.get(url, params=params)
+            if r.status_code != 200:
+                return {}
+            result = r.json().get("data", {}).get("tweetResult", {}).get("result", {})
+            if not result:
+                return {}
+            # Parse quoted tweet directly from the raw result
+            return TwitterClient._parse_quoted_from_raw_result(result)
+
+    @staticmethod
+    def _parse_quoted_from_raw_result(result: dict) -> dict:
+        """Extract quoted_tweet dict from a raw TweetResultByRestId result."""
+        quoted_raw = result.get("quoted_status_result", {}).get("result", {})
+        if not quoted_raw:
+            return {}
+        q_legacy = quoted_raw.get("legacy", {})
+        q_core = quoted_raw.get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {})
+        q_media = []
+        for m in q_legacy.get("extended_entities", {}).get("media", []):
+            mtype = m.get("type", "unknown")
+            poster = m.get("media_url_https", "")
+            item = {"type": mtype, "media_url": poster, "url": m.get("url", ""), "expanded_url": m.get("expanded_url", "")}
+            if mtype in ("video", "animated_gif"):
+                vi = m.get("video_info", {})
+                variants = vi.get("variants", [])
+                best_url, best_bitrate = "", -1
+                for v in variants:
+                    if v.get("content_type") == "video/mp4":
+                        br = v.get("bitrate", 0)
+                        if br > best_bitrate:
+                            best_bitrate = br
+                            best_url = v.get("url", "")
+                if best_url:
+                    item["video_url"] = best_url
+            q_media.append(item)
+        return {
+            "id": quoted_raw.get("rest_id", ""),
+            "text": q_legacy.get("full_text", ""),
+            "user": {
+                "name": q_core.get("name", ""),
+                "screen_name": q_core.get("screen_name", ""),
+                "avatar_url": q_core.get("profile_image_url_https", ""),
+            },
+            "media": q_media,
+        }
 
     async def search_user(self, query: str):
         await self.ensure_ready()
