@@ -166,6 +166,25 @@ class TwitterClient:
 
     @staticmethod
     def extract_tweet_data(tweet) -> dict:
+        import traceback as _tb
+        try:
+            import twikit as _tw
+            logger.debug(f"[DEBUG] twikit version: {getattr(_tw, '__version__', 'unknown')}")
+        except Exception:
+            pass
+        logger.debug(f"[DEBUG] tweet type: {type(tweet).__name__}, has _data: {hasattr(tweet, '_data')}")
+        if hasattr(tweet, "_data"):
+            _raw = tweet._data
+            logger.debug(f"[DEBUG] _data type: {type(_raw).__name__}, keys: {list(_raw.keys()) if isinstance(_raw, dict) else 'N/A'}")
+            if isinstance(_raw, dict):
+                _lk = _raw.get("legacy", {})
+                logger.debug(f"[DEBUG] legacy keys: {list(_lk.keys()) if isinstance(_lk, dict) else 'N/A'}")
+                if isinstance(_lk, dict):
+                    _ek = _lk.get("entities", {})
+                    logger.debug(f"[DEBUG] entities keys: {list(_ek.keys()) if isinstance(_ek, dict) else 'N/A'}")
+                    if isinstance(_ek, dict):
+                        logger.debug(f"[DEBUG] urls in entities: 'urls' in entities={type(_ek.get('urls'))}")
+
         data = {
             "id": tweet.id,
             "text": tweet.text or "",
@@ -202,7 +221,6 @@ class TwitterClient:
                         "url": m.get("url", ""),
                         "expanded_url": m.get("expanded_url", ""),
                     }
-                    # Extract actual video URL for videos/GIFs
                     if mtype in ("video", "animated_gif"):
                         vi = m.get("video_info", {})
                         variants = vi.get("variants", [])
@@ -219,10 +237,19 @@ class TwitterClient:
                     data["media"].append(item)
 
         raw = getattr(tweet, "_data", {})
-        # 从原始数据获取 urls，避免 property 内部 KeyError
-        raw_legacy = raw.get("legacy", {})
-        raw_entities = raw_legacy.get("entities", {})
-        data["urls"] = raw_entities.get("urls", [])
+        try:
+            _rl = raw.get("legacy") if isinstance(raw, dict) else {}
+            logger.debug(f"[DEBUG] legacy type: {type(_rl).__name__}, keys: {list(_rl.keys()) if isinstance(_rl, dict) else 'N/A'}")
+            _re = _rl.get("entities", {}) if isinstance(_rl, dict) else {}
+            logger.debug(f"[DEBUG] entities type: {type(_re).__name__}, keys: {list(_re.keys()) if isinstance(_re, dict) else 'N/A'}")
+            _ru = _re.get("urls", []) if isinstance(_re, dict) else []
+            logger.debug(f"[DEBUG] urls type: {type(_ru).__name__}, len: {len(_ru)}")
+            data["urls"] = _ru
+        except Exception as _e:
+            logger.error(f"[DEBUG] url extraction failed: {_e}")
+            import traceback
+            logger.error(f"[DEBUG] url extraction traceback: {traceback.format_exc()}")
+            data["urls"] = []
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {})
