@@ -287,9 +287,7 @@ class TwitterMonitorPlugin(Star):
                     yield event.chain_result([CompVideo.fromURL(vurl)])
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
-            import traceback
-            logger.error(f"Failed traceback: {traceback.format_exc()}")
-            yield event.plain_result(f"推送失败: {str(e)[:200]}")
+            yield event.plain_result(f"推送失败: {str(e)[:100]}")
 
     async def _cmd_monitor(self, event: AstrMessageEvent):
         umo = event.unified_msg_origin
