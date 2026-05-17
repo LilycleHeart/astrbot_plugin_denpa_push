@@ -188,7 +188,7 @@ class TwitterClient:
             "lang": getattr(tweet, "lang", ""),
             "media": [],
             "article": None,
-            "urls": getattr(tweet, "urls", []),
+            "urls": [],
         }
 
         if hasattr(tweet, "media") and tweet.media:
@@ -219,6 +219,10 @@ class TwitterClient:
                     data["media"].append(item)
 
         raw = getattr(tweet, "_data", {})
+        # 从原始数据获取 urls，避免 property 内部 KeyError
+        raw_legacy = raw.get("legacy", {})
+        raw_entities = raw_legacy.get("entities", {})
+        data["urls"] = raw_entities.get("urls", [])
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {})
