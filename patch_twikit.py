@@ -74,10 +74,11 @@ def main():
 
     patch_file(tweet_py, [
         ("['withheld_in_countries']", ".get('withheld_in_countries', [])"),
-        (".get('urls')", ".get('urls', [])"),
-        ("legacy['entities'].get('urls')", "legacy['entities'].get('urls', [])"),
-        ("legacy['entities'].get('media')", "legacy['entities'].get('media', [])"),
     ])
+    # 下方 tweet.py 修改项需手动编辑：
+    #   entity_set.get('urls') → entity_set.get('urls', [])
+    #   legacy['entities'].get('urls') → legacy['entities'].get('urls', [])
+    #   legacy['entities'].get('media') → legacy['entities'].get('media', [])
 
     patch_file(client_py, [
         (
