@@ -509,6 +509,7 @@ class TwitterMonitorPlugin(Star):
             "q_article_text": q_article_text,
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
+            "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
 
         card_img_url = await self._render_card(template, card_data)
