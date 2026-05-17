@@ -4,7 +4,6 @@ twikit 兼容性补丁。
 在 AstrBot 的 Python 环境下运行此脚本以修补 twikit 中已知的 KeyError bug。
 用法: python patch_twikit.py
 """
-import re
 import sys
 import os
 
@@ -26,20 +25,37 @@ def patch_file(filepath: str, replacements: list):
     return True
 
 
-def main():
-    site_packages = None
+def _find_twikit_dir():
+    # Method 1: find twikit via import
+    try:
+        import twikit
+        d = os.path.dirname(twikit.__file__)
+        if os.path.isdir(d):
+            return d
+    except Exception:
+        pass
+    # Method 2: search sys.path for site-packages
     for p in sys.path:
         if p.endswith("site-packages"):
-            site_packages = p
-            break
-    if not site_packages:
-        print("Cannot find site-packages directory")
-        return
+            d = os.path.join(p, "twikit")
+            if os.path.isdir(d):
+                return d
+    # Method 3: site.getsitepackages
+    try:
+        import site
+        for sp in site.getsitepackages():
+            d = os.path.join(sp, "twikit")
+            if os.path.isdir(d):
+                return d
+    except Exception:
+        pass
+    return None
 
-    twikit_dir = os.path.join(site_packages, "twikit")
-    if not os.path.exists(twikit_dir):
-        print(f"twikit not found at {twikit_dir}")
-        print("Please install twikit first: pip install twikit>=2.1.3")
+
+def main():
+    twikit_dir = _find_twikit_dir()
+    if not twikit_dir:
+        print("Cannot find twikit directory")
         return
 
     print(f"Patching twikit at: {twikit_dir}")
@@ -65,7 +81,7 @@ def main():
         ),
     ])
 
-    print("\nPatch complete. Try running: python -c \"from twikit import Client; print('twikit OK')\"")
+    print("\nPatch complete.")
 
 
 if __name__ == "__main__":
