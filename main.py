@@ -285,7 +285,7 @@ class TwitterMonitorPlugin(Star):
             # 1. 卡片 PNG 直接发送
             if info["card_img_url"]:
                 yield event.image_result(info["card_img_url"])
-            yield event.plain_result(f"📢 @{info['screen_name']}")
+            yield event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
 
             # 2. 图片合并到一条群合并转发消息
             from astrbot.api.message_components import Node, Plain
@@ -509,7 +509,6 @@ class TwitterMonitorPlugin(Star):
             "q_article_text": q_article_text,
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
-            "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
 
         card_img_url = await self._render_card(template, card_data)
@@ -523,6 +522,7 @@ class TwitterMonitorPlugin(Star):
             "screen_name": data["user"]["screen_name"],
             "user_name": data["user"]["name"],
             "user_id": data["user"]["id"],
+            "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
 
     async def _render_card(self, template: str, card_data: dict) -> str:
@@ -582,11 +582,11 @@ class TwitterMonitorPlugin(Star):
                         chain.chain.append(CompImage.fromURL(url))
                     else:
                         chain.chain.append(CompImage.fromFileSystem(url))
-                    chain.message(f"\n📢 @{info['screen_name']}")
+                    chain.message(f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
                 elif info["translated_text"]:
-                    chain.message(f"📢 @{info['screen_name']}\n\n{info['translated_text'][:500]}")
+                    chain.message(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}")
                 else:
-                    chain.message(f"📢 @{info['screen_name']} 新推文")
+                    chain.message(f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}")
 
                 if chain.chain:
                     await self.context.send_message(session_umo, chain)
