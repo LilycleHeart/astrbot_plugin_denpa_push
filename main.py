@@ -42,8 +42,8 @@ class TwitterMonitorPlugin(Star):
             try:
                 from . import patch_twikit
                 patch_twikit.main()
-            except Exception:
-                pass
+            except Exception as _pe:
+                logger.warning(f"twikit patch failed: {_pe}")
         except ImportError:
             logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
