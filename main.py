@@ -520,13 +520,12 @@ class TwitterMonitorPlugin(Star):
                 browser = await pw.chromium.launch(headless=True)
                 ctx = await browser.new_context(device_scale_factor=2)
                 page = await ctx.new_page()
-                await page.set_viewport_size({"width": 620, "height": 4096})
+                await page.set_viewport_size({"width": 620, "height": 100})
                 await page.goto(f"file:///{html_path.replace(chr(92), '/')}", wait_until="networkidle")
                 await page.wait_for_timeout(2000)
                 h = await page.evaluate("document.body.scrollHeight")
-                if h > 100:
-                    await page.set_viewport_size({"width": 620, "height": h})
-                    await page.wait_for_timeout(1000)
+                await page.set_viewport_size({"width": 620, "height": h})
+                await page.wait_for_timeout(500)
                 await page.screenshot(path=png_path, full_page=True)
                 await browser.close()
             return png_path
