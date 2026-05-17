@@ -398,7 +398,9 @@ class TwitterMonitorPlugin(Star):
         q_article = q_data.get("article", {}) if q_data else {}
         if q_article and q_article.get("rest_id") and q_data.get("id"):
             try:
-                q_art_full = await self.twitter.get_full_article_text(q_data["id"])
+                q_art_full = await asyncio.wait_for(
+                    self.twitter.get_full_article_text(q_data["id"]), timeout=20
+                )
                 if q_art_full:
                     q_article["full_text"] = q_art_full
             except Exception as e:
@@ -406,7 +408,12 @@ class TwitterMonitorPlugin(Star):
 
         translated_text = data.get("text", "")
         try:
-            translated_text = await self._translate_text(data)
+            translated_text = await asyncio.wait_for(
+                self._translate_text(data), timeout=30
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Text translation timed out, using original text")
+            translated_text = data.get("text", "(翻译超时)")
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
@@ -448,7 +455,12 @@ class TwitterMonitorPlugin(Star):
             images_for_translate = images
         if images_for_translate:
             try:
-                image_translations = await self._translate_images(data)
+                image_translations = await asyncio.wait_for(
+                    self._translate_images(data), timeout=30
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Image translation timed out, skipping")
+                image_translations = None
             except Exception as e:
                 logger.warning(f"Image translation failed: {e}")
 
