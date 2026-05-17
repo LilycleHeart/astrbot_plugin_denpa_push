@@ -504,6 +504,30 @@ class TwitterMonitorPlugin(Star):
             "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
 
+    async def _dump_render_debug(self, html: str, card_data: dict, png_path: str):
+        debug_dir = os.path.join(
+            getattr(self.context, "astrbot_root", os.getcwd()),
+            "data", "config", "debug_render"
+        )
+        os.makedirs(debug_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        tweet_id = card_data.get("id", "unknown")
+        base = os.path.join(debug_dir, f"{ts}_{tweet_id}")
+        try:
+            with open(f"{base}.html", "w", encoding="utf-8") as f:
+                f.write(html)
+            meta = {
+                "tweet_id": tweet_id,
+                "card_data_keys": list(card_data.keys()),
+                "screenshot_png": png_path,
+                "rendered_at": ts,
+            }
+            with open(f"{base}.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+            logger.debug(f"Render debug dumped to {base}.*")
+        except Exception as e:
+            logger.warning(f"Failed to dump render debug: {e}")
+
     async def _render_card(self, template: str, card_data: dict) -> str:
         """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
         import tempfile, os as _os
@@ -528,6 +552,7 @@ class TwitterMonitorPlugin(Star):
                 await page.wait_for_timeout(500)
                 await page.screenshot(path=png_path, full_page=True)
                 await browser.close()
+            await self._dump_render_debug(html, card_data, png_path)
             return png_path
         except Exception as e:
             logger.error(f"Local card render failed: {e}")
