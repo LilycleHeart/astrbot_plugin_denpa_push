@@ -290,14 +290,13 @@ class TwitterMonitorPlugin(Star):
             # 2. 图片合并到一条群合并转发消息
             from astrbot.api.message_components import Node, Plain
             uname = info.get("user_name", info["screen_name"])
-            uin_val = info.get("user_id", "0")
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
             for img in info.get("images", []):
                 iurl = img.get("media_url", "")
                 if iurl:
                     img_contents.append(CompImage.fromURL(iurl))
             if len(img_contents) > 1:
-                node = Node(uin=uin_val, name=uname, content=img_contents)
+                node = Node(uin="0", name=uname, content=img_contents)
                 yield event.chain_result([node])
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
@@ -587,7 +586,7 @@ class TwitterMonitorPlugin(Star):
                         img_contents.append(CompImage.fromURL(iurl))
                 if img_contents:
                     node = Node(
-                        uin=info.get("user_id", "0"),
+                        uin="0",
                         name=info.get("user_name", info["screen_name"]),
                         content=img_contents,
                     )
