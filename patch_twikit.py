@@ -68,10 +68,16 @@ def main():
         ("['urls']", ".get('urls', [])"),
         ("['withheld_in_countries']", ".get('withheld_in_countries', [])"),
         ("['pinned_tweet_ids_str']", ".get('pinned_tweet_ids_str', [])"),
+        # .get('urls') without default → returns None if key missing
+        (".get('url', {}).get('urls')", ".get('url', {}).get('urls', [])"),
     ])
 
     patch_file(tweet_py, [
         ("['withheld_in_countries']", ".get('withheld_in_countries', [])"),
+        # entity_set.get('urls') without default
+        ("entity_set.get('urls')", "entity_set.get('urls', [])"),
+        # legacy['entities'].get('media') → list expected, could be None
+        ("legacy['entities'].get('media')", "legacy['entities'].get('media', [])"),
     ])
 
     patch_file(client_py, [
