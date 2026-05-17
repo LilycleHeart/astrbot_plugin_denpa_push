@@ -409,7 +409,7 @@ class TwitterMonitorPlugin(Star):
         translated_text = data.get("text", "")
         try:
             translated_text = await asyncio.wait_for(
-                self._translate_text(data), timeout=30
+                self._translate_text(data), timeout=120
             )
         except asyncio.TimeoutError:
             logger.warning("Text translation timed out, using original text")
@@ -456,7 +456,7 @@ class TwitterMonitorPlugin(Star):
         if images_for_translate:
             try:
                 image_translations = await asyncio.wait_for(
-                    self._translate_images(data), timeout=30
+                    self._translate_images(data), timeout=120
                 )
             except asyncio.TimeoutError:
                 logger.warning("Image translation timed out, skipping")
