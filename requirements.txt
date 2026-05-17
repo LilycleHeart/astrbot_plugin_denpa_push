@@ -1,5 +1,4 @@
-# twikit 需要手动安装:
-# D:\AstrBot\backend\python\python.exe -m pip install twikit==2.1.3
-# 然后运行 patch_twikit.py 修补已知 bug
-#
-# 插件启动时会自动检查 twikit 是否可用
+twikit==2.1.3
+jinja2
+playwright
+# easyocr 可选，用于 text_extraction 图片文字识别模式

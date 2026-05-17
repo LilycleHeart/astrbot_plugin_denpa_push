@@ -39,11 +39,13 @@ class TwitterMonitorPlugin(Star):
     async def initialize(self):
         try:
             import twikit
+            try:
+                from . import patch_twikit
+                patch_twikit.main()
+            except Exception:
+                pass
         except ImportError:
-            logger.error(
-                "twikit 未安装。请手动安装: "
-                "D:\\AstrBot\\backend\\python\\python.exe -m pip install twikit==2.1.3"
-            )
+            logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
         self._load_data()
         auto_monitor = True
@@ -262,19 +264,18 @@ class TwitterMonitorPlugin(Star):
             # 1. 卡片 PNG 直接发送
             if info["card_img_url"]:
                 yield event.image_result(info["card_img_url"])
-            yield event.plain_result(f"📢 @{info['screen_name']}")
+            yield event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
 
             # 2. 图片合并到一条群合并转发消息
             from astrbot.api.message_components import Node, Plain
             uname = info.get("user_name", info["screen_name"])
-            uin_val = info.get("user_id", "0")
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
             for img in info.get("images", []):
                 iurl = img.get("media_url", "")
                 if iurl:
                     img_contents.append(CompImage.fromURL(iurl))
             if len(img_contents) > 1:
-                node = Node(uin=uin_val, name=uname, content=img_contents)
+                node = Node(uin="0", name=uname, content=img_contents)
                 yield event.chain_result([node])
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
@@ -371,9 +372,27 @@ class TwitterMonitorPlugin(Star):
             except Exception as e:
                 logger.warning(f"Failed to fetch quoted tweet data: {e}")
 
+        # 如果引推也有文章（NoteTweet），获取引推文章全文
+        q_data = data.get("quoted_tweet", {})
+        q_article = q_data.get("article", {}) if q_data else {}
+        if q_article and q_article.get("rest_id") and q_data.get("id"):
+            try:
+                q_art_full = await asyncio.wait_for(
+                    self.twitter.get_full_article_text(q_data["id"]), timeout=20
+                )
+                if q_art_full:
+                    q_article["full_text"] = q_art_full
+            except Exception as e:
+                logger.warning(f"Quoted article fetch failed: {e}")
+
         translated_text = data.get("text", "")
         try:
-            translated_text = await self._translate_text(data)
+            translated_text = await asyncio.wait_for(
+                self._translate_text(data), timeout=120
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Text translation timed out, using original text")
+            translated_text = data.get("text", "(翻译超时)")
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
@@ -386,6 +405,12 @@ class TwitterMonitorPlugin(Star):
         q_user_name = quoted_user.get("name", "")
         q_screen_name = quoted_user.get("screen_name", "")
         q_avatar = quoted_user.get("avatar_url", "")
+
+        # 引用推文的文章数据
+        q_article_data = quoted.get("article", {}) if quoted else {}
+        q_article_title = q_article_data.get("title", "") if q_article_data else ""
+        q_article_text = q_article_data.get("full_text", "") if q_article_data else ""
+        q_article_preview = q_article_data.get("preview_text", "") if q_article_data else ""
 
         image_translations = None
         images, gifs, videos = TwitterClient.extract_tweet_media(data)
@@ -409,7 +434,12 @@ class TwitterMonitorPlugin(Star):
             images_for_translate = images
         if images_for_translate:
             try:
-                image_translations = await self._translate_images(data)
+                image_translations = await asyncio.wait_for(
+                    self._translate_images(data), timeout=120
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Image translation timed out, skipping")
+                image_translations = None
             except Exception as e:
                 logger.warning(f"Image translation failed: {e}")
 
@@ -454,6 +484,10 @@ class TwitterMonitorPlugin(Star):
             "quoted_text": quoted.get("text", ""),
             "quoted_thumbnail_urls": quoted_thumbnails,
             "has_quoted_tweet": bool(quoted and quoted.get("text")),
+            "q_article_title": q_article_title,
+            "q_article_text": q_article_text,
+            "q_article_preview": q_article_preview,
+            "has_q_article": bool(q_article_title or q_article_text),
         }
 
         card_img_url = await self._render_card(template, card_data)
@@ -467,6 +501,7 @@ class TwitterMonitorPlugin(Star):
             "screen_name": data["user"]["screen_name"],
             "user_name": data["user"]["name"],
             "user_id": data["user"]["id"],
+            "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
 
     async def _render_card(self, template: str, card_data: dict) -> str:
@@ -526,11 +561,11 @@ class TwitterMonitorPlugin(Star):
                         chain.chain.append(CompImage.fromURL(url))
                     else:
                         chain.chain.append(CompImage.fromFileSystem(url))
-                    chain.message(f"\n📢 @{info['screen_name']}")
+                    chain.message(f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
                 elif info["translated_text"]:
-                    chain.message(f"📢 @{info['screen_name']}\n\n{info['translated_text'][:500]}")
+                    chain.message(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}")
                 else:
-                    chain.message(f"📢 @{info['screen_name']} 新推文")
+                    chain.message(f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}")
 
                 if chain.chain:
                     logger.info(f"[Push] Card to {session_umo} ({len(chain.chain)} components)")
@@ -545,7 +580,7 @@ class TwitterMonitorPlugin(Star):
                         img_contents.append(CompImage.fromURL(iurl))
                 if img_contents:
                     node = Node(
-                        uin=info.get("user_id", "0"),
+                        uin="0",
                         name=info.get("user_name", info["screen_name"]),
                         content=img_contents,
                     )
