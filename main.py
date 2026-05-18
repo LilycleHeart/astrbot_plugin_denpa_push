@@ -364,27 +364,34 @@ class TwitterMonitorPlugin(Star):
             logger.warning(f"Seed color extraction failed: {e}")
             return "#6750a4"
 
-    def _generate_md3_palette(self, seed_hex: str) -> dict:
+    def _generate_md3_palette(self, seed) -> dict:
+        def _to_hex(c) -> str:
+            if isinstance(c, str) and c.startswith("#"):
+                return c.lower()
+            return f"#{int(c) & 0xFFFFFF:06x}"
+
         try:
             from material_color_utilities import theme_from_color
-            theme = theme_from_color(seed_hex)
+            if not isinstance(seed, str):
+                seed = str(seed)
+            theme = theme_from_color(seed)
             if theme is None or not hasattr(theme, "schemes"):
                 raise ValueError("invalid result")
             l = theme.schemes.light
             return {
-                "surface": l.surface,
-                "surface_variant": l.surface_variant,
-                "primary": l.primary,
-                "on_primary": l.on_primary,
-                "primary_container": l.primary_container,
-                "on_primary_container": l.on_primary_container,
-                "secondary": l.secondary,
-                "on_surface": l.on_surface,
-                "on_surface_variant": l.on_surface_variant,
-                "outline": l.outline,
-                "outline_variant": l.outline_variant,
-                "footer": l.outline_variant,
-                "quote_bg": l.surface_variant,
+                "surface": _to_hex(l.surface),
+                "surface_variant": _to_hex(l.surface_variant),
+                "primary": _to_hex(l.primary),
+                "on_primary": _to_hex(l.on_primary),
+                "primary_container": _to_hex(l.primary_container),
+                "on_primary_container": _to_hex(l.on_primary_container),
+                "secondary": _to_hex(l.secondary),
+                "on_surface": _to_hex(l.on_surface),
+                "on_surface_variant": _to_hex(l.on_surface_variant),
+                "outline": _to_hex(l.outline),
+                "outline_variant": _to_hex(l.outline_variant),
+                "footer": _to_hex(l.outline_variant),
+                "quote_bg": _to_hex(l.surface_variant),
             }
         except Exception as e:
             logger.warning(f"MD3 palette failed, using fallback: {e}")
