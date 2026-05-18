@@ -355,72 +355,37 @@ class TwitterMonitorPlugin(Star):
     async def _extract_seed_color(self, avatar_url: str) -> str:
         try:
             import httpx
+            from PIL import Image
+            import io
             async with httpx.AsyncClient(timeout=10) as c:
                 r = await c.get(avatar_url)
                 r.raise_for_status()
-            from PIL import Image
-            import io
             img = Image.open(io.BytesIO(r.content)).convert("RGB")
-            small = img.resize((4, 4))
-            pixels = list(small.getdata())
-            valid = [(rr, gg, bb) for rr, gg, bb in pixels if 40 < (rr + gg + bb) / 3 < 220]
-            if not valid:
-                valid = pixels
-            avg_r = sum(p[0] for p in valid) // len(valid)
-            avg_g = sum(p[1] for p in valid) // len(valid)
-            avg_b = sum(p[2] for p in valid) // len(valid)
-            return f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
+            from material_color_utilities import prominent_colors_from_image
+            colors = prominent_colors_from_image(img)
+            return colors[0] if colors else "#6750a4"
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
-            return "#6750A4"
+            return "#6750a4"
 
     def _generate_md3_palette(self, seed_hex: str) -> dict:
-        r, g, b = int(seed_hex[1:3], 16), int(seed_hex[3:5], 16), int(seed_hex[5:7], 16)
-        rr, gg, bb = r / 255, g / 255, b / 255
-        mx, mn = max(rr, gg, bb), min(rr, gg, bb)
-        l = (mx + mn) / 2
-        if mx == mn:
-            h, s = 0, 0
-        else:
-            d = mx - mn
-            s = d / (1 - abs(2 * l - 1))
-            if mx == rr:
-                h = ((gg - bb) / d + (6 if gg < bb else 0)) / 6
-            elif mx == gg:
-                h = ((bb - rr) / d + 2) / 6
-            else:
-                h = ((rr - gg) / d + 4) / 6
-        s = min(s * 0.7, 0.35)
-
-        def _hsl(h, s, l):
-            def _h2(p, q, t):
-                if t < 0: t += 1
-                if t > 1: t -= 1
-                if t < 1 / 6: return p + (q - p) * 6 * t
-                if t < 1 / 2: return q
-                if t < 2 / 3: return p + (q - p) * (2 / 3 - t) * 6
-                return p
-            if s == 0: return (int(l * 255),) * 3
-            q = l * (1 + s) if l < 0.5 else l + s - l * s
-            p = 2 * l - q
-            return (int(_h2(p, q, h + 1 / 3) * 255), int(_h2(p, q, h) * 255), int(_h2(p, q, h - 1 / 3) * 255))
-
-        def _hex(v): return f"#{v[0]:02x}{v[1]:02x}{v[2]:02x}"
-
+        from material_color_utilities import theme_from_color
+        theme = theme_from_color(seed_hex)
+        l = theme.schemes.light
         return {
-            "surface": _hex(_hsl(h, s * 0.08, 0.985)),
-            "surface_variant": _hex(_hsl(h, s * 0.2, 0.95)),
-            "primary": _hex(_hsl(h, s, 0.50)),
-            "on_primary": "#ffffff",
-            "primary_container": _hex(_hsl(h, s * 0.35, 0.92)),
-            "on_primary_container": _hex(_hsl(h, s, 0.15)),
-            "secondary": _hex(_hsl(h, s * 0.3, 0.58)),
-            "on_surface": _hex(_hsl(h, 0, 0.11)),
-            "on_surface_variant": _hex(_hsl(h, s * 0.15, 0.45)),
-            "outline": _hex(_hsl(h, s * 0.3, 0.82)),
-            "outline_variant": _hex(_hsl(h, s * 0.1, 0.88)),
-            "footer": _hex(_hsl(h, s * 0.08, 0.78)),
-            "quote_bg": _hex(_hsl(h, s * 0.1, 0.97)),
+            "surface": l.surface,
+            "surface_variant": l.surface_variant,
+            "primary": l.primary,
+            "on_primary": l.on_primary,
+            "primary_container": l.primary_container,
+            "on_primary_container": l.on_primary_container,
+            "secondary": l.secondary,
+            "on_surface": l.on_surface,
+            "on_surface_variant": l.on_surface_variant,
+            "outline": l.outline,
+            "outline_variant": l.outline_variant,
+            "footer": l.outline_variant,
+            "quote_bg": l.surface_variant,
         }
 
     async def _build_card_data(self, data: dict) -> dict:
