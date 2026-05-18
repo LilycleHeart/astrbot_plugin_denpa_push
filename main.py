@@ -354,15 +354,15 @@ class TwitterMonitorPlugin(Star):
             from PIL import Image
             import io
             proxy = self.config.get("proxy", None)
-            async with httpx.AsyncClient(proxy=proxy if proxy else None, timeout=10) as c:
-                r = await c.get(avatar_url)
-                r.raise_for_status()
-            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-            img = img.resize((1, 1), resample=Image.Resampling.LANCZOS)
-            r, g, b, a = img.getpixel((0, 0))
-            seed_int = (255 << 24) | (r << 16) | (g << 8) | b
-            logger.debug(f"Seed color extracted: ARGB={seed_int} RGB=({r},{g},{b})")
-            return seed_int
+            async with httpx.AsyncClient(proxy=proxy if proxy else None, timeout=10) as _c:
+                _r = await _c.get(avatar_url)
+                _r.raise_for_status()
+                _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
+                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
+                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
+                _seed = (255 << 24) | (_pr << 16) | (_pg << 8) | _pb
+                logger.debug(f"Seed color extracted: ARGB={_seed} RGB=({_pr},{_pg},{_pb})")
+                return _seed
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return "#6750a4"
