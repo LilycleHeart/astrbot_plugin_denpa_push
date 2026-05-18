@@ -355,6 +355,8 @@ class TwitterMonitorPlugin(Star):
             import io
             proxy = self.config.get("proxy", None)
             async with httpx.AsyncClient(proxy=proxy if proxy else None, timeout=10) as c:
+                r = await c.get(avatar_url)
+                r.raise_for_status()
             img = Image.open(io.BytesIO(r.content)).convert("RGBA")
             img = img.resize((1, 1), resample=Image.Resampling.LANCZOS)
             r, g, b, a = img.getpixel((0, 0))
