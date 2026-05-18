@@ -369,23 +369,43 @@ class TwitterMonitorPlugin(Star):
             return "#6750a4"
 
     def _generate_md3_palette(self, seed_hex: str) -> dict:
-        from material_color_utilities import theme_from_color
-        theme = theme_from_color(seed_hex)
-        l = theme.schemes.light
+        try:
+            from material_color_utilities import theme_from_color
+            theme = theme_from_color(seed_hex)
+            if theme is None or not hasattr(theme, "schemes"):
+                raise ValueError("invalid result")
+            l = theme.schemes.light
+            return {
+                "surface": l.surface,
+                "surface_variant": l.surface_variant,
+                "primary": l.primary,
+                "on_primary": l.on_primary,
+                "primary_container": l.primary_container,
+                "on_primary_container": l.on_primary_container,
+                "secondary": l.secondary,
+                "on_surface": l.on_surface,
+                "on_surface_variant": l.on_surface_variant,
+                "outline": l.outline,
+                "outline_variant": l.outline_variant,
+                "footer": l.outline_variant,
+                "quote_bg": l.surface_variant,
+            }
+        except Exception as e:
+            logger.warning(f"MD3 palette failed, using fallback: {e}")
         return {
-            "surface": l.surface,
-            "surface_variant": l.surface_variant,
-            "primary": l.primary,
-            "on_primary": l.on_primary,
-            "primary_container": l.primary_container,
-            "on_primary_container": l.on_primary_container,
-            "secondary": l.secondary,
-            "on_surface": l.on_surface,
-            "on_surface_variant": l.on_surface_variant,
-            "outline": l.outline,
-            "outline_variant": l.outline_variant,
-            "footer": l.outline_variant,
-            "quote_bg": l.surface_variant,
+            "surface": "#fdf7ff",
+            "surface_variant": "#e7dff2",
+            "primary": "#5700d2",
+            "on_primary": "#ffffff",
+            "primary_container": "#9f7aff",
+            "on_primary_container": "#1c004f",
+            "secondary": "#554262",
+            "on_surface": "#1d1a24",
+            "on_surface_variant": "#494453",
+            "outline": "#686272",
+            "outline_variant": "#958fa0",
+            "footer": "#958fa0",
+            "quote_bg": "#e7dff2",
         }
 
     async def _build_card_data(self, data: dict) -> dict:
