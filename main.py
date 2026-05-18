@@ -68,7 +68,17 @@ class TwitterMonitorPlugin(Star):
             if os.path.exists(self._data_path):
                 with open(self._data_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self.subscriptions = data.get("subscriptions", {})
+                
+                # Migration: convert old tracked_users to subscriptions
+                if "tracked_users" in data and "subscriptions" not in data:
+                    logger.info("Migrating old data format to per-session subscriptions")
+                    # Create a default session for old global users
+                    default_session = "migrated_global"
+                    self.subscriptions = {default_session: data["tracked_users"]}
+                    logger.info(f"Migrated {len(data['tracked_users'])} users to session '{default_session}'")
+                else:
+                    self.subscriptions = data.get("subscriptions", {})
+                
                 sessions = data.get("monitored_sessions", [])
                 self.monitored_sessions = set(sessions)
                 total_subs = sum(len(u) for u in self.subscriptions.values())
