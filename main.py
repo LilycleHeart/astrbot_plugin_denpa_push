@@ -324,7 +324,8 @@ class TwitterMonitorPlugin(Star):
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
-            if self.tracked_users:
+            has_subs = any(len(users) > 0 for users in self.subscriptions.values())
+            if has_subs:
                 self._start_monitor()
             return event.plain_result("已开启本会话的自动推送")
 
