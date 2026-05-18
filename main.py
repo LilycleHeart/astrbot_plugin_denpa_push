@@ -352,6 +352,77 @@ class TwitterMonitorPlugin(Star):
 
             await asyncio.sleep(interval)
 
+    async def _extract_seed_color(self, avatar_url: str) -> str:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get(avatar_url)
+                r.raise_for_status()
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(r.content)).convert("RGB")
+            small = img.resize((4, 4))
+            pixels = list(small.getdata())
+            valid = [(rr, gg, bb) for rr, gg, bb in pixels if 40 < (rr + gg + bb) / 3 < 220]
+            if not valid:
+                valid = pixels
+            avg_r = sum(p[0] for p in valid) // len(valid)
+            avg_g = sum(p[1] for p in valid) // len(valid)
+            avg_b = sum(p[2] for p in valid) // len(valid)
+            return f"#{avg_r:02x}{avg_g:02x}{avg_b:02x}"
+        except Exception as e:
+            logger.warning(f"Seed color extraction failed: {e}")
+            return "#6750A4"
+
+    def _generate_md3_palette(self, seed_hex: str) -> dict:
+        r, g, b = int(seed_hex[1:3], 16), int(seed_hex[3:5], 16), int(seed_hex[5:7], 16)
+        rr, gg, bb = r / 255, g / 255, b / 255
+        mx, mn = max(rr, gg, bb), min(rr, gg, bb)
+        l = (mx + mn) / 2
+        if mx == mn:
+            h, s = 0, 0
+        else:
+            d = mx - mn
+            s = d / (1 - abs(2 * l - 1))
+            if mx == rr:
+                h = ((gg - bb) / d + (6 if gg < bb else 0)) / 6
+            elif mx == gg:
+                h = ((bb - rr) / d + 2) / 6
+            else:
+                h = ((rr - gg) / d + 4) / 6
+        s = min(s * 0.7, 0.35)
+
+        def _hsl(h, s, l):
+            def _h2(p, q, t):
+                if t < 0: t += 1
+                if t > 1: t -= 1
+                if t < 1 / 6: return p + (q - p) * 6 * t
+                if t < 1 / 2: return q
+                if t < 2 / 3: return p + (q - p) * (2 / 3 - t) * 6
+                return p
+            if s == 0: return (int(l * 255),) * 3
+            q = l * (1 + s) if l < 0.5 else l + s - l * s
+            p = 2 * l - q
+            return (int(_h2(p, q, h + 1 / 3) * 255), int(_h2(p, q, h) * 255), int(_h2(p, q, h - 1 / 3) * 255))
+
+        def _hex(v): return f"#{v[0]:02x}{v[1]:02x}{v[2]:02x}"
+
+        return {
+            "surface": _hex(_hsl(h, s * 0.08, 0.985)),
+            "surface_variant": _hex(_hsl(h, s * 0.2, 0.95)),
+            "primary": _hex(_hsl(h, s, 0.50)),
+            "on_primary": "#ffffff",
+            "primary_container": _hex(_hsl(h, s * 0.35, 0.92)),
+            "on_primary_container": _hex(_hsl(h, s, 0.15)),
+            "secondary": _hex(_hsl(h, s * 0.3, 0.58)),
+            "on_surface": _hex(_hsl(h, 0, 0.11)),
+            "on_surface_variant": _hex(_hsl(h, s * 0.15, 0.45)),
+            "outline": _hex(_hsl(h, s * 0.3, 0.82)),
+            "outline_variant": _hex(_hsl(h, s * 0.1, 0.88)),
+            "footer": _hex(_hsl(h, s * 0.08, 0.78)),
+            "quote_bg": _hex(_hsl(h, s * 0.1, 0.97)),
+        }
+
     async def _build_card_data(self, data: dict) -> dict:
         article = data.get("article")
         if article and article.get("rest_id"):
@@ -460,6 +531,8 @@ class TwitterMonitorPlugin(Star):
         if image_translations:
             translated_text = f"{translated_text}\n\n{image_translations}"
 
+        seed_color = await self._extract_seed_color(data["user"]["avatar_url"])
+        palette = self._generate_md3_palette(seed_color)
         card_data = {
             "user_name": data["user"]["name"],
             "screen_name": data["user"]["screen_name"],
@@ -488,6 +561,7 @@ class TwitterMonitorPlugin(Star):
             "q_article_text": q_article_text,
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
+            "palette": palette,
         }
 
         card_img_url = await self._render_card(template, card_data)
