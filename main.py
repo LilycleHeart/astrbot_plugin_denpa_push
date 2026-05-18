@@ -379,6 +379,10 @@ class TwitterMonitorPlugin(Star):
                 except asyncio.CancelledError:
                     return
                 except Exception as e:
+                    estr = str(e)
+                    if "429" in estr or "Rate limit" in estr:
+                        logger.warning(f"[Monitor] Rate limited for {username}, aborting this round")
+                        break
                     logger.error(f"[Monitor] Error for {username}: {e}")
 
             await asyncio.sleep(interval)
