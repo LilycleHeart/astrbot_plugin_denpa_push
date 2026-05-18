@@ -196,8 +196,8 @@
   "dashboard": {
     "enable": true,
     "username": "astrbot",
-    "password": "128281118e53c902a1cedc561e600e38",
-    "pbkdf2_password": "pbkdf2_sha256$600000$4aaf4bbe5cea270fdd2db9256b769ec8$959e51e9eba1720b5ac9bb96ea351eccff2f86483a58f15772bb3f85f76a3207",
+    "password": "c99066df515161117929868c28ed3491",
+    "pbkdf2_password": "pbkdf2_sha256$600000$fefe0c4dfadeb48e8c020cd6898ac1d0$f55ddd37b32caa930e13b81a6173e13a111bceefd9b546c3b2f225930ca63686",
     "password_storage_upgraded": true,
     "password_change_required": true,
     "jwt_secret": "",

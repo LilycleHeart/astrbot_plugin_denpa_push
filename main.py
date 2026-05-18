@@ -368,41 +368,49 @@ class TwitterMonitorPlugin(Star):
             return "#6750a4"
 
     def _generate_md3_palette(self, seed) -> dict:
-        def _to_hex(c) -> str:
-            if isinstance(c, str) and c.startswith("#"):
-                return c.lower()
-            return f"#{int(c) & 0xFFFFFF:06x}"
-
-        # Try material_color_utilities first
+        # Try PyMCUlib (pure Python official MCU implementation)
         try:
-            from material_color_utilities import theme_from_color
+            from PyMCUlib.hct import Hct
+            from PyMCUlib.scheme.scheme_vibrant import SchemeVibrant
+            from PyMCUlib.dynamiccolor.material_dynamic_colors import MaterialDynamicColors
+            from PyMCUlib.utils.string_utils import hex_from_argb
+            
             if isinstance(seed, str):
-                seed_str = seed
+                seed_int = int(seed.lstrip("#"), 16) | (0xFF << 24)
             else:
-                seed_str = f"#{seed & 0xFFFFFF:06x}"
-            theme = theme_from_color(seed_str)
-            if theme is None or not hasattr(theme, "schemes"):
-                raise ValueError("invalid result")
-            l = theme.schemes.light
+                seed_int = int(seed) if seed > 0xFFFFFF else int(seed) | (0xFF << 24)
+            
+            scheme = SchemeVibrant(
+                Hct.from_int(seed_int),
+                False,  # is_dark=False for light theme
+                0.25    # contrast_level (default in official MCU)
+            )
+            
+            mdc = MaterialDynamicColors()
+            
+            def _get_hex(dynamic_color_func, scheme):
+                argb = dynamic_color_func().get_argb(scheme)
+                return hex_from_argb(argb)
+            
             palette = {
-                "surface": _to_hex(l.surface),
-                "surface_variant": _to_hex(l.surface_variant),
-                "primary": _to_hex(l.primary),
-                "on_primary": _to_hex(l.on_primary),
-                "primary_container": _to_hex(l.primary_container),
-                "on_primary_container": _to_hex(l.on_primary_container),
-                "secondary": _to_hex(l.secondary),
-                "on_surface": _to_hex(l.on_surface),
-                "on_surface_variant": _to_hex(l.on_surface_variant),
-                "outline": _to_hex(l.outline),
-                "outline_variant": _to_hex(l.outline_variant),
-                "footer": _to_hex(l.outline_variant),
-                "quote_bg": _to_hex(l.surface_variant),
+                "surface": _get_hex(mdc.surface, scheme),
+                "surface_variant": _get_hex(mdc.surface_variant, scheme),
+                "primary": _get_hex(mdc.primary, scheme),
+                "on_primary": _get_hex(mdc.on_primary, scheme),
+                "primary_container": _get_hex(mdc.primary_container, scheme),
+                "on_primary_container": _get_hex(mdc.on_primary_container, scheme),
+                "secondary": _get_hex(mdc.secondary, scheme),
+                "on_surface": _get_hex(mdc.on_surface, scheme),
+                "on_surface_variant": _get_hex(mdc.on_surface_variant, scheme),
+                "outline": _get_hex(mdc.outline, scheme),
+                "outline_variant": _get_hex(mdc.outline_variant, scheme),
+                "footer": _get_hex(mdc.outline_variant, scheme),
+                "quote_bg": _get_hex(mdc.surface_variant, scheme),
             }
-            logger.debug(f"Generated MD3 palette (material-color-utilities): {json.dumps(palette)}")
+            logger.debug(f"Generated MD3 palette (PyMCUlib): {json.dumps(palette)}")
             return palette
         except Exception as e:
-            logger.debug(f"material-color-utilities failed: {e}, trying pure Python fallback")
+            logger.debug(f"PyMCUlib failed: {e}, trying pure Python fallback")
 
         # Pure Python MD3-like palette generator (fallback)
         try:
@@ -450,7 +458,97 @@ class TwitterMonitorPlugin(Star):
             
             h, s, l = _rgb_to_hsl(sr, sg, sb)
             
-            # Generate MD3-like palette
+            def _role(hue, sat, tone):
+                r, g, b = _hsl_to_rgb(hue, sat, tone)
+                return f"#{r:02x}{g:02x}{b:02x}"
+            
+            palette = {
+                "surface": _role(h, s * 0.1, 0.95),
+                "surface_variant": _role(h, s * 0.2, 0.85),
+                "primary": _role(h, min(s * 1.2, 1.0), 0.5),
+                "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
+                "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
+                "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
+                "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
+                "on_surface": _role(h, s * 0.1, 0.1),
+                "on_surface_variant": _role(h, s * 0.2, 0.3),
+                "outline": _role(h, s * 0.2, 0.4),
+                "outline_variant": _role(h, s * 0.2, 0.6),
+                "footer": _role(h, s * 0.2, 0.6),
+                "quote_bg": _role(h, s * 0.2, 0.85),
+            }
+            logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
+            return palette
+        except Exception as e:
+            logger.warning(f"MD3 palette pure Python fallback failed: {e}")
+
+        # Final hardcoded fallback
+        return {
+            "surface": "#fdf7ff",
+            "surface_variant": "#e7dff2",
+            "primary": "#5700d2",
+            "on_primary": "#ffffff",
+            "primary_container": "#9f7aff",
+            "on_primary_container": "#1c004f",
+            "secondary": "#554262",
+            "on_surface": "#1d1a24",
+            "on_surface_variant": "#494453",
+            "outline": "#686272",
+            "outline_variant": "#958fa0",
+            "footer": "#958fa0",
+            "quote_bg": "#e7dff2",
+        }
+            logger.debug(f"Generated MD3 palette (materialyoucolor): {json.dumps(palette)}")
+            return palette
+        except Exception as e:
+            logger.debug(f"materialyoucolor failed: {e}, trying pure Python fallback")
+
+        # Pure Python MD3-like palette generator (fallback)
+        try:
+            if isinstance(seed, str):
+                seed_int = int(seed.lstrip("#"), 16)
+            else:
+                seed_int = int(seed)
+            sr = (seed_int >> 16) & 0xFF
+            sg = (seed_int >> 8) & 0xFF
+            sb = seed_int & 0xFF
+            
+            def _rgb_to_hsl(r, g, b):
+                r, g, b = r / 255.0, g / 255.0, b / 255.0
+                mx, mn = max(r, g, b), min(r, g, b)
+                l = (mx + mn) / 2.0
+                if mx == mn:
+                    h = s = 0.0
+                else:
+                    d = mx - mn
+                    s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
+                    if mx == r: h = (g - b) / d + (6.0 if g < b else 0.0)
+                    elif mx == g: h = (b - r) / d + 2.0
+                    else: h = (r - g) / d + 4.0
+                    h /= 6.0
+                return h * 360.0, s, l
+            
+            def _hsl_to_rgb(h, s, l):
+                h = h / 360.0
+                if s == 0:
+                    r = g = b = l
+                else:
+                    def hue2rgb(p, q, t):
+                        if t < 0: t += 1
+                        if t > 1: t -= 1
+                        if t < 1/6: return p + (q - p) * 6 * t
+                        if t < 1/2: return q
+                        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+                        return p
+                    q = l * (1 + s) if l < 0.5 else l + s - l * s
+                    p = 2 * l - q
+                    r = hue2rgb(p, q, h + 1/3)
+                    g = hue2rgb(p, q, h)
+                    b = hue2rgb(p, q, h - 1/3)
+                return int(r * 255), int(g * 255), int(b * 255)
+            
+            h, s, l = _rgb_to_hsl(sr, sg, sb)
+            
             def _role(hue, sat, tone):
                 r, g, b = _hsl_to_rgb(hue, sat, tone)
                 return f"#{r:02x}{g:02x}{b:02x}"
