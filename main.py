@@ -348,18 +348,23 @@ class TwitterMonitorPlugin(Star):
 
             await asyncio.sleep(interval)
 
-    async def _extract_seed_color(self, avatar_url: str) -> str:
+    async def _extract_seed_color(self, avatar_url: str):
         try:
             import httpx
             from PIL import Image
             import io
-            async with httpx.AsyncClient(timeout=10) as c:
+            proxy = self.config.get("proxy", None)
+            if proxy and not proxy.startswith("http"):
+                proxy = None
+            async with httpx.AsyncClient(proxies={"all://": proxy} if proxy else None, timeout=10) as c:
                 r = await c.get(avatar_url)
                 r.raise_for_status()
-            img = Image.open(io.BytesIO(r.content)).convert("RGB")
-            from material_color_utilities import prominent_colors_from_image
-            colors = prominent_colors_from_image(img)
-            return colors[0] if colors else "#6750a4"
+            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+            img = img.resize((1, 1), resample=Image.Resampling.LANCZOS)
+            r, g, b, a = img.getpixel((0, 0))
+            seed_int = (255 << 24) | (r << 16) | (g << 8) | b
+            logger.debug(f"Seed color extracted: ARGB={seed_int} RGB=({r},{g},{b})")
+            return seed_int
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return "#6750a4"
@@ -372,13 +377,15 @@ class TwitterMonitorPlugin(Star):
 
         try:
             from material_color_utilities import theme_from_color
-            if not isinstance(seed, str):
-                seed = str(seed)
-            theme = theme_from_color(seed)
+            if isinstance(seed, int):
+                seed_str = f"#{seed & 0xFFFFFF:06x}"
+            else:
+                seed_str = str(seed)
+            theme = theme_from_color(seed_str)
             if theme is None or not hasattr(theme, "schemes"):
                 raise ValueError("invalid result")
             l = theme.schemes.light
-            return {
+            palette = {
                 "surface": _to_hex(l.surface),
                 "surface_variant": _to_hex(l.surface_variant),
                 "primary": _to_hex(l.primary),
@@ -393,6 +400,8 @@ class TwitterMonitorPlugin(Star):
                 "footer": _to_hex(l.outline_variant),
                 "quote_bg": _to_hex(l.surface_variant),
             }
+            logger.debug(f"Generated MD3 palette: {json.dumps(palette)}")
+            return palette
         except Exception as e:
             logger.warning(f"MD3 palette failed, using fallback: {e}")
         return {
