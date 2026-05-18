@@ -26,7 +26,7 @@ class TwitterMonitorPlugin(Star):
         super().__init__(context)
         self.config = config or {}
         self.twitter = TwitterClient()
-        self.tracked_users = {}
+        self.subscriptions = {}
         self.monitored_sessions = set()
         self.monitor_task = None
         self._running = False
@@ -45,7 +45,8 @@ class TwitterMonitorPlugin(Star):
         self._apply_twitter_credentials()
         self._load_data()
         auto_monitor = True
-        if self.tracked_users and auto_monitor:
+        has_subs = any(len(users) > 0 for users in self.subscriptions.values())
+        if has_subs and auto_monitor:
             self._start_monitor()
         logger.info("Twitter Monitor plugin initialized")
 
@@ -67,20 +68,21 @@ class TwitterMonitorPlugin(Star):
             if os.path.exists(self._data_path):
                 with open(self._data_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self.tracked_users = data.get("tracked_users", {})
+                self.subscriptions = data.get("subscriptions", {})
                 sessions = data.get("monitored_sessions", [])
                 self.monitored_sessions = set(sessions)
-                logger.info(f"Loaded {len(self.tracked_users)} tracked users")
+                total_subs = sum(len(u) for u in self.subscriptions.values())
+                logger.info(f"Loaded subscriptions for {len(self.subscriptions)} sessions ({total_subs} users)")
         except Exception as e:
             logger.warning(f"Failed to load data: {e}")
-            self.tracked_users = {}
+            self.subscriptions = {}
             self.monitored_sessions = set()
 
     def _save_data(self):
         try:
             os.makedirs(os.path.dirname(self._data_path), exist_ok=True)
             data = {
-                "tracked_users": self.tracked_users,
+                "subscriptions": self.subscriptions,
                 "monitored_sessions": list(self.monitored_sessions),
             }
             with open(self._data_path, "w", encoding="utf-8") as f:
@@ -91,9 +93,11 @@ class TwitterMonitorPlugin(Star):
     def _start_monitor(self):
         if self.monitor_task and not self.monitor_task.done():
             return
-        self._running = True
-        self.monitor_task = asyncio.create_task(self._monitor_loop())
-        logger.info("Monitor loop started")
+        has_subs = any(len(users) > 0 for users in self.subscriptions.values())
+        if has_subs:
+            self._running = True
+            self.monitor_task = asyncio.create_task(self._monitor_loop())
+            logger.info("Monitor loop started")
 
     def _stop_monitor(self):
         self._running = False
@@ -110,9 +114,9 @@ class TwitterMonitorPlugin(Star):
         if len(parts) < 2:
             yield event.plain_result(
                 "用法:\n"
-                "/twitter add <username>  - 关注用户\n"
-                "/twitter remove <username>  - 取消关注\n"
-                "/twitter list  - 关注列表\n"
+                "/twitter add <username>  - 本会话关注用户\n"
+                "/twitter remove <username>  - 本会话取消关注\n"
+                "/twitter list  - 本会话关注列表\n"
                 "/twitter push <url>  - 手动推送单条推文\n"
                 "/twitter monitor  - 切换本会话的推送开关"
             )
@@ -162,8 +166,10 @@ class TwitterMonitorPlugin(Star):
         '''
         if isinstance(usernames, str):
             usernames = [usernames]
+        session_id = event.unified_msg_origin
+        subs = self.subscriptions.get(session_id, {})
         for raw in usernames:
-            matched = [n for n in self.tracked_users if raw.lower() in n.lower()]
+            matched = [n for n in subs if raw.lower() in n.lower()]
             if not matched:
                 result = await self._cmd_remove(event, raw)
                 yield result
@@ -184,9 +190,11 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
-        '''列出所有已关注的 Twitter 用户。'''
-        lines = ["已关注用户:"]
-        for name in self.tracked_users:
+        '''列出本会话已关注的 Twitter 用户。'''
+        session_id = event.unified_msg_origin
+        subs = self.subscriptions.get(session_id, {})
+        lines = ["本会话已关注用户:"]
+        for name in subs:
             lines.append(f"  @{name}")
         yield event.plain_result("\n".join(lines) if len(lines) > 1 else "暂无关注用户")
 
@@ -201,19 +209,26 @@ class TwitterMonitorPlugin(Star):
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
-            if self.tracked_users:
+            has_subs = any(len(users) > 0 for users in self.subscriptions.values())
+            if has_subs:
                 self._start_monitor()
             yield event.plain_result("已开启本会话的自动推送")
 
     async def _cmd_add(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
-        if username in self.tracked_users:
-            return event.plain_result(f"已关注 @{username}")
+        session_id = event.unified_msg_origin
+        
+        if session_id not in self.subscriptions:
+            self.subscriptions[session_id] = {}
+        
+        if username in self.subscriptions[session_id]:
+            return event.plain_result(f"本会话已关注 @{username}")
+            
         try:
             user = await self.twitter.get_user_by_screen_name(username)
             tweets = await self.twitter.get_user_tweets(user.id, count=1)
             last_id = tweets[0].id if tweets else "0"
-            self.tracked_users[username] = {
+            self.subscriptions[session_id][username] = {
                 "user_id": user.id,
                 "last_tweet_id": last_id,
                 "last_checked_at": datetime.now(timezone.utc).isoformat(),
@@ -221,7 +236,7 @@ class TwitterMonitorPlugin(Star):
             self._save_data()
             self._start_monitor()
             return event.plain_result(
-                f"已关注 @{username}（{user.name}），开始跟踪"
+                f"本会话已关注 @{username}（{user.name}），开始跟踪"
             )
         except Exception as e:
             logger.error(f"Failed to add user {username}: {e}")
@@ -229,19 +244,24 @@ class TwitterMonitorPlugin(Star):
 
     async def _cmd_remove(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
-        if username not in self.tracked_users:
-            return event.plain_result(f"未关注 @{username}")
-        del self.tracked_users[username]
+        session_id = event.unified_msg_origin
+        
+        if session_id not in self.subscriptions or username not in self.subscriptions[session_id]:
+            return event.plain_result(f"本会话未关注 @{username}")
+            
+        del self.subscriptions[session_id][username]
+        if not self.subscriptions[session_id]:
+            del self.subscriptions[session_id]
         self._save_data()
-        if not self.tracked_users:
-            self._stop_monitor()
-        return event.plain_result(f"已取消关注 @{username}")
+        return event.plain_result(f"本会话已取消关注 @{username}")
 
     async def _cmd_list(self, event: AstrMessageEvent):
-        if not self.tracked_users:
-            return event.plain_result("暂无关注用户")
-        lines = ["已关注用户:"]
-        for name, info in self.tracked_users.items():
+        session_id = event.unified_msg_origin
+        subs = self.subscriptions.get(session_id, {})
+        if not subs:
+            return event.plain_result("本会话暂无关注用户")
+        lines = ["本会话已关注用户:"]
+        for name, info in subs.items():
             lines.append(f"  @{name}  (最后ID: {info.get('last_tweet_id', 'N/A')[:12]}...)")
         return event.plain_result("\n".join(lines))
 
@@ -300,7 +320,7 @@ class TwitterMonitorPlugin(Star):
 
     async def _monitor_loop(self):
         interval = max(1, int(self.config.get("poll_interval", 5))) * 60
-        logger.info(f"[Monitor] Loop started, interval={interval}s, tracked={len(self.tracked_users)}, sessions={len(self.monitored_sessions)}")
+        logger.info(f"[Monitor] Loop started, interval={interval}s")
         while self._running:
             try:
                 await self.twitter.ensure_ready()
@@ -309,42 +329,54 @@ class TwitterMonitorPlugin(Star):
                 await asyncio.sleep(60)
                 continue
 
-            for username in list(self.tracked_users.keys()):
+            # Aggregate subscriptions: user_id -> list of tasks
+            user_tasks = {}
+            for session_id, users in self.subscriptions.items():
+                for username, info in users.items():
+                    uid = info["user_id"]
+                    if uid not in user_tasks:
+                        user_tasks[uid] = []
+                    user_tasks[uid].append({
+                        "session_id": session_id,
+                        "username": username,
+                        "last_tweet_id": info.get("last_tweet_id", "0")
+                    })
+
+            if not user_tasks:
+                await asyncio.sleep(interval)
+                continue
+
+            for user_id, tasks in user_tasks.items():
                 try:
-                    info = self.tracked_users[username]
-                    user_id = info["user_id"]
                     tweets = await self.twitter.get_user_tweets(user_id, count=20)
+                    for task in tasks:
+                        session_id = task["session_id"]
+                        username = task["username"]
+                        last_id = task["last_tweet_id"]
+                        
+                        # Check if session is muted
+                        if session_id not in self.monitored_sessions:
+                            # Update last_id even if muted to avoid backlog
+                            if tweets:
+                                self.subscriptions[session_id][username]["last_tweet_id"] = tweets[0].id
+                            continue
 
-                    last_id = info.get("last_tweet_id", "0")
-                    new_tweets = []
-                    for t in tweets:
-                        if t.id > last_id:
-                            new_tweets.append(t)
-
-                    if new_tweets:
-                        logger.info(
-                            f"[Monitor] {username}: {len(new_tweets)} new tweets "
-                            f"(last={last_id[:15]}.., sessions={len(self.monitored_sessions)})"
-                        )
-
-                    for t in reversed(new_tweets):
-                        data = TwitterClient.extract_tweet_data(t)
-                        await self._process_and_push(data, list(self.monitored_sessions))
-                        await asyncio.sleep(2)
-
-                    if new_tweets:
-                        self.tracked_users[username]["last_tweet_id"] = new_tweets[0].id
-                        self.tracked_users[username]["last_checked_at"] = (
-                            datetime.now(timezone.utc).isoformat()
-                        )
-                        self._save_data()
-                        logger.info(f"[Monitor] {username}: last_id updated to {new_tweets[0].id[:15]}..")
-                    else:
-                        logger.info(f"[Monitor] {username}: no new tweets")
+                        new_tweets = [t for t in tweets if t.id > last_id]
+                        if new_tweets:
+                            logger.info(
+                                f"[Monitor] {username}: {len(new_tweets)} new tweets for {session_id}"
+                            )
+                            for t in reversed(new_tweets):
+                                data = TwitterClient.extract_tweet_data(t)
+                                await self._process_and_push(data, [session_id])
+                                await asyncio.sleep(2)
+                            
+                            self.subscriptions[session_id][username]["last_tweet_id"] = new_tweets[0].id
+                    self._save_data()
                 except asyncio.CancelledError:
                     return
                 except Exception as e:
-                    logger.error(f"[Monitor] Error for {username}: {e}")
+                    logger.error(f"[Monitor] Error for user {user_id}: {e}")
 
             await asyncio.sleep(interval)
 
