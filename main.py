@@ -60,7 +60,6 @@ class TwitterMonitorPlugin(Star):
         if self.monitor_task:
             self.monitor_task.cancel()
             self.monitor_task = None
-        self._save_data()
 
     def _load_data(self):
         try:
