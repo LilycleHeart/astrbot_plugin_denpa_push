@@ -375,11 +375,11 @@ class TwitterMonitorPlugin(Star):
 
         try:
             from material_color_utilities import theme_from_color
-            if isinstance(seed, int):
-                seed_str = f"#{seed & 0xFFFFFF:06x}"
+            if isinstance(seed, str):
+                seed_int = int(seed.lstrip("#"), 16) | (255 << 24)
             else:
-                seed_str = str(seed)
-            theme = theme_from_color(seed_str)
+                seed_int = int(seed)
+            theme = theme_from_color(seed_int)
             if theme is None or not hasattr(theme, "schemes"):
                 raise ValueError("invalid result")
             l = theme.schemes.light
