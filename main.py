@@ -373,6 +373,7 @@ class TwitterMonitorPlugin(Star):
                 return c.lower()
             return f"#{int(c) & 0xFFFFFF:06x}"
 
+        # Try material_color_utilities first
         try:
             from material_color_utilities import theme_from_color
             if isinstance(seed, str):
@@ -398,10 +399,83 @@ class TwitterMonitorPlugin(Star):
                 "footer": _to_hex(l.outline_variant),
                 "quote_bg": _to_hex(l.surface_variant),
             }
-            logger.debug(f"Generated MD3 palette: {json.dumps(palette)}")
+            logger.debug(f"Generated MD3 palette (material-color-utilities): {json.dumps(palette)}")
             return palette
         except Exception as e:
-            logger.warning(f"MD3 palette failed, using fallback: {e}")
+            logger.debug(f"material-color-utilities failed: {e}, trying pure Python fallback")
+
+        # Pure Python MD3-like palette generator (fallback)
+        try:
+            if isinstance(seed, str):
+                seed_int = int(seed.lstrip("#"), 16)
+            else:
+                seed_int = int(seed)
+            sr = (seed_int >> 16) & 0xFF
+            sg = (seed_int >> 8) & 0xFF
+            sb = seed_int & 0xFF
+            
+            def _rgb_to_hsl(r, g, b):
+                r, g, b = r / 255.0, g / 255.0, b / 255.0
+                mx, mn = max(r, g, b), min(r, g, b)
+                l = (mx + mn) / 2.0
+                if mx == mn:
+                    h = s = 0.0
+                else:
+                    d = mx - mn
+                    s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
+                    if mx == r: h = (g - b) / d + (6.0 if g < b else 0.0)
+                    elif mx == g: h = (b - r) / d + 2.0
+                    else: h = (r - g) / d + 4.0
+                    h /= 6.0
+                return h * 360.0, s, l
+            
+            def _hsl_to_rgb(h, s, l):
+                h = h / 360.0
+                if s == 0:
+                    r = g = b = l
+                else:
+                    def hue2rgb(p, q, t):
+                        if t < 0: t += 1
+                        if t > 1: t -= 1
+                        if t < 1/6: return p + (q - p) * 6 * t
+                        if t < 1/2: return q
+                        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+                        return p
+                    q = l * (1 + s) if l < 0.5 else l + s - l * s
+                    p = 2 * l - q
+                    r = hue2rgb(p, q, h + 1/3)
+                    g = hue2rgb(p, q, h)
+                    b = hue2rgb(p, q, h - 1/3)
+                return int(r * 255), int(g * 255), int(b * 255)
+            
+            h, s, l = _rgb_to_hsl(sr, sg, sb)
+            
+            # Generate MD3-like palette
+            def _role(hue, sat, tone):
+                r, g, b = _hsl_to_rgb(hue, sat, tone)
+                return f"#{r:02x}{g:02x}{b:02x}"
+            
+            palette = {
+                "surface": _role(h, s * 0.1, 0.95),
+                "surface_variant": _role(h, s * 0.2, 0.85),
+                "primary": _role(h, min(s * 1.2, 1.0), 0.5),
+                "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
+                "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
+                "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
+                "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
+                "on_surface": _role(h, s * 0.1, 0.1),
+                "on_surface_variant": _role(h, s * 0.2, 0.3),
+                "outline": _role(h, s * 0.2, 0.4),
+                "outline_variant": _role(h, s * 0.2, 0.6),
+                "footer": _role(h, s * 0.2, 0.6),
+                "quote_bg": _role(h, s * 0.2, 0.85),
+            }
+            logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
+            return palette
+        except Exception as e:
+            logger.warning(f"MD3 palette pure Python fallback failed: {e}")
+
+        # Final hardcoded fallback
         return {
             "surface": "#fdf7ff",
             "surface_variant": "#e7dff2",
