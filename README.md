@@ -6,7 +6,7 @@
 支持 **LLM 翻译、图片 OCR、多图排版、自动深色模式、媒体合并发送、Material Design 3 动态配色卡片**
 
 <p>
-  <img src="https://count.getloli.com/@LilycleHeart_astrbot_plugin_denpa_push?theme=moebooru&name=LilycleHeart_astrbot_plugin_denpa_push" alt="Moe Counter" />
+  <img src="https://count.moeyy.cn/@denpa_push?name=denpa_push&theme=rule34&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" alt="Moe Counter" />
 </p>
 
 <p>
