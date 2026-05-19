@@ -408,6 +408,10 @@ class TwitterMonitorPlugin(Star):
             return "#6750a4"
 
     def _generate_md3_palette(self, seed) -> dict:
+        # 根据时间自动切换深色/浅色模式（18:00-06:00 深色）
+        h = int(__import__("datetime").datetime.now().strftime("%H"))
+        is_dark = h >= 18 or h < 6
+
         # Try PyMCUlib (pure Python official MCU implementation)
         try:
             from PyMCUlib.hct import Hct
@@ -422,8 +426,8 @@ class TwitterMonitorPlugin(Star):
             
             scheme = SchemeVibrant(
                 Hct.from_int(seed_int),
-                False,  # is_dark=False for light theme
-                0.25    # contrast_level (default in official MCU)
+                is_dark,
+                0.25
             )
             
             mdc = MaterialDynamicColors()
@@ -433,7 +437,7 @@ class TwitterMonitorPlugin(Star):
                 return hex_from_argb(argb)
             
             seed_hct = Hct.from_int(seed_int)
-            card_bg_hct = Hct.from(seed_hct.hue, 10, 97)
+            card_bg_hct = Hct.from(seed_hct.hue, 10, 8 if is_dark else 97)
 
             palette = {
                 "surface": _get_hex(mdc.surface, scheme),
@@ -451,7 +455,7 @@ class TwitterMonitorPlugin(Star):
                 "quote_bg": _get_hex(mdc.surface_variant, scheme),
                 "card_bg": hex_from_argb(card_bg_hct.to_int()),
             }
-            logger.debug(f"Generated MD3 palette (PyMCUlib): {json.dumps(palette)}")
+            logger.debug(f"Generated MD3 palette (PyMCUlib, dark={is_dark}): {json.dumps(palette)}")
             return palette
         except Exception as e:
             logger.debug(f"PyMCUlib failed: {e}, trying pure Python fallback")
@@ -501,33 +505,64 @@ class TwitterMonitorPlugin(Star):
                 return int(r * 255), int(g * 255), int(b * 255)
             
             h, s, l = _rgb_to_hsl(sr, sg, sb)
-            
-            def _role(hue, sat, tone):
-                r, g, b = _hsl_to_rgb(hue, sat, tone)
-                return f"#{r:02x}{g:02x}{b:02x}"
-            
-            palette = {
-                "surface": _role(h, s * 0.1, 0.95),
-                "surface_variant": _role(h, s * 0.2, 0.85),
-                "primary": _role(h, min(s * 1.2, 1.0), 0.5),
-                "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
-                "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
-                "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
-                "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
-                "on_surface": _role(h, s * 0.1, 0.1),
-                "on_surface_variant": _role(h, s * 0.2, 0.3),
-                "outline": _role(h, s * 0.2, 0.4),
-                "outline_variant": _role(h, s * 0.2, 0.6),
-                "footer": _role(h, s * 0.2, 0.6),
-                "quote_bg": _role(h, s * 0.2, 0.85),
-                "card_bg": _role(h, s * 0.25, 0.93),
-            }
-            logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
+
+            if is_dark:
+                palette = {
+                    "surface": _role(h, s * 0.1, 0.06),
+                    "surface_variant": _role(h, s * 0.2, 0.18),
+                    "primary": _role(h, min(s * 1.2, 1.0), 0.8),
+                    "on_primary": _role(h, s * 0.1, 0.1),
+                    "primary_container": _role(h, min(s * 1.2, 1.0), 0.3),
+                    "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.9),
+                    "secondary": _role((h + 15) % 360, s * 0.6, 0.7),
+                    "on_surface": _role(h, s * 0.1, 0.9),
+                    "on_surface_variant": _role(h, s * 0.2, 0.7),
+                    "outline": _role(h, s * 0.2, 0.5),
+                    "outline_variant": _role(h, s * 0.2, 0.3),
+                    "footer": _role(h, s * 0.2, 0.5),
+                    "quote_bg": _role(h, s * 0.2, 0.12),
+                    "card_bg": _role(h, s * 0.25, 0.07),
+                }
+            else:
+                palette = {
+                    "surface": _role(h, s * 0.1, 0.95),
+                    "surface_variant": _role(h, s * 0.2, 0.85),
+                    "primary": _role(h, min(s * 1.2, 1.0), 0.5),
+                    "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
+                    "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
+                    "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
+                    "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
+                    "on_surface": _role(h, s * 0.1, 0.1),
+                    "on_surface_variant": _role(h, s * 0.2, 0.3),
+                    "outline": _role(h, s * 0.2, 0.4),
+                    "outline_variant": _role(h, s * 0.2, 0.6),
+                    "footer": _role(h, s * 0.2, 0.6),
+                    "quote_bg": _role(h, s * 0.2, 0.85),
+                    "card_bg": _role(h, s * 0.25, 0.93),
+                }
+            logger.debug(f"Generated MD3 palette (pure Python, dark={is_dark}): {json.dumps(palette)}")
             return palette
         except Exception as e:
             logger.warning(f"MD3 palette pure Python fallback failed: {e}")
 
         # Final hardcoded fallback
+        if is_dark:
+            return {
+                "surface": "#1c1b1f",
+                "surface_variant": "#2b2930",
+                "primary": "#d0bcff",
+                "on_primary": "#381e72",
+                "primary_container": "#4f378b",
+                "on_primary_container": "#eaddff",
+                "secondary": "#cac4d0",
+                "on_surface": "#e6e1e5",
+                "on_surface_variant": "#cac4d0",
+                "outline": "#938f99",
+                "outline_variant": "#49454f",
+                "footer": "#938f99",
+                "quote_bg": "#2b2930",
+                "card_bg": "#141318",
+            }
         return {
             "surface": "#fdf7ff",
             "surface_variant": "#e7dff2",
