@@ -6,8 +6,6 @@
 现代化 Twitter / X 推送插件  
 支持 **LLM 翻译、图片 OCR、多图排版、Material Design 3 动态配色卡片**
 
-架起天线，向世界传递电波 📡
-
 <p>
   <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.24-7C3AED?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Twitter-X-000000?style=for-the-badge&logo=x" />
@@ -75,12 +73,11 @@
 
 # 🚀 安装
 
-## 1. 放入插件目录
+## 1. 安装插件
 
-将插件目录放入 AstrBot 的：
-
+在插件商店安装或使用链接安装
 ```text
-addons/
+https://github.com/LilycleHeart/astrbot_plugin_denpa_push
 ```
 
 或你的自定义插件加载目录。
