@@ -864,6 +864,10 @@ class TwitterMonitorPlugin(Star):
         if not clean_text:
             clean_text = text
 
+        # 截断过长的文章正文，防止 LLM 调用超时
+        if len(clean_text) > 4000:
+            clean_text = clean_text[:4000] + "\n\n...(截断)"
+
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
         if not provider_id:
