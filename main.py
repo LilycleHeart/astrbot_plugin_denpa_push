@@ -274,9 +274,10 @@ class TwitterMonitorPlugin(Star):
             data = TwitterClient.extract_tweet_data(tweet)
             info = await self._build_card_data(data)
 
-            # 1. 卡片 PNG 直接发送
-            if info["card_img_url"]:
-                results.append(event.image_result(info["card_img_url"]))
+            # 1. 卡片 PNG 直接发送（多张长文章分块）
+            for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
+                if url:
+                    results.append(event.image_result(url))
             results.append(event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"))
 
             # 2. 图片合并到一条群合并转发消息
@@ -574,12 +575,7 @@ class TwitterMonitorPlugin(Star):
 
         translated_text = data.get("text", "")
         try:
-            translated_text = await asyncio.wait_for(
-                self._translate_text(data), timeout=120
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Text translation timed out, using original text")
-            translated_text = data.get("text", "(翻译超时)")
+            translated_text = await self._translate_text(data)
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
@@ -680,10 +676,60 @@ class TwitterMonitorPlugin(Star):
             "palette": palette,
         }
 
-        card_img_url = await self._render_card(template, card_data)
+        # 长文章分块渲染
+        article_text = data.get("article_full_text") or (article.get("full_text", "") if article else "")
+        MAX_CHUNK = 3000
+        if len(article_text) > MAX_CHUNK:
+            paragraphs = article_text.split('\n\n')
+            chunks = []
+            cur, cur_len = [], 0
+            for p in paragraphs:
+                if cur_len + len(p) > MAX_CHUNK and cur:
+                    chunks.append('\n\n'.join(cur))
+                    cur, cur_len = [p], len(p)
+                else:
+                    cur.append(p)
+                    cur_len += len(p) + 2
+            if cur:
+                chunks.append('\n\n'.join(cur))
+
+            # 对应地分割译文
+            t_paragraphs = translated_text.split('\n\n')
+            t_chunks = []
+            cur, cur_len = [], 0
+            for p in t_paragraphs:
+                if cur_len + len(p) > MAX_CHUNK and cur:
+                    t_chunks.append('\n\n'.join(cur))
+                    cur, cur_len = [p], len(p)
+                else:
+                    cur.append(p)
+                    cur_len += len(p) + 2
+            if cur:
+                t_chunks.append('\n\n'.join(cur))
+
+            # 补齐长度（译文段落数可能不同）
+            while len(t_chunks) < len(chunks):
+                t_chunks.append(t_chunks[-1] if t_chunks else translated_text)
+            while len(t_chunks) > len(chunks):
+                t_chunks = t_chunks[:len(chunks)]
+
+            card_img_urls = []
+            for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
+                sub = dict(card_data)
+                sub["article_title"] = card_data["article_title"] if i == 0 else f"(续 {i+1}/{len(chunks)})"
+                sub["article_text"] = chunk
+                sub["translated_text"] = t_chunk
+                img_url = await self._render_card(template, sub)
+                if img_url:
+                    card_img_urls.append(img_url)
+            if not card_img_urls:
+                card_img_urls = [await self._render_card(template, card_data)]
+        else:
+            card_img_urls = [await self._render_card(template, card_data)]
 
         return {
-            "card_img_url": card_img_url,
+            "card_img_urls": card_img_urls,
+            "card_img_url": card_img_urls[0] if card_img_urls else "",
             "translated_text": translated_text,
             "images": images,
             "gifs": gifs,
@@ -720,11 +766,12 @@ class TwitterMonitorPlugin(Star):
 
     async def _render_card(self, template: str, card_data: dict) -> str:
         """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
-        import tempfile, os as _os
+        import tempfile, os as _os, time as _time
         from playwright.async_api import async_playwright
 
-        html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.html")
-        png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.png")
+        _tag = f"{id(self)}_{int(_time.time() * 1000000) % 1000000}"
+        html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.html")
+        png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.png")
         try:
             from jinja2 import Template
             html = Template(template).render(card_data)
@@ -768,23 +815,30 @@ class TwitterMonitorPlugin(Star):
 
         for session_umo in target_sessions:
             try:
-                # 主消息：卡片 + 推主注明
-                chain = MessageChain()
-                if info["card_img_url"]:
-                    url = info["card_img_url"]
+                # 主消息：卡片（多张分块）+ 推主注明
+                card_urls = info.get("card_img_urls", [info.get("card_img_url", "")])
+                first_card = True
+                for url in card_urls:
+                    if not url:
+                        continue
+                    card_chain = MessageChain()
                     if url.startswith("http"):
-                        chain.chain.append(CompImage.fromURL(url))
+                        card_chain.chain.append(CompImage.fromURL(url))
                     else:
-                        chain.chain.append(CompImage.fromFileSystem(url))
-                    chain.message(f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
-                elif info["translated_text"]:
-                    chain.message(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}")
-                else:
-                    chain.message(f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}")
-
-                if chain.chain:
-                    logger.info(f"[Push] Card to {session_umo} ({len(chain.chain)} components)")
-                    await self.context.send_message(session_umo, chain)
+                        card_chain.chain.append(CompImage.fromFileSystem(url))
+                    if first_card:
+                        card_chain.message(f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
+                        first_card = False
+                    logger.info(f"[Push] Card to {session_umo}")
+                    await self.context.send_message(session_umo, card_chain)
+                    await asyncio.sleep(0.5)
+                if first_card:
+                    fallback = MessageChain()
+                    if info["translated_text"]:
+                        fallback.message(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}")
+                    else:
+                        fallback.message(f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}")
+                    await self.context.send_message(session_umo, fallback)
 
                 # 图片合并到一条群合并转发消息
                 from astrbot.api.message_components import Node, Plain
@@ -863,10 +917,6 @@ class TwitterMonitorPlugin(Star):
         clean_text = _re.sub(r'https?://\S+', '', text).strip()
         if not clean_text:
             clean_text = text
-
-        # 截断过长的文章正文，防止 LLM 调用超时
-        if len(clean_text) > 4000:
-            clean_text = clean_text[:4000] + "\n\n...(截断)"
 
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
