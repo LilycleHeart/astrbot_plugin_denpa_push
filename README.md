@@ -7,6 +7,11 @@
 支持 **LLM 翻译、图片 OCR、多图排版、自动深色模式、媒体合并发送、Material Design 3 动态配色卡片**
 
 <p>
+  <!-- 这一行是新加的 Moe-Counter 计数器，注意把 LilycleHeart 换成你实际的 GitHub 用户名或项目名 -->
+  <img src="https://count.getloli.com/get/@LilycleHeart_astrbot_plugin_denpa_push?theme=rule34" alt="Moe Counter" />
+</p>
+
+<p>
   <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.24-7C3AED?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Twitter-X-000000?style=for-the-badge&logo=x" />
   <img src="https://img.shields.io/badge/Playwright-Chromium-2EAD33?style=for-the-badge&logo=playwright" />
