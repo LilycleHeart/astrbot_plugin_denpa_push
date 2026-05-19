@@ -151,7 +151,7 @@ class TwitterClient:
                     html_parts.append("</ul>")
 
                 if html_parts:
-                    return "".join(html_parts)
+                    return "\n\n".join(html_parts)
 
             legacy = result.get("legacy", {})
             if legacy.get("full_text"):

@@ -680,10 +680,66 @@ class TwitterMonitorPlugin(Star):
             "palette": palette,
         }
 
-        card_img_url = await self._render_card(template, card_data)
+        # 长文章分块渲染
+        article_text = data.get("article_full_text") or (article.get("full_text", "") if article else "")
+        MAX_CHUNK = 2000
+
+        def split_into_chunks(text):
+            """Split text into ~MAX_CHUNK chunks at paragraph boundaries."""
+            paras = text.split('\n\n')
+            chunks, cur, cl = [], [], 0
+            for p in paras:
+                plen = len(p)
+                if cl + plen > MAX_CHUNK and cur:
+                    chunks.append('\n\n'.join(cur))
+                    cur, cl = [], 0
+                if plen > MAX_CHUNK:
+                    import re as _re
+                    sentences = _re.split(r'(?<=[。！？.!?])', p)
+                    s_chunk, s_cl = [], 0
+                    for s in sentences:
+                        if s_cl + len(s) > MAX_CHUNK and s_chunk:
+                            cur.append(''.join(s_chunk))
+                            cl += len(cur[-1]) + 2
+                            s_chunk, s_cl = [s], len(s)
+                        else:
+                            s_chunk.append(s)
+                            s_cl += len(s)
+                    if s_chunk:
+                        cur.append(''.join(s_chunk))
+                        cl += len(cur[-1]) + 2
+                else:
+                    cur.append(p)
+                    cl += plen + 2
+            if cur:
+                chunks.append('\n\n'.join(cur))
+            return chunks
+
+        if len(article_text) > MAX_CHUNK:
+            chunks = split_into_chunks(article_text)
+            t_chunks = split_into_chunks(translated_text)
+            min_len = min(len(chunks), len(t_chunks))
+            chunks = chunks[:min_len]
+            t_chunks = t_chunks[:min_len]
+            card_img_urls = []
+            for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
+                sub = dict(card_data)
+                sub["article_title"] = card_data["article_title"] if i == 0 else f"(续 {i+1}/{len(chunks)})"
+                sub["article_text"] = ""
+                if i > 0:
+                    sub["article_preview"] = ""
+                sub["translated_text"] = t_chunk
+                img_url = await self._render_card(template, sub)
+                if img_url:
+                    card_img_urls.append(img_url)
+            if not card_img_urls:
+                card_img_urls = [await self._render_card(template, card_data)]
+        else:
+            card_img_urls = [await self._render_card(template, card_data)]
 
         return {
-            "card_img_url": card_img_url,
+            "card_img_urls": card_img_urls,
+            "card_img_url": card_img_urls[0] if card_img_urls else "",
             "translated_text": translated_text,
             "images": images,
             "gifs": gifs,
