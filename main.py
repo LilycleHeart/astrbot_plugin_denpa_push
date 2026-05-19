@@ -730,7 +730,9 @@ class DenpaPushPlugin(Star):
             return (103, 80, 164)
 
     def _generate_palette(self, seed_rgb):
-        h = int(__import__("datetime").datetime.now().strftime("%H"))
+        h = int(__import__("datetime").datetime.now(
+            __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+        ).strftime("%H"))
         is_dark = h >= 18 or h < 6
 
         try:
