@@ -71,13 +71,6 @@ pip install easyocr
 - "列出已关注的推特账号" → 调用 `twitter_list`
 - "开启自动推送" / "关闭自动推送" → 调用 `twitter_monitor`
 
-## twikit 兼容性
-
-本插件使用 twikit 2.1.3，该版本在 Python 3.12 下存在 KeyError 问题。附带 `patch_twikit.py` 可自动修补，运行：
-
-```bash
-python patch_twikit.py
-```
 
 ## 数据文件
 

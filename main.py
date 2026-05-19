@@ -26,7 +26,7 @@ class TwitterMonitorPlugin(Star):
         super().__init__(context)
         self.config = config or {}
         self.twitter = TwitterClient()
-        self.tracked_users = {}
+        self.subscriptions = {}  # {session_umo: {username: {info}}}
         self.monitored_sessions = set()
         self.monitor_task = None
         self._running = False
@@ -39,17 +39,13 @@ class TwitterMonitorPlugin(Star):
     async def initialize(self):
         try:
             import twikit
-            try:
-                from . import patch_twikit
-                patch_twikit.main()
-            except Exception as _pe:
-                logger.warning(f"twikit patch failed: {_pe}")
+
         except ImportError:
             logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
         self._load_data()
         auto_monitor = True
-        if self.tracked_users and auto_monitor:
+        if self.subscriptions and auto_monitor:
             self._start_monitor()
         logger.info("Twitter Monitor plugin initialized")
 
@@ -64,27 +60,34 @@ class TwitterMonitorPlugin(Star):
         if self.monitor_task:
             self.monitor_task.cancel()
             self.monitor_task = None
-        self._save_data()
 
     def _load_data(self):
         try:
             if os.path.exists(self._data_path):
                 with open(self._data_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self.tracked_users = data.get("tracked_users", {})
-                sessions = data.get("monitored_sessions", [])
-                self.monitored_sessions = set(sessions)
-                logger.info(f"Loaded {len(self.tracked_users)} tracked users")
+                tracked = data.get("tracked_users")
+                if tracked is not None:
+                    sessions = data.get("monitored_sessions", [])
+                    self.subscriptions = {}
+                    for s in sessions:
+                        self.subscriptions[s] = dict(tracked)
+                    self.monitored_sessions = set(sessions)
+                else:
+                    self.subscriptions = data.get("subscriptions", {})
+                    self.monitored_sessions = set(data.get("monitored_sessions", []))
+                total = sum(len(users) for users in self.subscriptions.values())
+                logger.info(f"Loaded {len(self.subscriptions)} sessions with {total} tracked users")
         except Exception as e:
             logger.warning(f"Failed to load data: {e}")
-            self.tracked_users = {}
+            self.subscriptions = {}
             self.monitored_sessions = set()
 
     def _save_data(self):
         try:
             os.makedirs(os.path.dirname(self._data_path), exist_ok=True)
             data = {
-                "tracked_users": self.tracked_users,
+                "subscriptions": self.subscriptions,
                 "monitored_sessions": list(self.monitored_sessions),
             }
             with open(self._data_path, "w", encoding="utf-8") as f:
@@ -160,14 +163,15 @@ class TwitterMonitorPlugin(Star):
     @filter.llm_tool(name="twitter_remove")
     async def twitter_remove(self, event: AstrMessageEvent, usernames: list):
         '''当用户说「取消关注」「取关」「删除订阅」某个推特账号时使用此工具。支持模糊匹配。
-
         Args:
             usernames(array[string]): 要取消关注的用户名，如 ["apexlive"]
         '''
         if isinstance(usernames, str):
             usernames = [usernames]
+        umo = event.unified_msg_origin
+        session_users = self.subscriptions.get(umo, {})
         for raw in usernames:
-            matched = [n for n in self.tracked_users if raw.lower() in n.lower()]
+            matched = [n for n in session_users if raw.lower() in n.lower()]
             if not matched:
                 result = await self._cmd_remove(event, raw)
                 yield result
@@ -188,9 +192,11 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
-        '''列出所有已关注的 Twitter 用户。'''
+        '''列出当前群聊已关注的 Twitter 用户。'''
+        umo = event.unified_msg_origin
+        session_users = self.subscriptions.get(umo, {})
         lines = ["已关注用户:"]
-        for name in self.tracked_users:
+        for name in session_users:
             lines.append(f"  @{name}")
         yield event.plain_result("\n".join(lines) if len(lines) > 1 else "暂无关注用户")
 
@@ -205,47 +211,53 @@ class TwitterMonitorPlugin(Star):
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
-            if self.tracked_users:
+            if any(self.subscriptions.get(s) for s in self.monitored_sessions):
                 self._start_monitor()
             yield event.plain_result("已开启本会话的自动推送")
 
     async def _cmd_add(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
-        if username in self.tracked_users:
-            return event.plain_result(f"已关注 @{username}")
+        umo = event.unified_msg_origin
+        session_users = self.subscriptions.setdefault(umo, {})
+        if username in session_users:
+            return event.plain_result(f"本群已关注 @{username}")
         try:
             user = await self.twitter.get_user_by_screen_name(username)
             tweets = await self.twitter.get_user_tweets(user.id, count=1)
             last_id = tweets[0].id if tweets else "0"
-            self.tracked_users[username] = {
+            session_users[username] = {
                 "user_id": user.id,
                 "last_tweet_id": last_id,
                 "last_checked_at": datetime.now(timezone.utc).isoformat(),
             }
             self._save_data()
             self._start_monitor()
-            return event.plain_result(
-                f"已关注 @{username}（{user.name}），开始跟踪"
-            )
+            return event.plain_result(f"本群已关注 @{username}（{user.name}），开始跟踪")
         except Exception as e:
             logger.error(f"Failed to add user {username}: {e}")
             return event.plain_result(f"添加失败: {str(e)[:100]}")
 
     async def _cmd_remove(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
-        if username not in self.tracked_users:
-            return event.plain_result(f"未关注 @{username}")
-        del self.tracked_users[username]
+        umo = event.unified_msg_origin
+        session_users = self.subscriptions.get(umo, {})
+        if username not in session_users:
+            return event.plain_result(f"本群未关注 @{username}")
+        del session_users[username]
+        if not session_users:
+            del self.subscriptions[umo]
         self._save_data()
-        if not self.tracked_users:
+        if not self.subscriptions:
             self._stop_monitor()
-        return event.plain_result(f"已取消关注 @{username}")
+        return event.plain_result(f"本群已取消关注 @{username}")
 
     async def _cmd_list(self, event: AstrMessageEvent):
-        if not self.tracked_users:
-            return event.plain_result("暂无关注用户")
-        lines = ["已关注用户:"]
-        for name, info in self.tracked_users.items():
+        umo = event.unified_msg_origin
+        session_users = self.subscriptions.get(umo, {})
+        if not session_users:
+            return event.plain_result("本群暂无关注用户")
+        lines = ["本群关注用户:"]
+        for name, info in session_users.items():
             lines.append(f"  @{name}  (最后ID: {info.get('last_tweet_id', 'N/A')[:12]}...)")
         return event.plain_result("\n".join(lines))
 
@@ -298,13 +310,14 @@ class TwitterMonitorPlugin(Star):
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
-            if self.tracked_users:
+            if any(self.subscriptions.get(s) for s in self.monitored_sessions):
                 self._start_monitor()
             return event.plain_result("已开启本会话的自动推送")
 
     async def _monitor_loop(self):
         interval = max(1, int(self.config.get("poll_interval", 5))) * 60
-        logger.info(f"[Monitor] Loop started, interval={interval}s, tracked={len(self.tracked_users)}, sessions={len(self.monitored_sessions)}")
+        total_subs = sum(len(users) for users in self.subscriptions.values()) if self.subscriptions else 0
+        logger.info(f"[Monitor] Loop started, interval={interval}s, subscriptions={len(self.subscriptions)}, tracked_users={total_subs}, monitored_sessions={len(self.monitored_sessions)}")
         while self._running:
             try:
                 await self.twitter.ensure_ready()
@@ -313,44 +326,216 @@ class TwitterMonitorPlugin(Star):
                 await asyncio.sleep(60)
                 continue
 
-            for username in list(self.tracked_users.keys()):
+            # Build unique user set across all sessions
+            unique_users = {}
+            user_sessions = {}
+            for session_umo, session_users in list(self.subscriptions.items()):
+                for username, info in session_users.items():
+                    if username not in unique_users:
+                        unique_users[username] = info
+                    user_sessions.setdefault(username, []).append(session_umo)
+
+            for username in list(unique_users.keys()):
                 try:
-                    info = self.tracked_users[username]
+                    info = unique_users[username]
                     user_id = info["user_id"]
                     tweets = await self.twitter.get_user_tweets(user_id, count=20)
 
-                    last_id = info.get("last_tweet_id", "0")
-                    new_tweets = []
-                    for t in tweets:
-                        if t.id > last_id:
-                            new_tweets.append(t)
+                    # Highest last_tweet_id across sessions tracking this user
+                    last_id = "0"
+                    for sess_umo in user_sessions.get(username, []):
+                        sess_users = self.subscriptions.get(sess_umo, {})
+                        uid = sess_users.get(username, {}).get("last_tweet_id", "0")
+                        if uid > last_id:
+                            last_id = uid
+
+                    new_tweets = [t for t in tweets if t.id > last_id]
 
                     if new_tweets:
+                        target_sessions = [s for s in user_sessions.get(username, []) if s in self.monitored_sessions]
                         logger.info(
                             f"[Monitor] {username}: {len(new_tweets)} new tweets "
-                            f"(last={last_id[:15]}.., sessions={len(self.monitored_sessions)})"
+                            f"(last={last_id[:15]}.., targets={len(target_sessions)})"
                         )
 
-                    for t in reversed(new_tweets):
-                        data = TwitterClient.extract_tweet_data(t)
-                        await self._process_and_push(data, list(self.monitored_sessions))
-                        await asyncio.sleep(2)
+                        for t in reversed(new_tweets):
+                            data = TwitterClient.extract_tweet_data(t)
+                            await self._process_and_push(data, target_sessions)
+                            await asyncio.sleep(2)
 
-                    if new_tweets:
-                        self.tracked_users[username]["last_tweet_id"] = new_tweets[0].id
-                        self.tracked_users[username]["last_checked_at"] = (
-                            datetime.now(timezone.utc).isoformat()
-                        )
+                        max_id = new_tweets[0].id
+                        for sess_umo in user_sessions.get(username, []):
+                            sess_users = self.subscriptions.get(sess_umo)
+                            if sess_users and username in sess_users:
+                                sess_users[username]["last_tweet_id"] = max_id
+                                sess_users[username]["last_checked_at"] = (
+                                    datetime.now(timezone.utc).isoformat()
+                                )
                         self._save_data()
-                        logger.info(f"[Monitor] {username}: last_id updated to {new_tweets[0].id[:15]}..")
+                        logger.info(f"[Monitor] {username}: last_id updated to {max_id[:15]}..")
                     else:
-                        logger.info(f"[Monitor] {username}: no new tweets")
+                        logger.debug(f"[Monitor] {username}: no new tweets")
                 except asyncio.CancelledError:
                     return
                 except Exception as e:
+                    estr = str(e)
+                    if "429" in estr or "Rate limit" in estr:
+                        logger.warning(f"[Monitor] Rate limited for {username}, aborting this round")
+                        break
                     logger.error(f"[Monitor] Error for {username}: {e}")
 
             await asyncio.sleep(interval)
+
+    async def _extract_seed_color(self, avatar_url: str):
+        try:
+            import httpx
+            from PIL import Image
+            import io
+            proxy = self.config.get("proxy", None)
+            async with httpx.AsyncClient(proxy=proxy if proxy else None, timeout=10) as _c:
+                _r = await _c.get(avatar_url)
+                _r.raise_for_status()
+                _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
+                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
+                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
+                _seed = (255 << 24) | (_pr << 16) | (_pg << 8) | _pb
+                logger.debug(f"Seed color extracted: ARGB={_seed} RGB=({_pr},{_pg},{_pb})")
+                return _seed
+        except Exception as e:
+            logger.warning(f"Seed color extraction failed: {e}")
+            return "#6750a4"
+
+    def _generate_md3_palette(self, seed) -> dict:
+        # Try PyMCUlib (pure Python official MCU implementation)
+        try:
+            from PyMCUlib.hct import Hct
+            from PyMCUlib.scheme.scheme_vibrant import SchemeVibrant
+            from PyMCUlib.dynamiccolor.material_dynamic_colors import MaterialDynamicColors
+            from PyMCUlib.utils.string_utils import hex_from_argb
+            
+            if isinstance(seed, str):
+                seed_int = int(seed.lstrip("#"), 16) | (0xFF << 24)
+            else:
+                seed_int = int(seed) if seed > 0xFFFFFF else int(seed) | (0xFF << 24)
+            
+            scheme = SchemeVibrant(
+                Hct.from_int(seed_int),
+                False,  # is_dark=False for light theme
+                0.25    # contrast_level (default in official MCU)
+            )
+            
+            mdc = MaterialDynamicColors()
+            
+            def _get_hex(dynamic_color_func, scheme):
+                argb = dynamic_color_func().get_argb(scheme)
+                return hex_from_argb(argb)
+            
+            palette = {
+                "surface": _get_hex(mdc.surface, scheme),
+                "surface_variant": _get_hex(mdc.surface_variant, scheme),
+                "primary": _get_hex(mdc.primary, scheme),
+                "on_primary": _get_hex(mdc.on_primary, scheme),
+                "primary_container": _get_hex(mdc.primary_container, scheme),
+                "on_primary_container": _get_hex(mdc.on_primary_container, scheme),
+                "secondary": _get_hex(mdc.secondary, scheme),
+                "on_surface": _get_hex(mdc.on_surface, scheme),
+                "on_surface_variant": _get_hex(mdc.on_surface_variant, scheme),
+                "outline": _get_hex(mdc.outline, scheme),
+                "outline_variant": _get_hex(mdc.outline_variant, scheme),
+                "footer": _get_hex(mdc.outline_variant, scheme),
+                "quote_bg": _get_hex(mdc.surface_variant, scheme),
+            }
+            logger.debug(f"Generated MD3 palette (PyMCUlib): {json.dumps(palette)}")
+            return palette
+        except Exception as e:
+            logger.debug(f"PyMCUlib failed: {e}, trying pure Python fallback")
+
+        # Pure Python MD3-like palette generator (fallback)
+        try:
+            if isinstance(seed, str):
+                seed_int = int(seed.lstrip("#"), 16)
+            else:
+                seed_int = int(seed)
+            sr = (seed_int >> 16) & 0xFF
+            sg = (seed_int >> 8) & 0xFF
+            sb = seed_int & 0xFF
+            
+            def _rgb_to_hsl(r, g, b):
+                r, g, b = r / 255.0, g / 255.0, b / 255.0
+                mx, mn = max(r, g, b), min(r, g, b)
+                l = (mx + mn) / 2.0
+                if mx == mn:
+                    h = s = 0.0
+                else:
+                    d = mx - mn
+                    s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
+                    if mx == r: h = (g - b) / d + (6.0 if g < b else 0.0)
+                    elif mx == g: h = (b - r) / d + 2.0
+                    else: h = (r - g) / d + 4.0
+                    h /= 6.0
+                return h * 360.0, s, l
+            
+            def _hsl_to_rgb(h, s, l):
+                h = h / 360.0
+                if s == 0:
+                    r = g = b = l
+                else:
+                    def hue2rgb(p, q, t):
+                        if t < 0: t += 1
+                        if t > 1: t -= 1
+                        if t < 1/6: return p + (q - p) * 6 * t
+                        if t < 1/2: return q
+                        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+                        return p
+                    q = l * (1 + s) if l < 0.5 else l + s - l * s
+                    p = 2 * l - q
+                    r = hue2rgb(p, q, h + 1/3)
+                    g = hue2rgb(p, q, h)
+                    b = hue2rgb(p, q, h - 1/3)
+                return int(r * 255), int(g * 255), int(b * 255)
+            
+            h, s, l = _rgb_to_hsl(sr, sg, sb)
+            
+            def _role(hue, sat, tone):
+                r, g, b = _hsl_to_rgb(hue, sat, tone)
+                return f"#{r:02x}{g:02x}{b:02x}"
+            
+            palette = {
+                "surface": _role(h, s * 0.1, 0.95),
+                "surface_variant": _role(h, s * 0.2, 0.85),
+                "primary": _role(h, min(s * 1.2, 1.0), 0.5),
+                "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
+                "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
+                "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
+                "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
+                "on_surface": _role(h, s * 0.1, 0.1),
+                "on_surface_variant": _role(h, s * 0.2, 0.3),
+                "outline": _role(h, s * 0.2, 0.4),
+                "outline_variant": _role(h, s * 0.2, 0.6),
+                "footer": _role(h, s * 0.2, 0.6),
+                "quote_bg": _role(h, s * 0.2, 0.85),
+            }
+            logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
+            return palette
+        except Exception as e:
+            logger.warning(f"MD3 palette pure Python fallback failed: {e}")
+
+        # Final hardcoded fallback
+        return {
+            "surface": "#fdf7ff",
+            "surface_variant": "#e7dff2",
+            "primary": "#5700d2",
+            "on_primary": "#ffffff",
+            "primary_container": "#9f7aff",
+            "on_primary_container": "#1c004f",
+            "secondary": "#554262",
+            "on_surface": "#1d1a24",
+            "on_surface_variant": "#494453",
+            "outline": "#686272",
+            "outline_variant": "#958fa0",
+            "footer": "#958fa0",
+            "quote_bg": "#e7dff2",
+        }
 
     async def _build_card_data(self, data: dict) -> dict:
         article = data.get("article")
@@ -460,6 +645,8 @@ class TwitterMonitorPlugin(Star):
         if image_translations:
             translated_text = f"{translated_text}\n\n{image_translations}"
 
+        seed_color = await self._extract_seed_color(data["user"]["avatar_url"])
+        palette = self._generate_md3_palette(seed_color)
         card_data = {
             "user_name": data["user"]["name"],
             "screen_name": data["user"]["screen_name"],
@@ -488,6 +675,7 @@ class TwitterMonitorPlugin(Star):
             "q_article_text": q_article_text,
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
+            "palette": palette,
         }
 
         card_img_url = await self._render_card(template, card_data)
@@ -503,6 +691,30 @@ class TwitterMonitorPlugin(Star):
             "user_id": data["user"]["id"],
             "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
         }
+
+    async def _dump_render_debug(self, html: str, card_data: dict, png_path: str):
+        debug_dir = os.path.join(
+            getattr(self.context, "astrbot_root", os.getcwd()),
+            "data", "config", "debug_render"
+        )
+        os.makedirs(debug_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        tweet_id = card_data.get("id", "unknown")
+        base = os.path.join(debug_dir, f"{ts}_{tweet_id}")
+        try:
+            with open(f"{base}.html", "w", encoding="utf-8") as f:
+                f.write(html)
+            meta = {
+                "tweet_id": tweet_id,
+                "card_data_keys": list(card_data.keys()),
+                "screenshot_png": png_path,
+                "rendered_at": ts,
+            }
+            with open(f"{base}.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+            logger.debug(f"Render debug dumped to {base}.*")
+        except Exception as e:
+            logger.warning(f"Failed to dump render debug: {e}")
 
     async def _render_card(self, template: str, card_data: dict) -> str:
         """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
@@ -528,6 +740,7 @@ class TwitterMonitorPlugin(Star):
                 await page.wait_for_timeout(500)
                 await page.screenshot(path=png_path, full_page=True)
                 await browser.close()
+            await self._dump_render_debug(html, card_data, png_path)
             return png_path
         except Exception as e:
             logger.error(f"Local card render failed: {e}")
