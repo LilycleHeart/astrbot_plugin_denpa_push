@@ -437,7 +437,7 @@ class TwitterMonitorPlugin(Star):
                 return hex_from_argb(argb)
             
             seed_hct = Hct.from_int(seed_int)
-            card_bg_hct = Hct.from(seed_hct.hue, 10, 8 if is_dark else 97)
+            card_bg_hct = Hct.from_hct(seed_hct.hue, 10, 8 if is_dark else 97)
 
             palette = {
                 "surface": _get_hex(mdc.surface, scheme),
