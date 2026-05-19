@@ -1,6 +1,6 @@
 # Twitter Monitor — AstrBot Plugin
 
-监控指定 Twitter/X 账号的最新推文，自动生成配色卡片（PNG），支持翻译、图片 OCR、多平台推送。
+监控指定 Twitter/X 账号的最新推文，自动生成Material design 3 动态配色卡片（PNG），支持翻译、图片 OCR。
 
 ## 功能
 
