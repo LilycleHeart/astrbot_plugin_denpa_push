@@ -39,5 +39,10 @@
     "type": "string",
     "default": "中文",
     "hint": "例如: 中文、English、日本語"
+  },
+  "proxy": {
+    "description": "代理地址（可选）",
+    "type": "string",
+    "hint": "如 http://127.0.0.1:7890，留空不使用代理"
   }
 }
