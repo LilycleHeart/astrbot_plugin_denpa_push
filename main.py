@@ -1019,7 +1019,7 @@ class DenpaPushPlugin(Star):
                     if i == 0
                     else f"(续 {i + 1}/{len(chunks)})"
                 )
-                sub["article_text"] = chunk
+                sub["article_text"] = "" if i == 0 else chunk
                 if i > 0:
                     sub["article_preview"] = ""
                 sub["translated_text"] = t_chunk
