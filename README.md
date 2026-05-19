@@ -4,7 +4,7 @@
 <div align="center">
 
 现代化 Twitter / X 推送插件  
-支持 **LLM 翻译、图片 OCR、多图排版、Material Design 3 动态配色卡片**
+支持 **LLM 翻译、图片 OCR、多图排版、自动深色模式、媒体合并发送、Material Design 3 动态配色卡片**
 
 <p>
   <img src="https://img.shields.io/badge/AstrBot-%3E%3D4.24-7C3AED?style=for-the-badge" />
