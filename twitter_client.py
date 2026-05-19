@@ -223,6 +223,16 @@ class TwitterClient:
         raw_legacy = raw.get("legacy", {})
         raw_entities = raw_legacy.get("entities", {})
         data["urls"] = raw_entities.get("urls", [])
+
+        # 提取 NoteTweet（长推文）全文，覆盖被截断的 text/full_text
+        note_tweet = raw.get("note_tweet", {})
+        note_result = note_tweet.get("note_tweet_results", {}).get("result", {})
+        if note_result:
+            note_text = note_result.get("text", "")
+            if isinstance(note_text, str) and len(note_text) > len(data.get("text", "")):
+                data["text"] = note_text
+                data["full_text"] = note_text
+                data["has_note_tweet"] = True
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {})
