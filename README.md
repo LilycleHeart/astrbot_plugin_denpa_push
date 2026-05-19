@@ -1,7 +1,6 @@
-# 電波プッシュ · DenpaPush — AstrBot Plugin
+# Twitter Monitor — AstrBot Plugin
 
-X（Twitter）推文を電波のようにキャッチし、自動翻訳・カード化してプッシュ。
-以電波般的速度捕捉 X 推文，自動翻譯並生成卡片推送給你。
+监控指定 Twitter/X 账号的最新推文，自动生成Material design 3 动态配色卡片（PNG），支持翻译、图片 OCR。
 
 ## 功能
 
@@ -83,14 +82,14 @@ pip install easyocr
 
 ## 数据文件
 
-监控数据保存在 `data/config/astrbot_plugin_twitter_monitor_data.json`（兼容旧版），包括：
+监控数据保存在 `data/config/astrbot_plugin_twitter_monitor_data.json`，包括：
 - 已关注用户列表及最后推文 ID
 - 已开启自动推送的会话列表
 
 ## 项目结构
 
 ```
-astrbot_plugin_denpa_push/
+astrbot_plugin_twitter_monitor/
 ├── main.py                 # 插件入口，指令处理，监控循环
 ├── twitter_client.py       # Twitter API 封装
 ├── templates/
