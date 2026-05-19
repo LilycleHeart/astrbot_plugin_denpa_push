@@ -678,46 +678,56 @@ class TwitterMonitorPlugin(Star):
 
         # 长文章分块渲染
         article_text = data.get("article_full_text") or (article.get("full_text", "") if article else "")
-        MAX_CHUNK = 3000
-        if len(article_text) > MAX_CHUNK:
-            paragraphs = article_text.split('\n\n')
-            chunks = []
-            cur, cur_len = [], 0
-            for p in paragraphs:
-                if cur_len + len(p) > MAX_CHUNK and cur:
+        MAX_CHUNK = 2000
+
+        def split_into_chunks(text):
+            """Split text into ~MAX_CHUNK chunks at paragraph boundaries."""
+            paras = text.split('\n\n')
+            chunks, cur, cl = [], [], 0
+            for p in paras:
+                plen = len(p)
+                if cl + plen > MAX_CHUNK and cur:
                     chunks.append('\n\n'.join(cur))
-                    cur, cur_len = [p], len(p)
+                    cur, cl = [], 0
+                # if a single paragraph exceeds MAX_CHUNK, force-split at sentence
+                if plen > MAX_CHUNK:
+                    import re as _re
+                    sentences = _re.split(r'(?<=[。！？.!?])', p)
+                    s_chunk, s_cl = [], 0
+                    for s in sentences:
+                        if s_cl + len(s) > MAX_CHUNK and s_chunk:
+                            cur.append(''.join(s_chunk))
+                            cl += len(cur[-1]) + 2
+                            s_chunk, s_cl = [s], len(s)
+                        else:
+                            s_chunk.append(s)
+                            s_cl += len(s)
+                    if s_chunk:
+                        cur.append(''.join(s_chunk))
+                        cl += len(cur[-1]) + 2
                 else:
                     cur.append(p)
-                    cur_len += len(p) + 2
+                    cl += plen + 2
             if cur:
                 chunks.append('\n\n'.join(cur))
+            return chunks
 
-            # 对应地分割译文
-            t_paragraphs = translated_text.split('\n\n')
-            t_chunks = []
-            cur, cur_len = [], 0
-            for p in t_paragraphs:
-                if cur_len + len(p) > MAX_CHUNK and cur:
-                    t_chunks.append('\n\n'.join(cur))
-                    cur, cur_len = [p], len(p)
-                else:
-                    cur.append(p)
-                    cur_len += len(p) + 2
-            if cur:
-                t_chunks.append('\n\n'.join(cur))
+        if len(article_text) > MAX_CHUNK:
+            chunks = split_into_chunks(article_text)
+            t_chunks = split_into_chunks(translated_text)
 
-            # 补齐长度（译文段落数可能不同）
-            while len(t_chunks) < len(chunks):
-                t_chunks.append(t_chunks[-1] if t_chunks else translated_text)
-            while len(t_chunks) > len(chunks):
-                t_chunks = t_chunks[:len(chunks)]
+            # 译文段落数不同时，取两者最小值（不重复/留空）
+            min_len = min(len(chunks), len(t_chunks))
+            chunks = chunks[:min_len]
+            t_chunks = t_chunks[:min_len]
 
             card_img_urls = []
             for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
                 sub = dict(card_data)
                 sub["article_title"] = card_data["article_title"] if i == 0 else f"(续 {i+1}/{len(chunks)})"
-                sub["article_text"] = chunk
+                sub["article_text"] = ""  # 原文过长时只显示预览摘要
+                if i > 0:
+                    sub["article_preview"] = ""
                 sub["translated_text"] = t_chunk
                 img_url = await self._render_card(template, sub)
                 if img_url:
