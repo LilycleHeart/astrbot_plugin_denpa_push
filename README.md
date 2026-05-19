@@ -78,19 +78,19 @@ pip install easyocr
 - "取消关注 apex" → 调用 `twitter_remove`（模糊匹配）
 - "推送 https://x.com/xxx/status/123" → 调用 `twitter_push`
 - "列出已关注的推特账号" → 调用 `twitter_list`
-- "开启自动推送" / "关闭自动推送" → 调用 `twitter_monitor`
+- "开启自动推送" / "关闭自动推送" → 调用 `denpa_push`
 
 
 ## 数据文件
 
-监控数据保存在 `data/config/astrbot_plugin_twitter_monitor_data.json`，包括：
+监控数据保存在 `data/config/astrbot_plugin_denpa_push_data.json`，包括：
 - 已关注用户列表及最后推文 ID
 - 已开启自动推送的会话列表
 
 ## 项目结构
 
 ```
-astrbot_plugin_twitter_monitor/
+astrbot_plugin_denpa_push/
 ├── main.py                 # 插件入口，指令处理，监控循环
 ├── twitter_client.py       # Twitter API 封装
 ├── templates/
