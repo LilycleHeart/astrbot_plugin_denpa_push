@@ -155,7 +155,10 @@ class TwitterClient:
                     if in_list:
                         html_parts.append("</ul>")
                         in_list = False
-                    level = btype.replace("header-", "")
+                    level = {"one": "1", "two": "2", "three": "3",
+                             "four": "4", "five": "5", "six": "6"}.get(
+                        btype.replace("header-", ""), "2"
+                    )
                     html_parts.append(f"<h{level}>{text}</h{level}>")
                 elif btype == "blockquote":
                     if in_list:

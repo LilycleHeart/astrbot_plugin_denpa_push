@@ -1239,16 +1239,18 @@ class DenpaPushPlugin(Star):
         if not text or not text.strip():
             return "(无文字内容)"
 
-        # 翻译前过滤掉链接，防止非多模态模型误以为要它看图
+        # 翻译前过滤掉链接和 HTML 标签，防止非多模态模型误以为要它看图
         import re as _re
 
         clean_text = _re.sub(r"https?://\S+", "", text).strip()
+        clean_text = _re.sub(r"<[^>]+>", "", clean_text).strip()
         if not clean_text:
             clean_text = text
 
         # 截断过长的文章正文，防止 LLM 调用超时
-        if len(clean_text) > 4000:
-            clean_text = clean_text[:4000] + "\n\n...(截断)"
+        MAX_TRANSLATE = 12000
+        if len(clean_text) > MAX_TRANSLATE:
+            clean_text = clean_text[:MAX_TRANSLATE] + "\n\n...(截断)"
 
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
