@@ -12,17 +12,16 @@ from astrbot.api.star import Context, Star, register
 from .twitter_client import TwitterClient
 
 DATA_DIR = "data/config"
-# 保持旧数据文件名，兼容已有订阅
 DATA_FILE = "astrbot_plugin_twitter_monitor_data.json"
 
 
 @register(
-    "astrbot_plugin_denpa_push",
+    "astrbot_plugin_twitter_monitor",
     "astrbot_user",
-    "電波プッシュ · 捕捉 X 推文的電波，自動翻譯並生成卡片推送給你",
+    "Twitter/X 推文监控、翻译与推送插件",
     "1.0.0",
 )
-class DenpaPushPlugin(Star):
+class TwitterMonitorPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
         self.config = config or {}
@@ -47,29 +46,11 @@ class DenpaPushPlugin(Star):
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
-        logger.info("DenpaPush plugin initialized")
+        logger.info("Twitter Monitor plugin initialized")
 
     def _apply_twitter_credentials(self):
         auth_token = self.config.get("twitter_auth_token", "")
         ct0 = self.config.get("twitter_ct0", "")
-        if not auth_token:
-            # 兼容旧插件名 astrbot_plugin_twitter_monitor 的配置文件迁移
-            try:
-                old_cfg_path = os.path.join(
-                    getattr(self.context, "astrbot_root", os.getcwd()),
-                    "data",
-                    "config",
-                    "astrbot_plugin_twitter_monitor_config.json",
-                )
-                if os.path.exists(old_cfg_path):
-                    with open(old_cfg_path, "r", encoding="utf-8") as f:
-                        old_cfg = json.load(f)
-                    auth_token = old_cfg.get("twitter_auth_token", auth_token)
-                    ct0 = old_cfg.get("twitter_ct0", ct0)
-                    if auth_token:
-                        logger.info("Migrated credentials from old config file")
-            except Exception as e:
-                logger.debug(f"Old config migration failed: {e}")
         if auth_token:
             self.twitter.set_credentials(auth_token, ct0)
 
