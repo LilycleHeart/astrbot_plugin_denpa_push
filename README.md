@@ -1,6 +1,7 @@
-# Twitter Monitor — AstrBot Plugin
+# 電波プッシュ · DenpaPush — AstrBot Plugin
 
-监控指定 Twitter/X 账号的最新推文，自动生成Material design 3 动态配色卡片（PNG），支持翻译、图片 OCR。
+X（Twitter）推文を電波のようにキャッチし、自動翻訳・カード化してプッシュ。
+以電波般的速度捕捉 X 推文，自動翻譯並生成卡片推送給你。
 
 ## 功能
 
