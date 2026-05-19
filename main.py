@@ -12,16 +12,17 @@ from astrbot.api.star import Context, Star, register
 from .twitter_client import TwitterClient
 
 DATA_DIR = "data/config"
+# 保持旧数据文件名，兼容已有订阅
 DATA_FILE = "astrbot_plugin_twitter_monitor_data.json"
 
 
 @register(
-    "astrbot_plugin_twitter_monitor",
+    "astrbot_plugin_denpa_push",
     "astrbot_user",
-    "Twitter/X 推文监控、翻译与推送插件",
+    "電波プッシュ · 捕捉 X 推文的電波，自動翻譯並生成卡片推送給你",
     "1.0.0",
 )
-class TwitterMonitorPlugin(Star):
+class DenpaPushPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
         self.config = config or {}
