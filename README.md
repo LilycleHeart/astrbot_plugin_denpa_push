@@ -171,7 +171,7 @@ ct0
 插件数据默认保存在：
 
 ```text
-data/config/astrbot_plugin_twitter_monitor_data.json
+data/config/astrbot_plugin_denpa_push_data.json
 ```
 
 包含：
@@ -185,7 +185,7 @@ data/config/astrbot_plugin_twitter_monitor_data.json
 # 📦 项目结构
 
 ```text
-astrbot_plugin_twitter_monitor/
+astrbot_plugin_denpa_push/
 ├── main.py
 ├── twitter_client.py
 ├── templates/
