@@ -97,96 +97,95 @@ class TwitterClient:
         if r.status_code != 200:
             logger.warning(f"Article fetch failed: {r.status_code}")
             return ""
-            data = r.json()
-            result = data.get("data", {}).get("tweetResult", {}).get("result", {})
+        data = r.json()
+        result = data.get("data", {}).get("tweetResult", {}).get("result", {})
 
-            # Full article text from content_state blocks -> HTML
-            art_result = (
-                result.get("article", {}).get("article_results", {}).get("result", {})
-            )
-            content_state = art_result.get("content_state", {})
-            blocks = content_state.get("blocks", [])
-            if blocks:
-                entity_map = content_state.get("entityMap", [])
-                entities = {}
-                for entry in entity_map:
-                    if isinstance(entry, dict) and "key" in entry:
-                        entities[str(entry["key"])] = entry["value"]
+        # Full article text from content_state blocks -> HTML
+        art_result = (
+            result.get("article", {}).get("article_results", {}).get("result", {})
+        )
+        content_state = art_result.get("content_state", {})
+        blocks = content_state.get("blocks", [])
+        if blocks:
+            entity_map = content_state.get("entityMap", [])
+            entities = {}
+            for entry in entity_map:
+                if isinstance(entry, dict) and "key" in entry:
+                    entities[str(entry["key"])] = entry["value"]
 
-                def apply_entity_ranges(text, ranges):
-                    if not ranges:
-                        return text
-                    chars = list(text)
-                    for er in sorted(
-                        ranges, key=lambda x: x.get("offset", 0), reverse=True
-                    ):
-                        key = str(er.get("key", ""))
-                        ent = entities.get(key, {})
-                        etype = ent.get("type", "")
-                        offset = er.get("offset", 0)
-                        length = er.get("length", 0)
-                        if etype == "TWEMOJI":
-                            url = ent.get("data", {}).get("url", "")
-                            img = f'<img src="{url}" style="width:1.2em;height:1.2em;vertical-align:middle" alt="emoji"/>'
-                            for i in range(offset, min(offset + length, len(chars))):
-                                chars[i] = ""
-                            chars[offset] = img
-                    return "".join(chars)
-
-                html_parts = []
-                in_list = False
-                for b in blocks:
-                    btype = b.get("type", "unstyled")
-                    text = b.get("text", "")
-                    if not text:
-                        continue
-                    text = apply_entity_ranges(text, b.get("entityRanges", []))
-                    if btype == "unstyled":
-                        if in_list:
-                            html_parts.append("</ul>")
-                            in_list = False
-                        html_parts.append(f"<p>{text}</p>")
-                    elif btype in ("unordered-list-item", "ordered-list-item"):
-                        if not in_list:
-                            html_parts.append("<ul>")
-                            in_list = True
-                        html_parts.append(f"<li>{text}</li>")
-                    elif btype.startswith("header-"):
-                        if in_list:
-                            html_parts.append("</ul>")
-                            in_list = False
-                        level = btype.replace("header-", "")
-                        html_parts.append(f"<h{level}>{text}</h{level}>")
-                    elif btype == "blockquote":
-                        if in_list:
-                            html_parts.append("</ul>")
-                            in_list = False
-                        html_parts.append(f"<blockquote>{text}</blockquote>")
-                    else:
-                        if in_list:
-                            html_parts.append("</ul>")
-                            in_list = False
-                        html_parts.append(f"<p>{text}</p>")
-                if in_list:
-                    html_parts.append("</ul>")
-
-                if html_parts:
-                    return "\n\n".join(html_parts)
-
-            legacy = result.get("legacy", {})
-            if legacy.get("full_text"):
-                return legacy["full_text"]
-            note = (
-                result.get("note_tweet", {})
-                .get("note_tweet_results", {})
-                .get("result", {})
-            )
-            if note:
-                text = note.get("text", "")
-                if text:
+            def apply_entity_ranges(text, ranges):
+                if not ranges:
                     return text
-            return legacy.get("text", legacy.get("full_text", ""))
-        return ""
+                chars = list(text)
+                for er in sorted(
+                    ranges, key=lambda x: x.get("offset", 0), reverse=True
+                ):
+                    key = str(er.get("key", ""))
+                    ent = entities.get(key, {})
+                    etype = ent.get("type", "")
+                    offset = er.get("offset", 0)
+                    length = er.get("length", 0)
+                    if etype == "TWEMOJI":
+                        url = ent.get("data", {}).get("url", "")
+                        img = f'<img src="{url}" style="width:1.2em;height:1.2em;vertical-align:middle" alt="emoji"/>'
+                        for i in range(offset, min(offset + length, len(chars))):
+                            chars[i] = ""
+                        chars[offset] = img
+                return "".join(chars)
+
+            html_parts = []
+            in_list = False
+            for b in blocks:
+                btype = b.get("type", "unstyled")
+                text = b.get("text", "")
+                if not text:
+                    continue
+                text = apply_entity_ranges(text, b.get("entityRanges", []))
+                if btype == "unstyled":
+                    if in_list:
+                        html_parts.append("</ul>")
+                        in_list = False
+                    html_parts.append(f"<p>{text}</p>")
+                elif btype in ("unordered-list-item", "ordered-list-item"):
+                    if not in_list:
+                        html_parts.append("<ul>")
+                        in_list = True
+                    html_parts.append(f"<li>{text}</li>")
+                elif btype.startswith("header-"):
+                    if in_list:
+                        html_parts.append("</ul>")
+                        in_list = False
+                    level = btype.replace("header-", "")
+                    html_parts.append(f"<h{level}>{text}</h{level}>")
+                elif btype == "blockquote":
+                    if in_list:
+                        html_parts.append("</ul>")
+                        in_list = False
+                    html_parts.append(f"<blockquote>{text}</blockquote>")
+                else:
+                    if in_list:
+                        html_parts.append("</ul>")
+                        in_list = False
+                    html_parts.append(f"<p>{text}</p>")
+            if in_list:
+                html_parts.append("</ul>")
+
+            if html_parts:
+                return "\n\n".join(html_parts)
+
+        legacy = result.get("legacy", {})
+        if legacy.get("full_text"):
+            return legacy["full_text"]
+        note = (
+            result.get("note_tweet", {})
+            .get("note_tweet_results", {})
+            .get("result", {})
+        )
+        if note:
+            text = note.get("text", "")
+            if text:
+                return text
+        return legacy.get("text", legacy.get("full_text", ""))
 
     @staticmethod
     def extract_tweet_data(tweet) -> dict:
