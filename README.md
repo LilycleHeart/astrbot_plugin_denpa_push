@@ -102,6 +102,4 @@ astrbot_plugin_twitter_monitor/
 ## 注意
 
 - **QQ Official 平台**不支持 Node 转发消息，仅 OneBot (aiocqhttp) 支持
-- 图片以 Group forward 合并发送，视频/GIF 单独发送
 - 翻译使用 AstrBot 的 `llm_generate()`，需配置可用的 LLM Provider
-- 配色使用 NetEase 风格手调配色板 + CIE Lab 色距匹配，无需 PyMCUlib 依赖
