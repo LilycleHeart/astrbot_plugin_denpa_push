@@ -1,5 +1,4 @@
-# ⚡ 电波推送 / AstrBot Plugin
-
+<h1 align="center">⚡ 电波推送 / AstrBot Plugin</h1>
 
 <div align="center">
 
