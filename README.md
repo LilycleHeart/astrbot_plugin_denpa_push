@@ -217,18 +217,8 @@ astrbot_plugin_twitter_monitor/
 
 ---
 
-# ❤️ 致谢
-
-- AstrBot
-- Playwright
-- Twikit
-- Material Design 3
-
----
-
 <div align="center">
 
-### 📡 架起天线，向世界传递电波
 
 如果这个插件对你有帮助，欢迎 Star ⭐
 
