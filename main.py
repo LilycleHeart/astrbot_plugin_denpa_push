@@ -140,7 +140,7 @@ class TwitterMonitorPlugin(Star):
         elif sub == "list":
             yield await self._cmd_list(event)
         elif sub == "push" and len(parts) >= 3:
-            for result in await self._cmd_push(event, parts[2]):
+            async for result in self._cmd_push(event, parts[2]):
                 yield result
         elif sub == "monitor":
             yield await self._cmd_monitor(event)
@@ -187,7 +187,7 @@ class TwitterMonitorPlugin(Star):
         Args:
             url(string): 推特链接，如 https://x.com/username/status/123456
         '''
-        for r in await self._cmd_push(event, url):
+        async for r in self._cmd_push(event, url):
             yield r
 
     @filter.llm_tool(name="twitter_list")
@@ -262,22 +262,21 @@ class TwitterMonitorPlugin(Star):
         return event.plain_result("\n".join(lines))
 
     async def _cmd_push(self, event: AstrMessageEvent, url: str):
-        results = []
         m = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/(\d+)", url)
         if not m:
-            results.append(event.plain_result("无效的推文链接，格式: https://x.com/username/status/123456"))
-            return results
+            yield event.plain_result("无效的推文链接，格式: https://x.com/username/status/123456")
+            return
         username, tweet_id = m.group(1), m.group(2)
         try:
-            results.append(event.plain_result("正在获取推文..."))
+            yield event.plain_result("正在获取推文...")
             tweet = await self.twitter.get_tweet_by_id(tweet_id)
             data = TwitterClient.extract_tweet_data(tweet)
             info = await self._build_card_data(data)
 
             # 1. 卡片 PNG 直接发送
             if info["card_img_url"]:
-                results.append(event.image_result(info["card_img_url"]))
-            results.append(event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"))
+                yield event.image_result(info["card_img_url"])
+            yield event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
 
             # 2. 图片合并到一条群合并转发消息
             from astrbot.api.message_components import Node, Plain
@@ -289,19 +288,18 @@ class TwitterMonitorPlugin(Star):
                     img_contents.append(CompImage.fromURL(iurl))
             if len(img_contents) > 1:
                 node = Node(uin="0", name=uname, content=img_contents)
-                results.append(event.chain_result([node]))
+                yield event.chain_result([node])
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
                 if vurl:
-                    results.append(event.chain_result([CompVideo.fromURL(vurl)]))
+                    yield event.chain_result([CompVideo.fromURL(vurl)])
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
                 if vurl:
-                    results.append(event.chain_result([CompVideo.fromURL(vurl)]))
+                    yield event.chain_result([CompVideo.fromURL(vurl)])
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
-            results.append(event.plain_result(f"推送失败: {str(e)[:100]}"))
-        return results
+            yield event.plain_result(f"推送失败: {str(e)[:100]}")
 
     async def _cmd_monitor(self, event: AstrMessageEvent):
         umo = event.unified_msg_origin
@@ -863,10 +861,6 @@ class TwitterMonitorPlugin(Star):
         clean_text = _re.sub(r'https?://\S+', '', text).strip()
         if not clean_text:
             clean_text = text
-
-        # 截断过长的文章正文，防止 LLM 调用超时
-        if len(clean_text) > 4000:
-            clean_text = clean_text[:4000] + "\n\n...(截断)"
 
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
