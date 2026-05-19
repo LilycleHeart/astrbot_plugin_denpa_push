@@ -452,51 +452,26 @@ class TwitterMonitorPlugin(Star):
 
     @staticmethod
     def _derive_preset_palette(primary, secondary, bg, bg_darken, is_dark):
-        def lum(rgb):
-            r, g, b = [x / 255.0 for x in rgb]
-            return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-        def mix(a, b, p):
-            return tuple(int(a[i] * (1 - p) + b[i] * p) for i in range(3))
+        if not secondary:
+            def lum(rgb):
+                r, g, b = [x / 255.0 for x in rgb]
+                return 0.2126 * r + 0.7152 * g + 0.0722 * b
+            pl = lum(primary)
+            on_p = (255, 255, 255) if pl < 0.55 else (30, 30, 30)
+            secondary = on_p if is_dark else tuple(int(on_p[i]*0.6 + bg[i]*0.4) for i in range(3))
 
         def hx(rgb):
             return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
-        pl = lum(primary)
-        bl = lum(bg)
-
-        on_primary = (255, 255, 255) if pl < 0.55 else (30, 30, 30)
-
-        if is_dark:
-            pc = mix(primary, (0, 0, 0), 0.55)
-        else:
-            pc = mix(primary, (255, 255, 255), 0.75)
-        on_pc = (255, 255, 255) if lum(pc) < 0.55 else (30, 30, 30)
-
-        if not secondary:
-            secondary = mix(on_primary, bg, 0.5) if is_dark else mix(on_primary, bg, 0.4)
-
-        on_surface = (230, 230, 230) if bl < 0.35 else (30, 30, 30)
-        on_sv = mix(on_surface, bg, 0.55)
-        sv = mix(bg, primary, 0.08 if is_dark else 0.04)
-        outline = mix(bg, on_surface, 0.3)
-        outline_v = mix(bg, on_surface, 0.15)
-
         return {
             "primary": hx(primary),
-            "on_primary": hx(on_primary),
-            "primary_container": hx(pc),
-            "on_primary_container": hx(on_pc),
             "secondary": hx(secondary),
-            "surface": hx(bg),
-            "on_surface": hx(on_surface),
-            "surface_variant": hx(sv),
-            "on_surface_variant": hx(on_sv),
-            "outline": hx(outline),
-            "outline_variant": hx(outline_v),
-            "footer": hx(outline_v),
-            "quote_bg": hx(sv),
-            "card_bg": hx(bg_darken),
+            "bg": hx(bg),
+            "bg-darken": hx(bg_darken),
+            "primary_rgb": f"{primary[0]},{primary[1]},{primary[2]}",
+            "secondary_rgb": f"{secondary[0]},{secondary[1]},{secondary[2]}",
+            "bg_rgb": f"{bg[0]},{bg[1]},{bg[2]}",
+            "bg_darken_rgb": f"{bg_darken[0]},{bg_darken[1]},{bg_darken[2]}",
         }
 
     async def _extract_seed_color(self, avatar_url: str):
@@ -517,7 +492,7 @@ class TwitterMonitorPlugin(Star):
             logger.warning(f"Seed color extraction failed: {e}")
             return (103, 80, 164)
 
-    def _generate_palette(self, seed_rgb) -> dict:
+    def _generate_palette(self, seed_rgb):
         h = int(__import__("datetime").datetime.now().strftime("%H"))
         is_dark = h >= 18 or h < 6
 
@@ -549,30 +524,24 @@ class TwitterMonitorPlugin(Star):
 
             palette = self._derive_preset_palette(primary, secondary, bg, bg_darken, is_dark)
             logger.debug(f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): {json.dumps(palette)}")
-            return palette
+            return palette, is_dark
         except Exception as e:
             logger.warning(f"Preset palette failed: {e}")
 
         # Final hardcoded fallback
         if is_dark:
             return {
-                "surface": "#1c1b1f", "surface_variant": "#2b2930",
-                "primary": "#d0bcff", "on_primary": "#381e72",
-                "primary_container": "#4f378b", "on_primary_container": "#eaddff",
-                "secondary": "#cac4d0", "on_surface": "#e6e1e5",
-                "on_surface_variant": "#cac4d0", "outline": "#938f99",
-                "outline_variant": "#49454f", "footer": "#938f99",
-                "quote_bg": "#2b2930", "card_bg": "#141318",
-            }
+                "primary": "#d0bcff", "primary_rgb": "208,188,255",
+                "secondary": "#cac4d0", "secondary_rgb": "202,196,208",
+                "bg": "#1c1b1f", "bg_rgb": "28,27,31",
+                "bg-darken": "#141318", "bg_darken_rgb": "20,19,24",
+            }, is_dark
         return {
-            "surface": "#fdf7ff", "surface_variant": "#e7dff2",
-            "primary": "#5700d2", "on_primary": "#ffffff",
-            "primary_container": "#9f7aff", "on_primary_container": "#1c004f",
-            "secondary": "#554262", "on_surface": "#1d1a24",
-            "on_surface_variant": "#494453", "outline": "#686272",
-            "outline_variant": "#958fa0", "footer": "#958fa0",
-            "quote_bg": "#e7dff2", "card_bg": "#efe5ff",
-        }
+            "primary": "#5700d2", "primary_rgb": "87,0,210",
+            "secondary": "#554262", "secondary_rgb": "85,66,98",
+            "bg": "#fdf7ff", "bg_rgb": "253,247,255",
+            "bg-darken": "#efe5ff", "bg_darken_rgb": "239,229,255",
+        }, is_dark
 
     async def _build_card_data(self, data: dict) -> dict:
         article = data.get("article")
@@ -683,7 +652,7 @@ class TwitterMonitorPlugin(Star):
             translated_text = f"{translated_text}\n\n{image_translations}"
 
         seed_rgb = await self._extract_seed_color(data["user"]["avatar_url"])
-        palette = self._generate_palette(seed_rgb)
+        palette, is_dark = self._generate_palette(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
             "screen_name": data["user"]["screen_name"],
@@ -713,6 +682,7 @@ class TwitterMonitorPlugin(Star):
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
             "palette": palette,
+            "is_dark": is_dark,
         }
 
         # 长文章分块渲染
