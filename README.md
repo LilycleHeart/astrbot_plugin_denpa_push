@@ -1,4 +1,6 @@
+<div align="center">
 # ⚡ 电波推送 / AstrBot Twitter Plugin
+</div>
 
 <div align="center">
 
