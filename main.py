@@ -432,6 +432,9 @@ class TwitterMonitorPlugin(Star):
                 argb = dynamic_color_func().get_argb(scheme)
                 return hex_from_argb(argb)
             
+            seed_hct = Hct.from_int(seed_int)
+            card_bg_hct = Hct.from(seed_hct.hue, 10, 97)
+
             palette = {
                 "surface": _get_hex(mdc.surface, scheme),
                 "surface_variant": _get_hex(mdc.surface_variant, scheme),
@@ -446,6 +449,7 @@ class TwitterMonitorPlugin(Star):
                 "outline_variant": _get_hex(mdc.outline_variant, scheme),
                 "footer": _get_hex(mdc.outline_variant, scheme),
                 "quote_bg": _get_hex(mdc.surface_variant, scheme),
+                "card_bg": hex_from_argb(card_bg_hct.to_int()),
             }
             logger.debug(f"Generated MD3 palette (PyMCUlib): {json.dumps(palette)}")
             return palette
@@ -516,6 +520,7 @@ class TwitterMonitorPlugin(Star):
                 "outline_variant": _role(h, s * 0.2, 0.6),
                 "footer": _role(h, s * 0.2, 0.6),
                 "quote_bg": _role(h, s * 0.2, 0.85),
+                "card_bg": _role(h, s * 0.25, 0.93),
             }
             logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
             return palette
@@ -537,6 +542,7 @@ class TwitterMonitorPlugin(Star):
             "outline_variant": "#958fa0",
             "footer": "#958fa0",
             "quote_bg": "#e7dff2",
+            "card_bg": "#efe5ff",
         }
 
     async def _build_card_data(self, data: dict) -> dict:

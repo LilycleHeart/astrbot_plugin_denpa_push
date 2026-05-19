@@ -11,7 +11,7 @@ body{
   background:transparent;font-family:'Inter','Noto Sans SC',system-ui,-apple-system,sans-serif
 }
 .card{
-  width:620px;background:var(--md-surface);border-radius:28px;
+  width:620px;background:var(--md-card-bg);border-radius:28px;
   padding:24px;box-shadow:0 8px 30px rgba(0,0,0,0.08),0 2px 8px rgba(0,0,0,0.04);
   display:flex;flex-direction:column;gap:14px
 }
@@ -81,7 +81,7 @@ body{
 </style>
 </head>
 <body>
-<div class="card" style="--md-surface:{{palette.surface}};--md-primary:{{palette.primary}};--md-on-primary:{{palette.on_primary}};--md-primary-container:{{palette.primary_container}};--md-on-primary-container:{{palette.on_primary_container}};--md-secondary:{{palette.secondary}};--md-on-surface:{{palette.on_surface}};--md-on-surface-variant:{{palette.on_surface_variant}};--md-surface-variant:{{palette.surface_variant}};--md-outline:{{palette.outline}};--md-outline-variant:{{palette.outline_variant}};--md-footer:{{palette.footer}};--md-quote-bg:{{palette.quote_bg}}">
+<div class="card" style="--md-surface:{{palette.surface}};--md-card-bg:{{palette.card_bg}};--md-primary:{{palette.primary}};--md-on-primary:{{palette.on_primary}};--md-primary-container:{{palette.primary_container}};--md-on-primary-container:{{palette.on_primary_container}};--md-secondary:{{palette.secondary}};--md-on-surface:{{palette.on_surface}};--md-on-surface-variant:{{palette.on_surface_variant}};--md-surface-variant:{{palette.surface_variant}};--md-outline:{{palette.outline}};--md-outline-variant:{{palette.outline_variant}};--md-footer:{{palette.footer}};--md-quote-bg:{{palette.quote_bg}}">
 
   <div class="header">
     {% if avatar_url %}
