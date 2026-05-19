@@ -47,11 +47,29 @@ class DenpaPushPlugin(Star):
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
-        logger.info("Twitter Monitor plugin initialized")
+        logger.info("DenpaPush plugin initialized")
 
     def _apply_twitter_credentials(self):
         auth_token = self.config.get("twitter_auth_token", "")
         ct0 = self.config.get("twitter_ct0", "")
+        if not auth_token:
+            # 兼容旧插件名 astrbot_plugin_twitter_monitor 的配置文件迁移
+            try:
+                old_cfg_path = os.path.join(
+                    getattr(self.context, "astrbot_root", os.getcwd()),
+                    "data",
+                    "config",
+                    "astrbot_plugin_twitter_monitor_config.json",
+                )
+                if os.path.exists(old_cfg_path):
+                    with open(old_cfg_path, "r", encoding="utf-8") as f:
+                        old_cfg = json.load(f)
+                    auth_token = old_cfg.get("twitter_auth_token", auth_token)
+                    ct0 = old_cfg.get("twitter_ct0", ct0)
+                    if auth_token:
+                        logger.info("Migrated credentials from old config file")
+            except Exception as e:
+                logger.debug(f"Old config migration failed: {e}")
         if auth_token:
             self.twitter.set_credentials(auth_token, ct0)
 
