@@ -418,6 +418,103 @@ class TwitterMonitorPlugin(Star):
 
             await asyncio.sleep(interval)
 
+    # NetEase 预设色板（来自 material-you-theme-netease）
+    SCHEME_PRESETS = {
+        'dark-blue':      {'primary': (189, 230, 251), 'bg': (30, 37, 41), 'bg-darken': (23, 29, 32)},
+        'dark-gray':      {'primary': (255, 255, 255), 'bg': (32, 32, 32), 'bg-darken': (25, 25, 25)},
+        'dark-green':     {'primary': (183, 241, 222), 'bg': (26, 36, 33), 'bg-darken': (21, 28, 25)},
+        'dark-orange':    {'primary': (255, 200, 182), 'bg': (39, 30, 27), 'bg-darken': (30, 23, 21)},
+        'dark-purple':    {'primary': (216, 196, 241), 'bg': (34, 31, 38), 'bg-darken': (26, 24, 30)},
+        'dark-red':       {'primary': (253, 180, 180), 'bg': (39, 27, 27), 'bg-darken': (30, 21, 21)},
+        'dark-pink':      {'primary': (255, 217, 228), 'bg': (54, 41, 41), 'bg-darken': (33, 26, 26)},
+        'dark-rose-pine': {'primary': (235, 188, 186), 'secondary': (224, 222, 244), 'bg': (35, 33, 54), 'bg-darken': (57, 53, 82)},
+        'tokyo-night':    {'primary': (181, 185, 214), 'bg': (36, 38, 56), 'bg-darken': (28, 29, 43)},
+        'one-dark-blue':  {'primary': (113, 189, 242), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-green': {'primary': (167, 203, 139), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-cyan':  {'primary': (101, 193, 205), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-red':   {'primary': (231, 130, 135), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-pink':  {'primary': (255, 121, 198), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-yellow':{'primary': (218, 170, 120), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'one-dark-purple':{'primary': (209, 144, 227), 'secondary': (171, 178, 191), 'bg': (40, 44, 52), 'bg-darken': (33, 37, 43)},
+        'osu-pink':       {'primary': (255, 102, 171), 'secondary': (240, 219, 228), 'bg': (42, 34, 38), 'bg-darken': (28, 23, 25)},
+        'osu-purple':     {'primary': (140, 102, 255), 'secondary': (224, 219, 240), 'bg': (36, 34, 42), 'bg-darken': (24, 23, 28)},
+        'osu-blue':       {'primary': (102, 204, 255), 'secondary': (219, 233, 240), 'bg': (34, 40, 42), 'bg-darken': (23, 26, 28)},
+        'osu-green':      {'primary': (115, 255, 102), 'secondary': (221, 240, 219), 'bg': (35, 42, 34), 'bg-darken': (23, 28, 23)},
+        'osu-orange':     {'primary': (255, 153, 102), 'secondary': (240, 226, 219), 'bg': (42, 37, 34), 'bg-darken': (28, 25, 23)},
+        'osu-yellow':     {'primary': (255, 217, 102), 'secondary': (240, 235, 219), 'bg': (42, 40, 34), 'bg-darken': (28, 27, 23)},
+        'cyberpunk':      {'primary': (252, 236, 12), 'bg': (19, 99, 119), 'bg-darken': (8, 74, 90)},
+        'matrix':         {'primary': (0, 255, 65), 'bg': (6, 2, 8), 'bg-darken': (0, 22, 0)},
+        'dracula-mint':   {'primary': (47, 222, 182), 'secondary': (226, 226, 228), 'bg': (41, 45, 62), 'bg-darken': (33, 36, 50)},
+        'discord':        {'primary': (88, 101, 242), 'secondary': (255, 255, 255), 'bg': (54, 57, 63), 'bg-darken': (47, 49, 54)},
+        'pure-black':     {'primary': (240, 240, 240), 'bg': (0, 0, 0), 'bg-darken': (20, 20, 20)},
+        'light-blue':     {'primary': (34, 197, 253), 'secondary': (18, 51, 84), 'bg': (245, 247, 250), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-gray':     {'primary': (97, 113, 124), 'secondary': (41, 41, 42), 'bg': (247, 247, 247), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-green':    {'primary': (42, 225, 142), 'secondary': (25, 72, 62), 'bg': (246, 249, 249), 'bg-darken': (229, 236, 235), 'light': True},
+        'light-orange':   {'primary': (255, 130, 101), 'secondary': (86, 59, 37), 'bg': (250, 248, 247), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-purple':   {'primary': (159, 116, 231), 'secondary': (64, 43, 77), 'bg': (249, 247, 249), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-red':      {'primary': (255, 89, 102), 'secondary': (87, 41, 32), 'bg': (250, 247, 246), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-pink':     {'primary': (255, 130, 171), 'secondary': (99, 10, 39), 'bg': (250, 247, 246), 'bg-darken': (255, 255, 255), 'light': True},
+        'light-rose-pine':{'primary': (215, 130, 126), 'secondary': (87, 82, 121), 'bg': (242, 233, 225), 'bg-darken': (250, 244, 237), 'light': True},
+        'cerulean':       {'primary': (66, 141, 185), 'secondary': (33, 33, 33), 'bg': (243, 248, 251), 'bg-darken': (223, 238, 243), 'light': True},
+        'wechat':         {'primary': (7, 193, 96), 'secondary': (34, 34, 34), 'bg': (245, 245, 245), 'bg-darken': (218, 218, 218), 'light': True},
+        'tim':            {'primary': (29, 110, 255), 'secondary': (34, 34, 34), 'bg': (244, 246, 248), 'bg-darken': (255, 255, 255), 'light': True},
+        'Cloud & Moon':   {'primary': (93, 131, 194), 'secondary': (87, 111, 147), 'bg': (237, 241, 248), 'bg-darken': (247, 250, 245), 'light': True},
+    }
+
+    @staticmethod
+    def _rgb_to_lab(rgb):
+        r, g, b = [x / 255.0 for x in rgb]
+        r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
+        g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
+        b = b / 12.92 if b <= 0.03928 else ((b + 0.055) / 1.055) ** 2.4
+        x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100
+        y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100
+        z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100
+
+        def f(t):
+            return t ** (1/3) if t > 0.008856 else 7.787 * t + 16/116
+
+        return (116 * f(y / 100) - 16, 500 * (f(x / 95.047) - f(y / 100)), 200 * (f(y / 100) - f(z / 108.883)))
+
+    @staticmethod
+    def _lab_distance(lab1, lab2):
+        return ((lab1[0] - lab2[0]) ** 2 + (lab1[1] - lab2[1]) ** 2 + (lab1[2] - lab2[2]) ** 2) ** 0.5
+
+    @staticmethod
+    def _derive_preset_palette(primary, secondary, bg, bg_darken, is_dark):
+        def lum(rgb):
+            r, g, b = [x / 255.0 for x in rgb]
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def mix(a, b, p):
+            return tuple(int(a[i] * (1 - p) + b[i] * p) for i in range(3))
+
+        def hx(rgb):
+            return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+        def rgb_str(c):
+            return f"{c[0]}, {c[1]}, {c[2]}"
+
+        bl = lum(bg)
+
+        if not secondary:
+            secondary = mix((255, 255, 255) if bl < 0.35 else (0, 0, 0), bg, 0.55)
+
+        on_surface = (230, 230, 230) if bl < 0.35 else (30, 30, 30)
+
+        return {
+            "primary": hx(primary),
+            "primary_rgb": rgb_str(primary),
+            "secondary": hx(secondary),
+            "secondary_rgb": rgb_str(secondary),
+            "surface": hx(bg),
+            "surface_rgb": rgb_str(bg),
+            "surface_variant": hx(bg_darken),
+            "surface_variant_rgb": rgb_str(bg_darken),
+            "on_surface": hx(on_surface),
+            "on_surface_rgb": rgb_str(on_surface),
+        }
+
     async def _extract_seed_color(self, avatar_url: str):
         try:
             import httpx
@@ -433,158 +530,66 @@ class TwitterMonitorPlugin(Star):
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
                 _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
                 _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                _seed = (255 << 24) | (_pr << 16) | (_pg << 8) | _pb
-                logger.debug(
-                    f"Seed color extracted: ARGB={_seed} RGB=({_pr},{_pg},{_pb})"
-                )
-                return _seed
+                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
+                return (_pr, _pg, _pb)
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
-            return "#6750a4"
+            return (103, 80, 164)
 
-    def _generate_md3_palette(self, seed) -> dict:
-        # Try PyMCUlib (pure Python official MCU implementation)
+    def _generate_palette(self, seed_rgb):
+        h = int(__import__("datetime").datetime.now(
+            __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+        ).strftime("%H"))
+        is_dark = h >= 18 or h < 6
+
         try:
-            from PyMCUlib.hct import Hct
-            from PyMCUlib.scheme.scheme_vibrant import SchemeVibrant
-            from PyMCUlib.dynamiccolor.material_dynamic_colors import (
-                MaterialDynamicColors,
-            )
-            from PyMCUlib.utils.string_utils import hex_from_argb
+            seed_lab = self._rgb_to_lab(seed_rgb)
+            best_name, best_dist = None, float("inf")
+            presets = self.SCHEME_PRESETS
 
-            if isinstance(seed, str):
-                seed_int = int(seed.lstrip("#"), 16) | (0xFF << 24)
-            else:
-                seed_int = int(seed) if seed > 0xFFFFFF else int(seed) | (0xFF << 24)
+            for name, p in presets.items():
+                is_light = p.get("light", False)
+                if is_dark and is_light:
+                    continue
+                if not is_dark and not is_light:
+                    continue
+                p_lab = self._rgb_to_lab(p["primary"])
+                dist = self._lab_distance(seed_lab, p_lab)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_name = name
 
-            scheme = SchemeVibrant(
-                Hct.from_int(seed_int),
-                False,  # is_dark=False for light theme
-                0.25,  # contrast_level (default in official MCU)
-            )
+            if not best_name:
+                best_name = "dark-blue" if is_dark else "light-blue"
 
-            mdc = MaterialDynamicColors()
+            preset = presets[best_name]
+            primary = preset["primary"]
+            secondary = preset.get("secondary", None)
+            bg = preset["bg"]
+            bg_darken = preset["bg-darken"]
 
-            def _get_hex(dynamic_color_func, scheme):
-                argb = dynamic_color_func().get_argb(scheme)
-                return hex_from_argb(argb)
-
-            palette = {
-                "surface": _get_hex(mdc.surface, scheme),
-                "surface_variant": _get_hex(mdc.surface_variant, scheme),
-                "primary": _get_hex(mdc.primary, scheme),
-                "on_primary": _get_hex(mdc.on_primary, scheme),
-                "primary_container": _get_hex(mdc.primary_container, scheme),
-                "on_primary_container": _get_hex(mdc.on_primary_container, scheme),
-                "secondary": _get_hex(mdc.secondary, scheme),
-                "on_surface": _get_hex(mdc.on_surface, scheme),
-                "on_surface_variant": _get_hex(mdc.on_surface_variant, scheme),
-                "outline": _get_hex(mdc.outline, scheme),
-                "outline_variant": _get_hex(mdc.outline_variant, scheme),
-                "footer": _get_hex(mdc.outline_variant, scheme),
-                "quote_bg": _get_hex(mdc.surface_variant, scheme),
-            }
-            logger.debug(f"Generated MD3 palette (PyMCUlib): {json.dumps(palette)}")
-            return palette
+            palette = self._derive_preset_palette(primary, secondary, bg, bg_darken, is_dark)
+            logger.debug(f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): {json.dumps(palette)}")
+            return palette, is_dark
         except Exception as e:
-            logger.debug(f"PyMCUlib failed: {e}, trying pure Python fallback")
-
-        # Pure Python MD3-like palette generator (fallback)
-        try:
-            if isinstance(seed, str):
-                seed_int = int(seed.lstrip("#"), 16)
-            else:
-                seed_int = int(seed)
-            sr = (seed_int >> 16) & 0xFF
-            sg = (seed_int >> 8) & 0xFF
-            sb = seed_int & 0xFF
-
-            def _rgb_to_hsl(r, g, b):
-                r, g, b = r / 255.0, g / 255.0, b / 255.0
-                mx, mn = max(r, g, b), min(r, g, b)
-                l = (mx + mn) / 2.0
-                if mx == mn:
-                    h = s = 0.0
-                else:
-                    d = mx - mn
-                    s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
-                    if mx == r:
-                        h = (g - b) / d + (6.0 if g < b else 0.0)
-                    elif mx == g:
-                        h = (b - r) / d + 2.0
-                    else:
-                        h = (r - g) / d + 4.0
-                    h /= 6.0
-                return h * 360.0, s, l
-
-            def _hsl_to_rgb(h, s, l):
-                h = h / 360.0
-                if s == 0:
-                    r = g = b = l
-                else:
-
-                    def hue2rgb(p, q, t):
-                        if t < 0:
-                            t += 1
-                        if t > 1:
-                            t -= 1
-                        if t < 1 / 6:
-                            return p + (q - p) * 6 * t
-                        if t < 1 / 2:
-                            return q
-                        if t < 2 / 3:
-                            return p + (q - p) * (2 / 3 - t) * 6
-                        return p
-
-                    q = l * (1 + s) if l < 0.5 else l + s - l * s
-                    p = 2 * l - q
-                    r = hue2rgb(p, q, h + 1 / 3)
-                    g = hue2rgb(p, q, h)
-                    b = hue2rgb(p, q, h - 1 / 3)
-                return int(r * 255), int(g * 255), int(b * 255)
-
-            h, s, l = _rgb_to_hsl(sr, sg, sb)
-
-            def _role(hue, sat, tone):
-                r, g, b = _hsl_to_rgb(hue, sat, tone)
-                return f"#{r:02x}{g:02x}{b:02x}"
-
-            palette = {
-                "surface": _role(h, s * 0.1, 0.95),
-                "surface_variant": _role(h, s * 0.2, 0.85),
-                "primary": _role(h, min(s * 1.2, 1.0), 0.5),
-                "on_primary": _role(h, s * 0.1, 0.1 if l > 0.5 else 0.95),
-                "primary_container": _role(h, min(s * 1.2, 1.0), 0.8),
-                "on_primary_container": _role(h, min(s * 1.2, 1.0), 0.1),
-                "secondary": _role((h + 15) % 360, s * 0.6, 0.5),
-                "on_surface": _role(h, s * 0.1, 0.1),
-                "on_surface_variant": _role(h, s * 0.2, 0.3),
-                "outline": _role(h, s * 0.2, 0.4),
-                "outline_variant": _role(h, s * 0.2, 0.6),
-                "footer": _role(h, s * 0.2, 0.6),
-                "quote_bg": _role(h, s * 0.2, 0.85),
-            }
-            logger.debug(f"Generated MD3 palette (pure Python): {json.dumps(palette)}")
-            return palette
-        except Exception as e:
-            logger.warning(f"MD3 palette pure Python fallback failed: {e}")
+            logger.warning(f"Preset palette failed: {e}")
 
         # Final hardcoded fallback
+        if is_dark:
+            return {
+                "primary": "#d0bcff", "primary_rgb": "208, 188, 255",
+                "secondary": "#cac4d0", "secondary_rgb": "202, 196, 208",
+                "surface": "#1c1b1f", "surface_rgb": "28, 27, 31",
+                "surface_variant": "#2b2930", "surface_variant_rgb": "43, 41, 48",
+                "on_surface": "#e6e1e5", "on_surface_rgb": "230, 225, 229",
+            }, is_dark
         return {
-            "surface": "#fdf7ff",
-            "surface_variant": "#e7dff2",
-            "primary": "#5700d2",
-            "on_primary": "#ffffff",
-            "primary_container": "#9f7aff",
-            "on_primary_container": "#1c004f",
-            "secondary": "#554262",
-            "on_surface": "#1d1a24",
-            "on_surface_variant": "#494453",
-            "outline": "#686272",
-            "outline_variant": "#958fa0",
-            "footer": "#958fa0",
-            "quote_bg": "#e7dff2",
-        }
+            "primary": "#5700d2", "primary_rgb": "87, 0, 210",
+            "secondary": "#554262", "secondary_rgb": "85, 66, 98",
+            "surface": "#fdf7ff", "surface_rgb": "253, 247, 255",
+            "surface_variant": "#efe5ff", "surface_variant_rgb": "239, 229, 255",
+            "on_surface": "#1d1a24", "on_surface_rgb": "29, 26, 36",
+        }, is_dark
 
     async def _build_card_data(self, data: dict) -> dict:
         article = data.get("article")
@@ -700,8 +705,8 @@ class TwitterMonitorPlugin(Star):
         if image_translations:
             translated_text = f"{translated_text}\n\n{image_translations}"
 
-        seed_color = await self._extract_seed_color(data["user"]["avatar_url"])
-        palette = self._generate_md3_palette(seed_color)
+        seed_rgb = await self._extract_seed_color(data["user"]["avatar_url"])
+        palette, is_dark = self._generate_palette(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
             "screen_name": data["user"]["screen_name"],
@@ -734,12 +739,15 @@ class TwitterMonitorPlugin(Star):
             "q_article_preview": q_article_preview,
             "has_q_article": bool(q_article_title or q_article_text),
             "palette": palette,
+            "is_dark": is_dark,
         }
 
         # 长文章分块渲染
-        article_text = data.get("article_full_text") or (
+        import re as _re
+        article_raw = data.get("article_full_text") or (
             article.get("full_text", "") if article else ""
         )
+        article_text = _re.sub(r"<[^>]+>", "", article_raw).strip() if article_raw else ""
         MAX_CHUNK = 2000
 
         def split_into_chunks(text):
@@ -776,23 +784,18 @@ class TwitterMonitorPlugin(Star):
             return chunks
 
         if len(article_text) > MAX_CHUNK:
-            chunks = split_into_chunks(article_text)
             t_chunks = split_into_chunks(translated_text)
 
-            # 译文段落数不同时，取两者最小值（不重复/留空）
-            min_len = min(len(chunks), len(t_chunks))
-            chunks = chunks[:min_len]
-            t_chunks = t_chunks[:min_len]
-
+            # 译文块数决定卡片数，原文只用在第一张
             card_img_urls = []
-            for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
+            for i, t_chunk in enumerate(t_chunks):
                 sub = dict(card_data)
                 sub["article_title"] = (
                     card_data["article_title"]
                     if i == 0
-                    else f"(续 {i + 1}/{len(chunks)})"
+                    else f"(续 {i + 1}/{len(t_chunks)})"
                 )
-                sub["article_text"] = ""  # 原文过长时只显示预览摘要
+                sub["article_text"] = ""
                 if i > 0:
                     sub["article_preview"] = ""
                 sub["translated_text"] = t_chunk
@@ -988,6 +991,8 @@ class TwitterMonitorPlugin(Star):
         return str(pid) if pid else ""
 
     async def _translate_text(self, data: dict) -> str:
+        import re as _re
+
         text = data.get("text", "")
         article = data.get("article")
         if article:
@@ -996,6 +1001,7 @@ class TwitterMonitorPlugin(Star):
                 or article.get("full_text")
                 or article.get("preview_text", "")
             )
+            full = _re.sub(r"<[^>]+>", "", full).strip()
             text = f"{article.get('title', '')}\n\n{full}"
 
         # 追加引用推文
@@ -1009,29 +1015,51 @@ class TwitterMonitorPlugin(Star):
         if not text or not text.strip():
             return "(无文字内容)"
 
-        # 翻译前过滤掉链接，防止非多模态模型误以为要它看图
-        import re as _re
-
-        clean_text = _re.sub(r"https?://\S+", "", text).strip()
-        if not clean_text:
-            clean_text = text
+        # 过滤链接
+        text = _re.sub(r"https?://\S+", "", text).strip()
+        if not text:
+            return "(无文字内容)"
 
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
         if not provider_id:
             provider_id = self.config.get("text_translate_provider", "")
 
-        if provider_id:
+        if not provider_id:
+            return text
+
+        MAX_CHUNK = 10000
+        translated_parts = []
+
+        paras = text.split("\n\n")
+        chunks, cur, cl = [], [], 0
+        for p in paras:
+            plen = len(p)
+            if cl + plen > MAX_CHUNK and cur:
+                chunks.append("\n\n".join(cur))
+                cur, cl = [], 0
+            cur.append(p)
+            cl += plen + 2
+        if cur:
+            chunks.append("\n\n".join(cur))
+
+        for i, chunk in enumerate(chunks):
+            prefix = f"(第{i+1}/{len(chunks)}部分)\n" if len(chunks) > 1 else ""
+            prompt = f"请将以下内容翻译成{target_lang}，只返回翻译结果:\n\n{prefix}{chunk}"
             try:
                 llm_resp = await self.context.llm_generate(
                     chat_provider_id=provider_id,
-                    prompt=f"请将以下内容翻译成{target_lang}，只返回翻译结果:\n\n{clean_text}",
+                    prompt=prompt,
                 )
                 if llm_resp and llm_resp.completion_text:
-                    return llm_resp.completion_text
+                    translated_parts.append(llm_resp.completion_text.strip())
+                else:
+                    translated_parts.append(chunk)
             except Exception as e:
-                logger.warning(f"LLM translate failed: {e}")
-        return text
+                logger.warning(f"LLM translate chunk {i} failed: {e}")
+                translated_parts.append(chunk)
+
+        return "\n\n".join(translated_parts) if translated_parts else text
 
     async def _translate_images(self, data: dict) -> str:
         images, _, _ = TwitterClient.extract_tweet_media(data)
