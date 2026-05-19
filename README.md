@@ -1,16 +1,18 @@
 # Twitter Monitor — AstrBot Plugin
 
-监控指定 Twitter/X 账号的最新推文，自动生成 MD3 风格卡片（PNG），支持翻译、图片 OCR、多平台推送。
+监控指定 Twitter/X 账号的最新推文，自动生成配色卡片（PNG），支持翻译、图片 OCR、多平台推送。
 
 ## 功能
 
 - **推文监控**：后台轮询，新推文自动推送
-- **MD3 卡片渲染**：本地 Playwright 生成 Material Design 3 风格 PNG（620px 宽，2x Retina）
-- **多语言翻译**：借助 AstrBot LLM 能力翻译推文正文、长文 Article、图片文字
+- **卡片渲染**：本地 Playwright 生成卡片 PNG（620px 宽，2x Retina），使用 NetEase 风格手调配色（CIE Lab 色距匹配）
+- **深色/浅色模式**：18:00–06:00 自动切换深色模式
+- **多语言翻译**：借助 AstrBot LLM 能力翻译推文正文、长文 Article、NoteTweet、图片文字
+- **图片自适应排版**：单张全宽、多张自适应网格（1/2/3/4 图响应式布局）
 - **图片推送**：Group forward (Node) 合并发送，不刷屏
 - **视频/GIF**：直接发送视频消息
-- **支持引用推文**：引用推文以左侧竖线样式在卡片中展示，翻译时一并处理
-- **长文 Article**：支持 Twitter Article（NoteTweet）全文提取与渲染
+- **引用推文**：引用推文以左侧竖线样式在卡片中展示，翻译时一并处理
+- **长文 Article & NoteTweet**：支持 Twitter Article（2 万字长文）和 NoteTweet（长推文）全文提取与渲染
 - **自然语言控制**：集成 `@filter.llm_tool`，支持通过自然语言添加/移除订阅
 
 ## 安装
@@ -88,7 +90,6 @@ astrbot_plugin_twitter_monitor/
 │   └── tweet_card.html     # MD3 卡片 Jinja2 模板
 ├── metadata.yaml           # 插件元数据
 ├── _conf_schema.json       # WebUI 配置 schema
-├── patch_twikit.py         # twikit 2.1.3 兼容补丁
 └── requirements.txt        # 依赖声明
 ```
 
@@ -97,3 +98,4 @@ astrbot_plugin_twitter_monitor/
 - **QQ Official 平台**不支持 Node 转发消息，仅 OneBot (aiocqhttp) 支持
 - 图片以 Group forward 合并发送，视频/GIF 单独发送
 - 翻译使用 AstrBot 的 `llm_generate()`，需配置可用的 LLM Provider
+- 配色使用 NetEase 风格手调配色板 + CIE Lab 色距匹配，无需 PyMCUlib 依赖
