@@ -80,8 +80,6 @@
 https://github.com/LilycleHeart/astrbot_plugin_denpa_push
 ```
 
-或你的自定义插件加载目录。
-
 ---
 
 ## 2. 安装依赖
