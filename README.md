@@ -126,14 +126,8 @@ pip install easyocr
 # 🍪 获取 Twitter Cookie
 
 1. 打开 `https://x.com` 并登录账号
-2. 按 `F12` 打开开发者工具
-3. 进入：
-
-```text
-Application → Cookies → x.com
-```
-
-4. 复制以下字段：
+2. 使用cookie editor插件
+3. 复制以下字段：
 
 ```text
 auth_token
