@@ -15,6 +15,12 @@
 - **长文 Article & NoteTweet**：支持 Twitter Article（2 万字长文）和 NoteTweet（长推文）全文提取与渲染
 - **自然语言控制**：集成 `@filter.llm_tool`，支持通过自然语言添加/移除订阅
 
+## 预览
+
+| 深色模式 | 浅色模式 |
+|---------|---------|
+| ![Dark](preview_dark.png) | ![Light](preview_light.png) |
+
 ## 安装
 
 1. 将本插件目录放入 AstrBot 的 `addons/` 或插件加载路径
