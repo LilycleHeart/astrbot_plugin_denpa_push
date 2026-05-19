@@ -574,12 +574,7 @@ class TwitterMonitorPlugin(Star):
 
         translated_text = data.get("text", "")
         try:
-            translated_text = await asyncio.wait_for(
-                self._translate_text(data), timeout=120
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Text translation timed out, using original text")
-            translated_text = data.get("text", "(翻译超时)")
+            translated_text = await self._translate_text(data)
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
