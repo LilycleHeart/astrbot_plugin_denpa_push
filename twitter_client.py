@@ -168,9 +168,6 @@ class TwitterClient:
                 if html_parts:
                     return "\n\n".join(html_parts)
 
-            legacy = result.get("legacy", {})
-            if legacy.get("full_text"):
-                return legacy["full_text"]
             note = (
                 result.get("note_tweet", {})
                 .get("note_tweet_results", {})
@@ -180,6 +177,9 @@ class TwitterClient:
                 text = note.get("text", "")
                 if text:
                     return text
+            legacy = result.get("legacy", {})
+            if legacy.get("full_text"):
+                return legacy["full_text"]
             return legacy.get("text", legacy.get("full_text", ""))
         return ""
 
