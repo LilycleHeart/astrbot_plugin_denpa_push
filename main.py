@@ -556,6 +556,7 @@ class TwitterMonitorPlugin(Star):
             best_name, best_dist = None, float("inf")
             presets = self.SCHEME_PRESETS
 
+            seed_chroma = (seed_lab[1] ** 2 + seed_lab[2] ** 2) ** 0.5
             for name, p in presets.items():
                 is_light = p.get("light", False)
                 if is_dark and is_light:
@@ -563,7 +564,11 @@ class TwitterMonitorPlugin(Star):
                 if not is_dark and not is_light:
                     continue
                 p_lab = self._rgb_to_lab(p["primary"])
+                p_chroma = (p_lab[1] ** 2 + p_lab[2] ** 2) ** 0.5
                 dist = self._lab_distance(seed_lab, p_lab)
+                # 种子有色彩就不该配给灰色 preset
+                if seed_chroma > 10 and p_chroma < 10:
+                    dist += 30
                 if dist < best_dist:
                     best_dist = dist
                     best_name = name
