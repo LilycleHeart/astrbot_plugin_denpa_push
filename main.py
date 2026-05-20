@@ -539,7 +539,7 @@ class TwitterMonitorPlugin(Star):
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
                 _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
                 _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                logger.warning(f"Seed extracted: RGB=({_pr},{_pg},{_pb}) from {len(r.content)} bytes")
+                logger.warning(f"Seed extracted: RGB=({_pr},{_pg},{_pb}) from {len(_r.content)} bytes")
                 return (_pr, _pg, _pb)
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
