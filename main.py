@@ -12,16 +12,16 @@ from astrbot.api.star import Context, Star, register
 from .twitter_client import TwitterClient
 
 DATA_DIR = "data/config"
-DATA_FILE = "astrbot_plugin_twitter_monitor_data.json"
+DATA_FILE = "astrbot_plugin_denpa_push_data.json"
 
 
 @register(
-    "astrbot_plugin_twitter_monitor",
+    "astrbot_plugin_denpa_push",
     "astrbot_user",
     "Twitter/X 推文监控、翻译与推送插件",
     "1.0.0",
 )
-class TwitterMonitorPlugin(Star):
+class DenpaPushPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
         self.config = config or {}
@@ -202,8 +202,8 @@ class TwitterMonitorPlugin(Star):
             lines.append(f"  @{name}")
         yield event.plain_result("\n".join(lines) if len(lines) > 1 else "暂无关注用户")
 
-    @filter.llm_tool(name="twitter_monitor")
-    async def twitter_monitor(self, event: AstrMessageEvent):
+    @filter.llm_tool(name="denpa_push")
+    async def denpa_push(self, event: AstrMessageEvent):
         """开启或关闭当前会话的自动推送。"""
         umo = event.unified_msg_origin
         if umo in self.monitored_sessions:
