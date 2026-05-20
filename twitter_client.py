@@ -244,11 +244,28 @@ class TwitterClient:
         data["urls"] = raw_entities.get("urls", [])
         # 用 raw_legacy.full_text 覆盖可能截断的 tweet.text
         raw_full = raw_legacy.get("full_text", "")
-        logger.warning(f"extract: tweet.text len={len(data.get('text',''))}, raw_full len={len(raw_full)}")
+        logger.warning(f"extract: tweet.text len={len(data.get('text',''))}, tweet.full_text len={len(data.get('full_text',''))}, raw_full len={len(raw_full)}")
         if raw_full and len(raw_full) > len(data.get("text", "")):
             data["text"] = raw_full
             data["full_text"] = raw_full
             logger.warning(f"extract: overrode text with raw_full (len={len(raw_full)})")
+        # NoteTweet 的全文在 note_tweet 字段，legacy.full_text 只有预览
+        note_tweet = (
+            raw.get("note_tweet", {})
+            .get("note_tweet_results", {})
+            .get("result", {})
+        )
+        note_text = note_tweet.get("text", "")
+        if note_text and len(note_text) > len(data["text"]):
+            data["text"] = note_text
+            data["full_text"] = note_text
+            logger.warning(f"extract: overrode text with note_tweet (len={len(note_text)})")
+        # 旧版 extended_tweet 回退
+        ext_text = raw_legacy.get("extended_tweet", {}).get("full_text", "")
+        if ext_text and len(ext_text) > len(data["text"]):
+            data["text"] = ext_text
+            data["full_text"] = ext_text
+            logger.warning(f"extract: overrode text with extended_tweet (len={len(ext_text)})")
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {}) if article else {}
