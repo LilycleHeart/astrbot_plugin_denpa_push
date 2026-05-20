@@ -606,6 +606,7 @@ class TwitterMonitorPlugin(Star):
             try:
                 full_text = await self.twitter.get_full_article_text(data["id"])
                 if full_text:
+                    data["text"] = full_text
                     data["article_full_text"] = full_text
                     title_m = _re.search(r"<h1[^>]*>(.*?)</h1>", full_text, _re.I | _re.S)
                     title = _re.sub(r"<[^>]+>", "", title_m.group(1) if title_m else "").strip()
