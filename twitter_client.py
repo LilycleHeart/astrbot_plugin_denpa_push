@@ -242,12 +242,13 @@ class TwitterClient:
         raw_legacy = raw.get("legacy", {})
         raw_entities = raw_legacy.get("entities", {})
         data["urls"] = raw_entities.get("urls", [])
-        # 用 tweet.full_text 覆盖可能截断的 tweet.text
-        full_text = data.get("full_text", "")
-        logger.debug(f"extract: tweet.text len={len(data.get('text',''))}, full_text len={len(full_text)}, full_text exists={bool(full_text)}")
-        if full_text and len(full_text) > len(data.get("text", "")):
-            data["text"] = full_text
-            logger.debug(f"extract: overrode text with full_text (len={len(full_text)})")
+        # 用 raw_legacy.full_text 覆盖可能截断的 tweet.text
+        raw_full = raw_legacy.get("full_text", "")
+        logger.debug(f"extract: tweet.text len={len(data.get('text',''))}, raw_full len={len(raw_full)}, raw_full exists={bool(raw_full)}")
+        if raw_full and len(raw_full) > len(data.get("text", "")):
+            data["text"] = raw_full
+            data["full_text"] = raw_full
+            logger.debug(f"extract: overrode text with raw_full (len={len(raw_full)})")
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {}) if article else {}
