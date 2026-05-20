@@ -592,6 +592,7 @@ class TwitterMonitorPlugin(Star):
         }, is_dark
 
     async def _build_card_data(self, data: dict) -> dict:
+        import re as _re
         article = data.get("article")
         if article and article.get("rest_id"):
             try:
@@ -601,6 +602,21 @@ class TwitterMonitorPlugin(Star):
                     data["article_full_text"] = full_text
             except Exception as e:
                 logger.warning(f"Full article fetch failed: {e}")
+        elif not article:
+            try:
+                full_text = await self.twitter.get_full_article_text(data["id"])
+                if full_text:
+                    data["article_full_text"] = full_text
+                    title_m = _re.search(r"<h1[^>]*>(.*?)</h1>", full_text, _re.I | _re.S)
+                    title = _re.sub(r"<[^>]+>", "", title_m.group(1) if title_m else "").strip()
+                    data["article"] = {
+                        "title": title,
+                        "full_text": full_text,
+                        "preview_text": "",
+                        "rest_id": data["id"],
+                    }
+            except Exception as e:
+                logger.warning(f"Fallback article fetch failed: {e}")
 
         # 如果推文是引用推文但未提取到数据（twikit get_tweet_by_id 不返回 quoted_status_result），单独获取
         if data.get("is_quote") and not data.get("quoted_tweet"):
