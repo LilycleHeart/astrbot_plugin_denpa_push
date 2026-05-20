@@ -36,8 +36,8 @@ body{
 }
 .chip-original{background:var(--md-surface-variant);color:var(--md-on-surface)}
 .chip-original .ico{color:var(--md-primary)}
-.chip-translated{background:var(--md-surface-variant);color:var(--md-on-surface)}
-.chip-translated .ico{color:var(--md-primary)}
+.chip-translated{background:var(--md-primary);color:var(--md-on-primary)}
+.chip-translated .ico{color:var(--md-on-primary)}
 .article-card{
   border-radius:12px;overflow:hidden;
   background:var(--md-surface-variant)
@@ -57,7 +57,7 @@ body{
 .trans-text{font-size:15px;line-height:1.6;color:var(--md-secondary);white-space:pre-wrap;overflow-wrap:break-word;border-left:3px solid rgba(var(--md-on-surface-rgb),0.12);padding-left:12px;margin-top:6px}
 .media-row{font-size:14px;color:rgba(var(--md-on-surface-rgb),0.65)}
 .media-row .ico{color:var(--md-primary)}
-.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:6px}
+.media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-top:6px}
 .media-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;border:1px solid rgba(var(--md-on-surface-rgb),0.12)}
 .divider{height:1px;background:rgba(var(--md-on-surface-rgb),0.12);margin:2px 0}
 .footer{text-align:center;font-size:12px;color:rgba(var(--md-on-surface-rgb),0.5);padding-top:10px}
@@ -87,7 +87,7 @@ body{
 </style>
 </head>
 <body class="{{ 'dark' if is_dark else 'light' }}">
-<div class="card" style="--md-surface:{{palette.surface}};--md-primary:{{palette.primary}};--md-secondary:{{palette.secondary}};--md-surface-variant:{{palette.surface_variant}};--md-on-surface:{{palette.on_surface}};--md-primary-rgb:{{palette.primary_rgb}};--md-on-surface-rgb:{{palette.on_surface_rgb}};--md-surface-rgb:{{palette.surface_rgb}}">
+<div class="card" style="--md-surface:{{palette.surface}};--md-primary:{{palette.primary}};--md-on-primary:{{palette.on_primary}};--md-secondary:{{palette.secondary}};--md-surface-variant:{{palette.surface_variant}};--md-on-surface:{{palette.on_surface}};--md-primary-rgb:{{palette.primary_rgb}};--md-on-primary-rgb:{{palette.on_primary_rgb}};--md-on-surface-rgb:{{palette.on_surface_rgb}};--md-surface-rgb:{{palette.surface_rgb}}">
 
   <div class="header">
     {% if avatar_url %}

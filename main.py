@@ -496,15 +496,19 @@ class TwitterMonitorPlugin(Star):
             return f"{c[0]}, {c[1]}, {c[2]}"
 
         bl = lum(bg)
+        pl = lum(primary)
 
         if not secondary:
             secondary = mix((255, 255, 255) if bl < 0.35 else (0, 0, 0), bg, 0.55)
 
         on_surface = (230, 230, 230) if bl < 0.35 else (30, 30, 30)
+        on_primary = (255, 255, 255) if pl < 0.55 else (30, 30, 30)
 
         return {
             "primary": hx(primary),
             "primary_rgb": rgb_str(primary),
+            "on_primary": hx(on_primary),
+            "on_primary_rgb": rgb_str(on_primary),
             "secondary": hx(secondary),
             "secondary_rgb": rgb_str(secondary),
             "surface": hx(bg),
@@ -578,6 +582,7 @@ class TwitterMonitorPlugin(Star):
         if is_dark:
             return {
                 "primary": "#d0bcff", "primary_rgb": "208, 188, 255",
+                "on_primary": "#381e72", "on_primary_rgb": "56, 30, 114",
                 "secondary": "#cac4d0", "secondary_rgb": "202, 196, 208",
                 "surface": "#1c1b1f", "surface_rgb": "28, 27, 31",
                 "surface_variant": "#2b2930", "surface_variant_rgb": "43, 41, 48",
@@ -585,6 +590,7 @@ class TwitterMonitorPlugin(Star):
             }, is_dark
         return {
             "primary": "#5700d2", "primary_rgb": "87, 0, 210",
+            "on_primary": "#ffffff", "on_primary_rgb": "255, 255, 255",
             "secondary": "#554262", "secondary_rgb": "85, 66, 98",
             "surface": "#fdf7ff", "surface_rgb": "253, 247, 255",
             "surface_variant": "#efe5ff", "surface_variant_rgb": "239, 229, 255",
