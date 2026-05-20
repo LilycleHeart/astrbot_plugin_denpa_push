@@ -418,6 +418,92 @@ class TwitterMonitorPlugin(Star):
 
             await asyncio.sleep(interval)
 
+    # NetEase 预设色板（来自 material-you-theme-netease）
+    SCHEME_PRESETS = {
+        "dark-blue":      {"primary": (189, 230, 251), "bg": (30, 37, 41), "bg-darken": (23, 29, 32)},
+        "dark-gray":      {"primary": (255, 255, 255), "bg": (32, 32, 32), "bg-darken": (25, 25, 25)},
+        "dark-green":     {"primary": (183, 241, 222), "bg": (26, 36, 33), "bg-darken": (21, 28, 25)},
+        "dark-orange":    {"primary": (255, 200, 182), "bg": (39, 30, 27), "bg-darken": (30, 23, 21)},
+        "dark-purple":    {"primary": (216, 196, 241), "bg": (34, 31, 38), "bg-darken": (26, 24, 30)},
+        "dark-red":       {"primary": (253, 180, 180), "bg": (39, 27, 27), "bg-darken": (30, 21, 21)},
+        "dark-pink":      {"primary": (255, 217, 228), "bg": (54, 41, 41), "bg-darken": (33, 26, 26)},
+        "dark-rose-pine": {"primary": (235, 188, 186), "secondary": (224, 222, 244), "bg": (35, 33, 54), "bg-darken": (57, 53, 82)},
+        "tokyo-night":    {"primary": (181, 185, 214), "bg": (36, 38, 56), "bg-darken": (28, 29, 43)},
+        "one-dark-blue":  {"primary": (113, 189, 242), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-green": {"primary": (167, 203, 139), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-cyan":  {"primary": (101, 193, 205), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-red":   {"primary": (231, 130, 135), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-pink":  {"primary": (255, 121, 198), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-yellow":{"primary": (218, 170, 120), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "one-dark-purple":{"primary": (209, 144, 227), "secondary": (171, 178, 191), "bg": (40, 44, 52), "bg-darken": (33, 37, 43)},
+        "osu-pink":       {"primary": (255, 102, 171), "secondary": (240, 219, 228), "bg": (42, 34, 38), "bg-darken": (28, 23, 25)},
+        "osu-purple":     {"primary": (140, 102, 255), "secondary": (224, 219, 240), "bg": (36, 34, 42), "bg-darken": (24, 23, 28)},
+        "osu-blue":       {"primary": (102, 204, 255), "secondary": (219, 233, 240), "bg": (34, 40, 42), "bg-darken": (23, 26, 28)},
+        "osu-green":      {"primary": (115, 255, 102), "secondary": (221, 240, 219), "bg": (35, 42, 34), "bg-darken": (23, 28, 23)},
+        "osu-orange":     {"primary": (255, 153, 102), "secondary": (240, 226, 219), "bg": (42, 37, 34), "bg-darken": (28, 25, 23)},
+        "osu-yellow":     {"primary": (255, 217, 102), "secondary": (240, 235, 219), "bg": (42, 40, 34), "bg-darken": (28, 27, 23)},
+        "cyberpunk":      {"primary": (252, 236, 12), "bg": (19, 99, 119), "bg-darken": (8, 74, 90)},
+        "matrix":         {"primary": (0, 255, 65), "bg": (6, 2, 8), "bg-darken": (0, 22, 0)},
+        "dracula-mint":   {"primary": (47, 222, 182), "secondary": (226, 226, 228), "bg": (41, 45, 62), "bg-darken": (33, 36, 50)},
+        "discord":        {"primary": (88, 101, 242), "secondary": (255, 255, 255), "bg": (54, 57, 63), "bg-darken": (47, 49, 54)},
+        "pure-black":     {"primary": (240, 240, 240), "bg": (0, 0, 0), "bg-darken": (20, 20, 20)},
+        "light-blue":     {"primary": (34, 197, 253), "secondary": (18, 51, 84), "bg": (245, 247, 250), "bg-darken": (255, 255, 255), "light": True},
+        "light-gray":     {"primary": (97, 113, 124), "secondary": (41, 41, 42), "bg": (247, 247, 247), "bg-darken": (255, 255, 255), "light": True},
+        "light-green":    {"primary": (42, 225, 142), "secondary": (25, 72, 62), "bg": (246, 249, 249), "bg-darken": (229, 236, 235), "light": True},
+        "light-orange":   {"primary": (255, 130, 101), "secondary": (86, 59, 37), "bg": (250, 248, 247), "bg-darken": (255, 255, 255), "light": True},
+        "light-purple":   {"primary": (159, 116, 231), "secondary": (64, 43, 77), "bg": (249, 247, 249), "bg-darken": (255, 255, 255), "light": True},
+        "light-red":      {"primary": (255, 89, 102), "secondary": (87, 41, 32), "bg": (250, 247, 246), "bg-darken": (255, 255, 255), "light": True},
+        "light-pink":     {"primary": (255, 130, 171), "secondary": (99, 10, 39), "bg": (250, 247, 246), "bg-darken": (255, 255, 255), "light": True},
+        "light-rose-pine":{"primary": (215, 130, 126), "secondary": (87, 82, 121), "bg": (242, 233, 225), "bg-darken": (250, 244, 237), "light": True},
+        "cerulean":       {"primary": (66, 141, 185), "secondary": (33, 33, 33), "bg": (243, 248, 251), "bg-darken": (223, 238, 243), "light": True},
+        "wechat":         {"primary": (7, 193, 96), "secondary": (34, 34, 34), "bg": (245, 245, 245), "bg-darken": (218, 218, 218), "light": True},
+        "tim":            {"primary": (29, 110, 255), "secondary": (34, 34, 34), "bg": (244, 246, 248), "bg-darken": (255, 255, 255), "light": True},
+        "Cloud & Moon":   {"primary": (93, 131, 194), "secondary": (87, 111, 147), "bg": (237, 241, 248), "bg-darken": (247, 250, 245), "light": True},
+    }
+
+    @staticmethod
+    def _lab_distance(lab1, lab2):
+        return ((lab1[0] - lab2[0]) ** 2 + (lab1[1] - lab2[1]) ** 2 + (lab1[2] - lab2[2]) ** 2) ** 0.5
+
+    @staticmethod
+    def _derive_preset_palette(primary, secondary, bg, bg_darken, is_dark):
+        def lum(rgb):
+            r, g, b = [x / 255.0 for x in rgb]
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def mix(a, b, p):
+            return tuple(int(a[i] * (1 - p) + b[i] * p) for i in range(3))
+
+        def hx(rgb):
+            return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+        def rgb_str(c):
+            return f"{c[0]}, {c[1]}, {c[2]}"
+
+        bl = lum(bg)
+        pl = lum(primary)
+
+        if not secondary:
+            secondary = mix((255, 255, 255) if bl < 0.35 else (0, 0, 0), bg, 0.55)
+
+        on_surface = (230, 230, 230) if bl < 0.35 else (30, 30, 30)
+        on_primary = (255, 255, 255) if pl < 0.55 else (30, 30, 30)
+
+        return {
+            "primary": hx(primary),
+            "primary_rgb": rgb_str(primary),
+            "on_primary": hx(on_primary),
+            "on_primary_rgb": rgb_str(on_primary),
+            "secondary": hx(secondary),
+            "secondary_rgb": rgb_str(secondary),
+            "surface": hx(bg),
+            "surface_rgb": rgb_str(bg),
+            "surface_variant": hx(bg_darken),
+            "surface_variant_rgb": rgb_str(bg_darken),
+            "on_surface": hx(on_surface),
+            "on_surface_rgb": rgb_str(on_surface),
+        }
+
     @staticmethod
     def _rgb_to_lab(rgb):
         r, g, b = [x / 255.0 for x in rgb]
@@ -427,115 +513,68 @@ class TwitterMonitorPlugin(Star):
         x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100
         y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100
         z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100
+
         def f(t):
-            return t ** (1/3) if t > 0.008856 else 7.787 * t + 16/116
+            return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
         return (116 * f(y / 100) - 16, 500 * (f(x / 95.047) - f(y / 100)), 200 * (f(y / 100) - f(z / 108.883)))
 
-    @staticmethod
-    def _lab_to_rgb(L, a, b):
-        import math
-
-        def inv_f(t):
-            t3 = t ** 3
-            return t3 if t3 > 0.008856 else (t - 16/116) / 7.787
-
-        fy = (L + 16) / 116
-        fx = a / 500 + fy
-        fz = fy - b / 200
-        xx = inv_f(fx) * 95.047
-        yy = inv_f(fy) * 100.0
-        zz = inv_f(fz) * 108.883
-
-        xx /= 100
-        yy /= 100
-        zz /= 100
-        rr = xx * 3.2406 + yy * -1.5372 + zz * -0.4986
-        gg = xx * -0.9689 + yy * 1.8758 + zz * 0.0415
-        bb = xx * 0.0557 + yy * -0.2040 + zz * 1.0570
-
-        def to_srgb(c):
-            if c > 0.0031308:
-                return 1.055 * (c ** (1/2.4)) - 0.055
-            return c * 12.92
-
-        return (
-            max(0, min(255, round(to_srgb(rr) * 255))),
-            max(0, min(255, round(to_srgb(gg) * 255))),
-            max(0, min(255, round(to_srgb(bb) * 255))),
-        )
-
-    async def _extract_seed_color(self, avatar_url: str):
-        try:
-            import httpx
-            from PIL import Image
-            import io
-
-            proxy = self.config.get("proxy", None)
-            async with httpx.AsyncClient(
-                proxy=proxy if proxy else None, timeout=10
-            ) as _c:
-                _r = await _c.get(avatar_url)
-                _r.raise_for_status()
-                _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
-                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
-                return (_pr, _pg, _pb)
-        except Exception as e:
-            logger.warning(f"Seed color extraction failed: {e}")
-            return (103, 80, 164)
-
     def _generate_palette(self, seed_rgb):
-        import math as _m
         h = int(__import__("datetime").datetime.now(
             __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
         ).strftime("%H"))
         is_dark = h >= 18 or h < 6
 
         try:
-            L, a_star, b_star = self._rgb_to_lab(seed_rgb)
-            hue = _m.atan2(b_star, a_star)
-            chroma = _m.sqrt(a_star**2 + b_star**2)
-            chroma = max(10, min(100, chroma))
+            seed_lab = self._rgb_to_lab(seed_rgb)
+            best_name, best_dist = None, float("inf")
+            presets = self.SCHEME_PRESETS
 
-            roles = {
-                "primary":          (40, 80,  1.0),
-                "on_primary":       (100, 20, 0.0),
-                "secondary":        (50, 70,  0.5),
-                "surface":          (98, 8,   0.03),
-                "surface_variant":  (92, 15,  0.08),
-                "on_surface":       (10, 90,  0.0),
-            }
+            for name, p in presets.items():
+                is_light = p.get("light", False)
+                if is_dark and is_light:
+                    continue
+                if not is_dark and not is_light:
+                    continue
+                p_lab = self._rgb_to_lab(p["primary"])
+                dist = self._lab_distance(seed_lab, p_lab)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_name = name
 
-            def hx(rgb):
-                return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-            def rs(rgb):
-                return f"{rgb[0]}, {rgb[1]}, {rgb[2]}"
+            if not best_name:
+                best_name = "dark-blue" if is_dark else "light-blue"
 
-            palette = {}
-            for role, (tone_light, tone_dark, cs) in roles.items():
-                tone = tone_dark if is_dark else tone_light
-                c = chroma * cs
-                a = c * _m.cos(hue)
-                b = c * _m.sin(hue)
-                rgb = self._lab_to_rgb(tone, a, b)
-                palette[role] = hx(rgb)
-                palette[f"{role}_rgb"] = rs(rgb)
+            preset = presets[best_name]
+            primary = preset["primary"]
+            secondary = preset.get("secondary", None)
+            bg = preset["bg"]
+            bg_darken = preset["bg-darken"]
 
-            logger.debug(f"Dynamic palette from seed RGB{seed_rgb}: {json.dumps(palette)}")
+            palette = self._derive_preset_palette(primary, secondary, bg, bg_darken, is_dark)
+            logger.debug(f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): {json.dumps(palette)}")
             return palette, is_dark
         except Exception as e:
-            logger.warning(f"Dynamic palette failed: {e}")
+            logger.warning(f"Preset palette failed: {e}")
 
+        # Final hardcoded fallback
         if is_dark:
             return {
                 "primary": "#d0bcff", "primary_rgb": "208, 188, 255",
                 "on_primary": "#381e72", "on_primary_rgb": "56, 30, 114",
                 "secondary": "#cac4d0", "secondary_rgb": "202, 196, 208",
                 "surface": "#1c1b1f", "surface_rgb": "28, 27, 31",
-                "surface_variant": "#2b2930", "surface_variant_rgb": "43, 41, 48",
+                "surface_variant": "#141318", "surface_variant_rgb": "20, 19, 24",
                 "on_surface": "#e6e1e5", "on_surface_rgb": "230, 225, 229",
             }, is_dark
+        return {
+            "primary": "#5700d2", "primary_rgb": "87, 0, 210",
+            "on_primary": "#ffffff", "on_primary_rgb": "255, 255, 255",
+            "secondary": "#554262", "secondary_rgb": "85, 66, 98",
+            "surface": "#fdf7ff", "surface_rgb": "253, 247, 255",
+            "surface_variant": "#efe5ff", "surface_variant_rgb": "239, 229, 255",
+            "on_surface": "#1c1b1f", "on_surface_rgb": "28, 27, 31",
+        }, is_dark
         return {
             "primary": "#5700d2", "primary_rgb": "87, 0, 210",
             "on_primary": "#ffffff", "on_primary_rgb": "255, 255, 255",
