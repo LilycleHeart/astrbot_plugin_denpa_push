@@ -35,7 +35,9 @@ body{
   padding:4px 16px;border-radius:14px;font-size:13px;font-weight:600;letter-spacing:.02em
 }
 .chip-original{background:var(--md-surface-variant);color:var(--md-primary)}
+.chip-original .ico{color:var(--md-primary)}
 .chip-translated{background:var(--md-primary);color:var(--md-on-surface)}
+.chip-translated .ico{color:var(--md-on-surface)}
 .article-card{
   border-radius:12px;overflow:hidden;
   background:var(--md-surface-variant)
@@ -54,8 +56,9 @@ body{
 .orig-text{font-size:16px;line-height:1.6;color:var(--md-on-surface);white-space:pre-wrap;overflow-wrap:break-word;border-left:3px solid var(--md-primary);padding-left:12px;margin-top:6px}
 .trans-text{font-size:15px;line-height:1.6;color:var(--md-secondary);white-space:pre-wrap;overflow-wrap:break-word;border-left:3px solid rgba(var(--md-on-surface-rgb),0.12);padding-left:12px;margin-top:6px}
 .media-row{font-size:14px;color:rgba(var(--md-on-surface-rgb),0.65)}
-.media-grid{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.media-grid img{width:180px;height:180px;object-fit:cover;border-radius:12px;border:1px solid rgba(var(--md-on-surface-rgb),0.12)}
+.media-row .ico{color:var(--md-primary)}
+.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:6px}
+.media-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;border:1px solid rgba(var(--md-on-surface-rgb),0.12)}
 .divider{height:1px;background:rgba(var(--md-on-surface-rgb),0.12);margin:2px 0}
 .footer{text-align:center;font-size:12px;color:rgba(var(--md-on-surface-rgb),0.5);padding-top:10px}
 .image-translation{margin-top:8px;font-size:13px;color:var(--md-secondary);font-style:italic}
@@ -100,7 +103,7 @@ body{
 
     {% if article_title %}
   <div class="chip-row">
-    <span class="chip chip-original">📝 Original</span>
+    <span class="chip chip-original"><span class="ico">📝</span> Original</span>
   </div>
 
   <div class="article-card">
@@ -118,7 +121,7 @@ body{
   </div>
   {% else %}
   <div class="chip-row">
-    <span class="chip chip-original">📝 Original</span>
+    <span class="chip chip-original"><span class="ico">📝</span> Original</span>
   </div>
 
   <div class="orig-text">{{ original_text }}</div>
@@ -160,7 +163,7 @@ body{
   <div class="divider"></div>
 
   <div class="chip-row">
-    <span class="chip chip-translated">🌐 中文翻译</span>
+    <span class="chip chip-translated"><span class="ico">🌐</span> 中文翻译</span>
   </div>
 
   <div class="trans-text">{{ translated_text }}</div>
@@ -169,7 +172,7 @@ body{
   <div class="divider"></div>
 
   <div class="media-row">
-    🖼️ {{ image_count }} images{% if gif_count > 0 %} · 🎞️ {{ gif_count }} gifs{% endif %}{% if video_count > 0 %} · 🎬 {{ video_count }} videos{% endif %}
+    <span class="ico">🖼️</span> {{ image_count }} images{% if gif_count > 0 %} · <span class="ico">🎞️</span> {{ gif_count }} gifs{% endif %}{% if video_count > 0 %} · <span class="ico">🎬</span> {{ video_count }} videos{% endif %}
   </div>
 
   {% if thumbnail_urls %}
