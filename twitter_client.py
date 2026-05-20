@@ -1,5 +1,8 @@
 from twikit import Client
 from astrbot.api import logger
+import asyncio
+from html import escape
+import re
 
 
 class TwitterClient:
@@ -38,11 +41,32 @@ class TwitterClient:
         await self.ensure_ready()
         return await self.client.get_tweet_by_id(tweet_id)
 
+    @staticmethod
+    def _plain_text_to_html(text: str) -> str:
+        """Convert article plain text into safe paragraph HTML."""
+        if not text:
+            return ""
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+        if not normalized:
+            return ""
+
+        paragraphs = [
+            p.strip()
+            for p in re.split(r"\n\s*\n+", normalized)
+            if p and p.strip()
+        ]
+        return "\n\n".join(
+            f"<p>{escape(p).replace(chr(10), '<br/>')}</p>" for p in paragraphs
+        )
+
     async def get_full_article_text(self, tweet_id: str) -> str:
         """Fetch full article text body via TweetResultByRestId with withArticlePlainText=True."""
         await self.ensure_ready()
-        import httpx
         import json as _json
+        try:
+            import httpx
+        except ImportError:
+            httpx = None
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -87,17 +111,37 @@ class TwitterClient:
             "fieldToggles": field_toggles,
         }
         try:
-            async with httpx.AsyncClient(
-                cookies=cookies, headers=headers, timeout=30
-            ) as c:
-                r = await c.get(url, params=params)
+            if httpx:
+                async with httpx.AsyncClient(
+                    cookies=cookies, headers=headers, timeout=30
+                ) as c:
+                    r = await c.get(url, params=params)
+                status_code = r.status_code
+                data = r.json() if status_code == 200 else {}
+            else:
+                import urllib.parse
+                import urllib.request
+
+                def fetch_with_urllib():
+                    req_headers = dict(headers)
+                    req_headers["Cookie"] = (
+                        f"auth_token={self._auth_token}; ct0={self._ct0}"
+                    )
+                    query = urllib.parse.urlencode(params)
+                    req = urllib.request.Request(
+                        f"{url}?{query}", headers=req_headers
+                    )
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        body = resp.read().decode("utf-8")
+                        return resp.status, _json.loads(body)
+
+                status_code, data = await asyncio.to_thread(fetch_with_urllib)
         except Exception as e:
             logger.warning(f"Article fetch network error: {e}")
             return ""
-        if r.status_code != 200:
-            logger.warning(f"Article fetch failed: {r.status_code}")
+        if status_code != 200:
+            logger.warning(f"Article fetch failed: {status_code}")
             return ""
-        data = r.json()
         result = data.get("data", {}).get("tweetResult", {}).get("result", {})
 
         # Full article text from content_state blocks -> HTML
@@ -115,31 +159,57 @@ class TwitterClient:
 
             def apply_entity_ranges(text, ranges):
                 if not ranges:
-                    return text
-                chars = list(text)
-                for er in sorted(
-                    ranges, key=lambda x: x.get("offset", 0), reverse=True
-                ):
+                    return escape(text)
+
+                by_offset = {}
+                for er in ranges:
                     key = str(er.get("key", ""))
                     ent = entities.get(key, {})
-                    etype = ent.get("type", "")
                     offset = er.get("offset", 0)
-                    length = er.get("length", 0)
+                    if isinstance(offset, int):
+                        by_offset[offset] = (er, ent)
+
+                html_parts = []
+                i = 0
+                while i < len(text):
+                    current = by_offset.get(i)
+                    if not current:
+                        html_parts.append(escape(text[i]))
+                        i += 1
+                        continue
+
+                    er, ent = current
+                    etype = ent.get("type", "")
+                    length = er.get("length", 0) or 0
+                    raw_value = text[i : i + length]
                     if etype == "LINK":
                         url = ent.get("data", {}).get("url", "")
-                        link_text = text[offset : offset + length]
-                        text = (
-                            text[:offset]
-                            + f'<a href="{url}">{link_text}</a>'
-                            + text[offset + length :]
+                        html_parts.append(
+                            f'<a href="{escape(url, quote=True)}">'
+                            f"{escape(raw_value)}</a>"
                         )
                     elif etype == "TWEMOJI":
                         url = ent.get("data", {}).get("url", "")
-                        img = f'<img src="{url}" style="width:1.2em;height:1.2em;vertical-align:middle" alt="emoji"/>'
-                        for i in range(offset, min(offset + length, len(chars))):
-                            chars[i] = ""
-                        chars[offset] = img
-                return "".join(chars)
+                        html_parts.append(
+                            f'<img src="{escape(url, quote=True)}" '
+                            'style="width:1.2em;height:1.2em;'
+                            'vertical-align:middle" alt="emoji"/>'
+                        )
+                    else:
+                        html_parts.append(escape(raw_value))
+                    i += max(length, 1)
+                return "".join(html_parts)
+
+            def html_paragraphs(text):
+                paragraphs = [
+                    p.strip()
+                    for p in re.split(
+                        r"\n\s*\n+",
+                        text.replace("\r\n", "\n").replace("\r", "\n"),
+                    )
+                    if p and p.strip()
+                ]
+                return [f"<p>{p.replace(chr(10), '<br/>')}</p>" for p in paragraphs]
 
             html_parts = []
             in_list = False
@@ -153,7 +223,7 @@ class TwitterClient:
                     if in_list:
                         html_parts.append("</ul>")
                         in_list = False
-                    html_parts.append(f"<p>{text}</p>")
+                    html_parts.extend(html_paragraphs(text))
                 elif btype in ("unordered-list-item", "ordered-list-item"):
                     if not in_list:
                         html_parts.append("<ul>")
@@ -186,7 +256,7 @@ class TwitterClient:
 
         legacy = result.get("legacy", {})
         if legacy.get("full_text"):
-            return legacy["full_text"]
+            return self._plain_text_to_html(legacy["full_text"])
         note = (
             result.get("note_tweet", {})
             .get("note_tweet_results", {})
@@ -195,8 +265,8 @@ class TwitterClient:
         if note:
             text = note.get("text", "")
             if text:
-                return text
-        return legacy.get("text", legacy.get("full_text", ""))
+                return self._plain_text_to_html(text)
+        return self._plain_text_to_html(legacy.get("text", legacy.get("full_text", "")))
 
     @staticmethod
     def extract_tweet_data(tweet) -> dict:

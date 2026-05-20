@@ -1005,23 +1005,39 @@ class DenpaPushPlugin(Star):
                 chunks.append("\n\n".join(cur))
             return chunks
 
+        def build_article_summary():
+            """Use a compact original summary for long articles."""
+            from html import escape as _escape
+
+            preview = article.get("preview_text", "") if article else ""
+            summary = preview.strip()
+            if not summary:
+                summary = re.sub(r"<[^>]+>", " ", article_text)
+                summary = re.sub(r"\s+", " ", summary).strip()
+            if len(summary) > 520:
+                summary = summary[:520].rstrip() + "..."
+            return f"<p>{_escape(summary)}</p>" if summary else ""
+
         if len(article_text) > MAX_CHUNK:
-            chunks = split_into_chunks(article_text)
             t_chunks = split_into_chunks(translated_text)
-            min_len = min(len(chunks), len(t_chunks))
-            chunks = chunks[:min_len]
-            t_chunks = t_chunks[:min_len]
+            if not t_chunks:
+                t_chunks = [""]
+            total_chunks = len(t_chunks)
+            article_summary = build_article_summary()
             card_img_urls = []
-            for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
+            for i in range(total_chunks):
+                t_chunk = t_chunks[i] if i < len(t_chunks) else ""
                 sub = dict(card_data)
                 sub["article_title"] = (
                     card_data["article_title"]
                     if i == 0
-                    else f"(续 {i + 1}/{len(chunks)})"
+                    else f"(续 {i + 1}/{total_chunks})"
                 )
-                sub["article_text"] = ""
-                if i > 0:
-                    sub["article_preview"] = ""
+                sub["article_cover_url"] = (
+                    card_data["article_cover_url"] if i == 0 else ""
+                )
+                sub["article_text"] = article_summary if i == 0 else ""
+                sub["article_preview"] = ""
                 sub["translated_text"] = t_chunk
                 img_url = await self._render_card(template, sub)
                 if img_url:
@@ -1162,7 +1178,30 @@ class DenpaPushPlugin(Star):
                     await self.context.send_message(session_umo, chain)
 
                 # 图片合并到一条群合并转发消息
-                from astrbot.api.message_components import Node
+                from astrbot.api.message_components import Node, Plain
+
+                extra_card_urls = info.get("card_img_urls", [])[1:]
+                if extra_card_urls:
+                    fwd_chain = MessageChain()
+                    total_cards = len(info.get("card_img_urls", []))
+                    for idx, card_url in enumerate(extra_card_urls, start=2):
+                        content = [Plain(f"续页 {idx}/{total_cards}")]
+                        if card_url.startswith("http"):
+                            content.append(CompImage.fromURL(card_url))
+                        else:
+                            content.append(CompImage.fromFileSystem(card_url))
+                        fwd_chain.chain.append(
+                            Node(
+                                uin="0",
+                                name=info.get("user_name", info["screen_name"]),
+                                content=content,
+                            )
+                        )
+                    logger.info(
+                        f"[Push] {len(extra_card_urls)} continuation cards forward to {session_umo}"
+                    )
+                    await self.context.send_message(session_umo, fwd_chain)
+                    await asyncio.sleep(0.5)
 
                 img_contents = []
                 for img in info.get("images", []):
@@ -1243,6 +1282,10 @@ class DenpaPushPlugin(Star):
         import re as _re
 
         clean_text = _re.sub(r"https?://\S+", "", text).strip()
+        clean_text = _re.sub(r"<br\s*/?>", "\n", clean_text, flags=_re.I)
+        clean_text = _re.sub(
+            r"</(?:p|h[1-6]|li|blockquote)>\s*", "\n\n", clean_text, flags=_re.I
+        )
         clean_text = _re.sub(r"<[^>]+>", "", clean_text).strip()
         if not clean_text:
             clean_text = text
