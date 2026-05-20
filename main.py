@@ -419,6 +419,19 @@ class TwitterMonitorPlugin(Star):
             await asyncio.sleep(interval)
 
     @staticmethod
+    def _rgb_to_lab(rgb):
+        r, g, b = [x / 255.0 for x in rgb]
+        r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
+        g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
+        b = b / 12.92 if b <= 0.03928 else ((b + 0.055) / 1.055) ** 2.4
+        x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100
+        y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100
+        z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100
+        def f(t):
+            return t ** (1/3) if t > 0.008856 else 7.787 * t + 16/116
+        return (116 * f(y / 100) - 16, 500 * (f(x / 95.047) - f(y / 100)), 200 * (f(y / 100) - f(z / 108.883)))
+
+    @staticmethod
     def _lab_to_rgb(L, a, b):
         import math
 
