@@ -44,6 +44,7 @@ class TwitterClient:
         """Fetch full article text body via TweetResultByRestId with withArticlePlainText=True."""
         await self.ensure_ready()
         import httpx, json as _json
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
@@ -51,31 +52,41 @@ class TwitterClient:
             "Content-Type": "application/json",
         }
         cookies = {"auth_token": self._auth_token, "ct0": self._ct0}
-        variables = _json.dumps({
-            "tweetId": tweet_id,
-            "withCommunity": False,
-            "includePromotedContent": False,
-            "withVoice": False,
-        })
-        features = _json.dumps({
-            "creator_subscriptions_tweet_preview_api_enabled": True,
-            "communities_web_enable_tweet_community_results_fetch": True,
-            "c9s_tweet_anatomy_moderator_badge_enabled": True,
-            "articles_preview_enabled": True,
-            "responsive_web_twitter_article_tweet_consumption_enabled": True,
-            "longform_notetweets_consumption_enabled": True,
-            "longform_notetweets_rich_text_read_enabled": True,
-            "longform_notetweets_inline_media_enabled": True,
-            "responsive_web_graphql_exclude_directive_enabled": True,
-            "verified_phone_label_enabled": False,
-        })
-        field_toggles = _json.dumps({
-            "withArticleRichContentState": True,
-            "withArticlePlainText": True,
-            "withGrokAnalyze": False,
-        })
+        variables = _json.dumps(
+            {
+                "tweetId": tweet_id,
+                "withCommunity": False,
+                "includePromotedContent": False,
+                "withVoice": False,
+            }
+        )
+        features = _json.dumps(
+            {
+                "creator_subscriptions_tweet_preview_api_enabled": True,
+                "communities_web_enable_tweet_community_results_fetch": True,
+                "c9s_tweet_anatomy_moderator_badge_enabled": True,
+                "articles_preview_enabled": True,
+                "responsive_web_twitter_article_tweet_consumption_enabled": True,
+                "longform_notetweets_consumption_enabled": True,
+                "longform_notetweets_rich_text_read_enabled": True,
+                "longform_notetweets_inline_media_enabled": True,
+                "responsive_web_graphql_exclude_directive_enabled": True,
+                "verified_phone_label_enabled": False,
+            }
+        )
+        field_toggles = _json.dumps(
+            {
+                "withArticleRichContentState": True,
+                "withArticlePlainText": True,
+                "withGrokAnalyze": False,
+            }
+        )
         url = "https://x.com/i/api/graphql/Xl5pC_lBk_gcO2ItU39DQw/TweetResultByRestId"
-        params = {"variables": variables, "features": features, "fieldToggles": field_toggles}
+        params = {
+            "variables": variables,
+            "features": features,
+            "fieldToggles": field_toggles,
+        }
         async with httpx.AsyncClient(cookies=cookies, headers=headers, timeout=30) as c:
             r = await c.get(url, params=params)
             if r.status_code != 200:
@@ -85,7 +96,9 @@ class TwitterClient:
             result = data.get("data", {}).get("tweetResult", {}).get("result", {})
 
             # Full article text from content_state blocks -> HTML
-            art_result = result.get("article", {}).get("article_results", {}).get("result", {})
+            art_result = (
+                result.get("article", {}).get("article_results", {}).get("result", {})
+            )
             content_state = art_result.get("content_state", {})
             blocks = content_state.get("blocks", [])
             if blocks:
@@ -99,7 +112,9 @@ class TwitterClient:
                     if not ranges:
                         return text
                     chars = list(text)
-                    for er in sorted(ranges, key=lambda x: x.get("offset", 0), reverse=True):
+                    for er in sorted(
+                        ranges, key=lambda x: x.get("offset", 0), reverse=True
+                    ):
                         key = str(er.get("key", ""))
                         ent = entities.get(key, {})
                         etype = ent.get("type", "")
@@ -156,7 +171,11 @@ class TwitterClient:
             legacy = result.get("legacy", {})
             if legacy.get("full_text"):
                 return legacy["full_text"]
-            note = result.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {})
+            note = (
+                result.get("note_tweet", {})
+                .get("note_tweet_results", {})
+                .get("result", {})
+            )
             if note:
                 text = note.get("text", "")
                 if text:
@@ -225,9 +244,7 @@ class TwitterClient:
         data["urls"] = raw_entities.get("urls", [])
         article = raw.get("article", {})
         art_result = (
-            article.get("article_results", {}).get("result", {})
-            if article
-            else {}
+            article.get("article_results", {}).get("result", {}) if article else {}
         )
         if art_result:
             cover_media = art_result.get("cover_media", {}).get("media_info", {})
@@ -242,12 +259,22 @@ class TwitterClient:
         quoted_raw = raw.get("quoted_status_result", {}).get("result", {})
         if quoted_raw:
             q_legacy = quoted_raw.get("legacy", {})
-            q_core = quoted_raw.get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {})
+            q_core = (
+                quoted_raw.get("core", {})
+                .get("user_results", {})
+                .get("result", {})
+                .get("legacy", {})
+            )
             q_media = []
             for m in q_legacy.get("extended_entities", {}).get("media", []):
                 mtype = m.get("type", "unknown")
                 poster = m.get("media_url_https", "")
-                item = {"type": mtype, "media_url": poster, "url": m.get("url", ""), "expanded_url": m.get("expanded_url", "")}
+                item = {
+                    "type": mtype,
+                    "media_url": poster,
+                    "url": m.get("url", ""),
+                    "expanded_url": m.get("expanded_url", ""),
+                }
                 if mtype in ("video", "animated_gif"):
                     vi = m.get("video_info", {})
                     variants = vi.get("variants", [])
@@ -286,6 +313,7 @@ class TwitterClient:
         """Fetch quoted tweet data via TweetResultByRestId which includes quoted_status_result."""
         await self.ensure_ready()
         import httpx, json as _json
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
@@ -293,27 +321,41 @@ class TwitterClient:
             "Content-Type": "application/json",
         }
         cookies = {"auth_token": self._auth_token, "ct0": self._ct0}
-        variables = _json.dumps({
-            "tweetId": tweet_id, "withCommunity": False,
-            "includePromotedContent": False, "withVoice": False,
-        })
-        features = _json.dumps({
-            "creator_subscriptions_tweet_preview_api_enabled": True,
-            "communities_web_enable_tweet_community_results_fetch": True,
-            "c9s_tweet_anatomy_moderator_badge_enabled": True,
-            "articles_preview_enabled": True,
-            "responsive_web_twitter_article_tweet_consumption_enabled": True,
-            "longform_notetweets_consumption_enabled": True,
-            "longform_notetweets_rich_text_read_enabled": True,
-            "longform_notetweets_inline_media_enabled": True,
-            "responsive_web_graphql_exclude_directive_enabled": True,
-            "verified_phone_label_enabled": False,
-        })
-        field_toggles = _json.dumps({
-            "withArticleRichContentState": True, "withArticlePlainText": True, "withGrokAnalyze": False,
-        })
+        variables = _json.dumps(
+            {
+                "tweetId": tweet_id,
+                "withCommunity": False,
+                "includePromotedContent": False,
+                "withVoice": False,
+            }
+        )
+        features = _json.dumps(
+            {
+                "creator_subscriptions_tweet_preview_api_enabled": True,
+                "communities_web_enable_tweet_community_results_fetch": True,
+                "c9s_tweet_anatomy_moderator_badge_enabled": True,
+                "articles_preview_enabled": True,
+                "responsive_web_twitter_article_tweet_consumption_enabled": True,
+                "longform_notetweets_consumption_enabled": True,
+                "longform_notetweets_rich_text_read_enabled": True,
+                "longform_notetweets_inline_media_enabled": True,
+                "responsive_web_graphql_exclude_directive_enabled": True,
+                "verified_phone_label_enabled": False,
+            }
+        )
+        field_toggles = _json.dumps(
+            {
+                "withArticleRichContentState": True,
+                "withArticlePlainText": True,
+                "withGrokAnalyze": False,
+            }
+        )
         url = "https://x.com/i/api/graphql/Xl5pC_lBk_gcO2ItU39DQw/TweetResultByRestId"
-        params = {"variables": variables, "features": features, "fieldToggles": field_toggles}
+        params = {
+            "variables": variables,
+            "features": features,
+            "fieldToggles": field_toggles,
+        }
         async with httpx.AsyncClient(cookies=cookies, headers=headers, timeout=30) as c:
             r = await c.get(url, params=params)
             if r.status_code != 200:
@@ -331,12 +373,22 @@ class TwitterClient:
         if not quoted_raw:
             return {}
         q_legacy = quoted_raw.get("legacy", {})
-        q_core = quoted_raw.get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {})
+        q_core = (
+            quoted_raw.get("core", {})
+            .get("user_results", {})
+            .get("result", {})
+            .get("legacy", {})
+        )
         q_media = []
         for m in q_legacy.get("extended_entities", {}).get("media", []):
             mtype = m.get("type", "unknown")
             poster = m.get("media_url_https", "")
-            item = {"type": mtype, "media_url": poster, "url": m.get("url", ""), "expanded_url": m.get("expanded_url", "")}
+            item = {
+                "type": mtype,
+                "media_url": poster,
+                "url": m.get("url", ""),
+                "expanded_url": m.get("expanded_url", ""),
+            }
             if mtype in ("video", "animated_gif"):
                 vi = m.get("video_info", {})
                 variants = vi.get("variants", [])
@@ -362,7 +414,9 @@ class TwitterClient:
         }
         # Extract article metadata from quoted tweet
         q_art = quoted_raw.get("article", {})
-        q_art_result = q_art.get("article_results", {}).get("result", {}) if q_art else {}
+        q_art_result = (
+            q_art.get("article_results", {}).get("result", {}) if q_art else {}
+        )
         if q_art_result:
             q_cover = q_art_result.get("cover_media", {}).get("media_info", {})
             result["article"] = {

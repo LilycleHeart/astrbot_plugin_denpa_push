@@ -77,7 +77,9 @@ class TwitterMonitorPlugin(Star):
                     self.subscriptions = data.get("subscriptions", {})
                     self.monitored_sessions = set(data.get("monitored_sessions", []))
                 total = sum(len(users) for users in self.subscriptions.values())
-                logger.info(f"Loaded {len(self.subscriptions)} sessions with {total} tracked users")
+                logger.info(
+                    f"Loaded {len(self.subscriptions)} sessions with {total} tracked users"
+                )
         except Exception as e:
             logger.warning(f"Failed to load data: {e}")
             self.subscriptions = {}
@@ -109,8 +111,6 @@ class TwitterMonitorPlugin(Star):
             self.monitor_task = None
         logger.info("Monitor loop stopped")
 
-
-
     @filter.command("twitter")
     async def twitter_cmd(self, event: AstrMessageEvent):
         parts = event.message_str.strip().split()
@@ -129,7 +129,9 @@ class TwitterMonitorPlugin(Star):
 
         auth_token = self.config.get("twitter_auth_token", "")
         if not auth_token:
-            yield event.plain_result("请先在插件配置中设置 twitter_auth_token 和 twitter_ct0")
+            yield event.plain_result(
+                "请先在插件配置中设置 twitter_auth_token 和 twitter_ct0"
+            )
             return
         self.twitter.set_credentials(auth_token, self.config.get("twitter_ct0", ""))
 
@@ -149,11 +151,11 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_add")
     async def twitter_add(self, event: AstrMessageEvent, usernames: list):
-        '''当用户说「关注」「订阅」「跟踪」某个推特账号时使用此工具。会开始监控该用户的推文并自动推送新内容。
+        """当用户说「关注」「订阅」「跟踪」某个推特账号时使用此工具。会开始监控该用户的推文并自动推送新内容。
 
         Args:
             usernames(array[string]): 要关注的用户名，如 ["ApexLiveComms"]
-        '''
+        """
         if isinstance(usernames, str):
             usernames = [usernames]
         for name in usernames:
@@ -162,10 +164,10 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_remove")
     async def twitter_remove(self, event: AstrMessageEvent, usernames: list):
-        '''当用户说「取消关注」「取关」「删除订阅」某个推特账号时使用此工具。支持模糊匹配。
+        """当用户说「取消关注」「取关」「删除订阅」某个推特账号时使用此工具。支持模糊匹配。
         Args:
             usernames(array[string]): 要取消关注的用户名，如 ["apexlive"]
-        '''
+        """
         if isinstance(usernames, str):
             usernames = [usernames]
         umo = event.unified_msg_origin
@@ -182,17 +184,17 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_push")
     async def twitter_push(self, event: AstrMessageEvent, url: str):
-        '''当用户发来一个推特链接并要求「推送」「翻译」「看看」「读取」「解析」时使用此工具。会获取推文内容、翻译、生成卡片并发送图片/视频。不要自己解释推文内容，交给此工具处理。
+        """当用户发来一个推特链接并要求「推送」「翻译」「看看」「读取」「解析」时使用此工具。会获取推文内容、翻译、生成卡片并发送图片/视频。不要自己解释推文内容，交给此工具处理。
 
         Args:
             url(string): 推特链接，如 https://x.com/username/status/123456
-        '''
+        """
         for r in await self._cmd_push(event, url):
             yield r
 
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
-        '''列出当前群聊已关注的 Twitter 用户。'''
+        """列出当前群聊已关注的 Twitter 用户。"""
         umo = event.unified_msg_origin
         session_users = self.subscriptions.get(umo, {})
         lines = ["已关注用户:"]
@@ -202,7 +204,7 @@ class TwitterMonitorPlugin(Star):
 
     @filter.llm_tool(name="twitter_monitor")
     async def twitter_monitor(self, event: AstrMessageEvent):
-        '''开启或关闭当前会话的自动推送。'''
+        """开启或关闭当前会话的自动推送。"""
         umo = event.unified_msg_origin
         if umo in self.monitored_sessions:
             self.monitored_sessions.discard(umo)
@@ -232,7 +234,9 @@ class TwitterMonitorPlugin(Star):
             }
             self._save_data()
             self._start_monitor()
-            return event.plain_result(f"本群已关注 @{username}（{user.name}），开始跟踪")
+            return event.plain_result(
+                f"本群已关注 @{username}（{user.name}），开始跟踪"
+            )
         except Exception as e:
             logger.error(f"Failed to add user {username}: {e}")
             return event.plain_result(f"添加失败: {str(e)[:100]}")
@@ -258,14 +262,20 @@ class TwitterMonitorPlugin(Star):
             return event.plain_result("本群暂无关注用户")
         lines = ["本群关注用户:"]
         for name, info in session_users.items():
-            lines.append(f"  @{name}  (最后ID: {info.get('last_tweet_id', 'N/A')[:12]}...)")
+            lines.append(
+                f"  @{name}  (最后ID: {info.get('last_tweet_id', 'N/A')[:12]}...)"
+            )
         return event.plain_result("\n".join(lines))
 
     async def _cmd_push(self, event: AstrMessageEvent, url: str):
         results = []
         m = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/(\d+)", url)
         if not m:
-            results.append(event.plain_result("无效的推文链接，格式: https://x.com/username/status/123456"))
+            results.append(
+                event.plain_result(
+                    "无效的推文链接，格式: https://x.com/username/status/123456"
+                )
+            )
             return results
         username, tweet_id = m.group(1), m.group(2)
         try:
@@ -278,10 +288,15 @@ class TwitterMonitorPlugin(Star):
             for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
                 if url:
                     results.append(event.image_result(url))
-            results.append(event.plain_result(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"))
+            results.append(
+                event.plain_result(
+                    f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
+                )
+            )
 
             # 2. 图片合并到一条群合并转发消息
             from astrbot.api.message_components import Node, Plain
+
             uname = info.get("user_name", info["screen_name"])
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
             for img in info.get("images", []):
@@ -319,8 +334,14 @@ class TwitterMonitorPlugin(Star):
 
     async def _monitor_loop(self):
         interval = max(1, int(self.config.get("poll_interval", 5))) * 60
-        total_subs = sum(len(users) for users in self.subscriptions.values()) if self.subscriptions else 0
-        logger.info(f"[Monitor] Loop started, interval={interval}s, subscriptions={len(self.subscriptions)}, tracked_users={total_subs}, monitored_sessions={len(self.monitored_sessions)}")
+        total_subs = (
+            sum(len(users) for users in self.subscriptions.values())
+            if self.subscriptions
+            else 0
+        )
+        logger.info(
+            f"[Monitor] Loop started, interval={interval}s, subscriptions={len(self.subscriptions)}, tracked_users={total_subs}, monitored_sessions={len(self.monitored_sessions)}"
+        )
         while self._running:
             try:
                 await self.twitter.ensure_ready()
@@ -355,7 +376,11 @@ class TwitterMonitorPlugin(Star):
                     new_tweets = [t for t in tweets if t.id > last_id]
 
                     if new_tweets:
-                        target_sessions = [s for s in user_sessions.get(username, []) if s in self.monitored_sessions]
+                        target_sessions = [
+                            s
+                            for s in user_sessions.get(username, [])
+                            if s in self.monitored_sessions
+                        ]
                         logger.info(
                             f"[Monitor] {username}: {len(new_tweets)} new tweets "
                             f"(last={last_id[:15]}.., targets={len(target_sessions)})"
@@ -371,11 +396,13 @@ class TwitterMonitorPlugin(Star):
                             sess_users = self.subscriptions.get(sess_umo)
                             if sess_users and username in sess_users:
                                 sess_users[username]["last_tweet_id"] = max_id
-                                sess_users[username]["last_checked_at"] = (
-                                    datetime.now(timezone.utc).isoformat()
-                                )
+                                sess_users[username]["last_checked_at"] = datetime.now(
+                                    timezone.utc
+                                ).isoformat()
                         self._save_data()
-                        logger.info(f"[Monitor] {username}: last_id updated to {max_id[:15]}..")
+                        logger.info(
+                            f"[Monitor] {username}: last_id updated to {max_id[:15]}.."
+                        )
                     else:
                         logger.debug(f"[Monitor] {username}: no new tweets")
                 except asyncio.CancelledError:
@@ -383,7 +410,9 @@ class TwitterMonitorPlugin(Star):
                 except Exception as e:
                     estr = str(e)
                     if "429" in estr or "Rate limit" in estr:
-                        logger.warning(f"[Monitor] Rate limited for {username}, aborting this round")
+                        logger.warning(
+                            f"[Monitor] Rate limited for {username}, aborting this round"
+                        )
                         break
                     logger.error(f"[Monitor] Error for {username}: {e}")
 
@@ -394,15 +423,20 @@ class TwitterMonitorPlugin(Star):
             import httpx
             from PIL import Image
             import io
+
             proxy = self.config.get("proxy", None)
-            async with httpx.AsyncClient(proxy=proxy if proxy else None, timeout=10) as _c:
+            async with httpx.AsyncClient(
+                proxy=proxy if proxy else None, timeout=10
+            ) as _c:
                 _r = await _c.get(avatar_url)
                 _r.raise_for_status()
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
                 _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
                 _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
                 _seed = (255 << 24) | (_pr << 16) | (_pg << 8) | _pb
-                logger.debug(f"Seed color extracted: ARGB={_seed} RGB=({_pr},{_pg},{_pb})")
+                logger.debug(
+                    f"Seed color extracted: ARGB={_seed} RGB=({_pr},{_pg},{_pb})"
+                )
                 return _seed
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
@@ -413,26 +447,28 @@ class TwitterMonitorPlugin(Star):
         try:
             from PyMCUlib.hct import Hct
             from PyMCUlib.scheme.scheme_vibrant import SchemeVibrant
-            from PyMCUlib.dynamiccolor.material_dynamic_colors import MaterialDynamicColors
+            from PyMCUlib.dynamiccolor.material_dynamic_colors import (
+                MaterialDynamicColors,
+            )
             from PyMCUlib.utils.string_utils import hex_from_argb
-            
+
             if isinstance(seed, str):
                 seed_int = int(seed.lstrip("#"), 16) | (0xFF << 24)
             else:
                 seed_int = int(seed) if seed > 0xFFFFFF else int(seed) | (0xFF << 24)
-            
+
             scheme = SchemeVibrant(
                 Hct.from_int(seed_int),
                 False,  # is_dark=False for light theme
-                0.25    # contrast_level (default in official MCU)
+                0.25,  # contrast_level (default in official MCU)
             )
-            
+
             mdc = MaterialDynamicColors()
-            
+
             def _get_hex(dynamic_color_func, scheme):
                 argb = dynamic_color_func().get_argb(scheme)
                 return hex_from_argb(argb)
-            
+
             palette = {
                 "surface": _get_hex(mdc.surface, scheme),
                 "surface_variant": _get_hex(mdc.surface_variant, scheme),
@@ -462,7 +498,7 @@ class TwitterMonitorPlugin(Star):
             sr = (seed_int >> 16) & 0xFF
             sg = (seed_int >> 8) & 0xFF
             sb = seed_int & 0xFF
-            
+
             def _rgb_to_hsl(r, g, b):
                 r, g, b = r / 255.0, g / 255.0, b / 255.0
                 mx, mn = max(r, g, b), min(r, g, b)
@@ -472,37 +508,47 @@ class TwitterMonitorPlugin(Star):
                 else:
                     d = mx - mn
                     s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
-                    if mx == r: h = (g - b) / d + (6.0 if g < b else 0.0)
-                    elif mx == g: h = (b - r) / d + 2.0
-                    else: h = (r - g) / d + 4.0
+                    if mx == r:
+                        h = (g - b) / d + (6.0 if g < b else 0.0)
+                    elif mx == g:
+                        h = (b - r) / d + 2.0
+                    else:
+                        h = (r - g) / d + 4.0
                     h /= 6.0
                 return h * 360.0, s, l
-            
+
             def _hsl_to_rgb(h, s, l):
                 h = h / 360.0
                 if s == 0:
                     r = g = b = l
                 else:
+
                     def hue2rgb(p, q, t):
-                        if t < 0: t += 1
-                        if t > 1: t -= 1
-                        if t < 1/6: return p + (q - p) * 6 * t
-                        if t < 1/2: return q
-                        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+                        if t < 0:
+                            t += 1
+                        if t > 1:
+                            t -= 1
+                        if t < 1 / 6:
+                            return p + (q - p) * 6 * t
+                        if t < 1 / 2:
+                            return q
+                        if t < 2 / 3:
+                            return p + (q - p) * (2 / 3 - t) * 6
                         return p
+
                     q = l * (1 + s) if l < 0.5 else l + s - l * s
                     p = 2 * l - q
-                    r = hue2rgb(p, q, h + 1/3)
+                    r = hue2rgb(p, q, h + 1 / 3)
                     g = hue2rgb(p, q, h)
-                    b = hue2rgb(p, q, h - 1/3)
+                    b = hue2rgb(p, q, h - 1 / 3)
                 return int(r * 255), int(g * 255), int(b * 255)
-            
+
             h, s, l = _rgb_to_hsl(sr, sg, sb)
-            
+
             def _role(hue, sat, tone):
                 r, g, b = _hsl_to_rgb(hue, sat, tone)
                 return f"#{r:02x}{g:02x}{b:02x}"
-            
+
             palette = {
                 "surface": _role(h, s * 0.1, 0.95),
                 "surface_variant": _role(h, s * 0.2, 0.85),
@@ -584,7 +630,9 @@ class TwitterMonitorPlugin(Star):
         quoted = data.get("quoted_tweet", {})
         quoted_user = quoted.get("user", {}) if quoted else {}
         quoted_media = quoted.get("media", []) if quoted else []
-        quoted_thumbnails = [m.get("media_url", "") for m in quoted_media[:2] if m.get("media_url", "")]
+        quoted_thumbnails = [
+            m.get("media_url", "") for m in quoted_media[:2] if m.get("media_url", "")
+        ]
         q_user_name = quoted_user.get("name", "")
         q_screen_name = quoted_user.get("screen_name", "")
         q_avatar = quoted_user.get("avatar_url", "")
@@ -593,7 +641,9 @@ class TwitterMonitorPlugin(Star):
         q_article_data = quoted.get("article", {}) if quoted else {}
         q_article_title = q_article_data.get("title", "") if q_article_data else ""
         q_article_text = q_article_data.get("full_text", "") if q_article_data else ""
-        q_article_preview = q_article_data.get("preview_text", "") if q_article_data else ""
+        q_article_preview = (
+            q_article_data.get("preview_text", "") if q_article_data else ""
+        )
 
         image_translations = None
         images, gifs, videos = TwitterClient.extract_tweet_media(data)
@@ -608,7 +658,11 @@ class TwitterMonitorPlugin(Star):
         urls = data.get("urls", [])
         text_no_urls = raw_text
         for u in urls:
-            text_no_urls = text_no_urls.replace(u.get("url", ""), "").replace(u.get("expanded_url", ""), "").strip()
+            text_no_urls = (
+                text_no_urls.replace(u.get("url", ""), "")
+                .replace(u.get("expanded_url", ""), "")
+                .strip()
+            )
         is_link_only = len(text_no_urls.strip()) < 5
         has_article = bool(data.get("article"))
         if is_link_only or has_article:
@@ -635,7 +689,10 @@ class TwitterMonitorPlugin(Star):
                 thumbnail_urls.append(poster)
 
         import os as _os
-        tmpl_path = _os.path.join(_os.path.dirname(__file__), "templates", "tweet_card.html")
+
+        tmpl_path = _os.path.join(
+            _os.path.dirname(__file__), "templates", "tweet_card.html"
+        )
         with open(tmpl_path, "r", encoding="utf-8") as f:
             template = f.read()
 
@@ -650,12 +707,15 @@ class TwitterMonitorPlugin(Star):
             "screen_name": data["user"]["screen_name"],
             "user_id": data["user"]["id"],
             "avatar_url": data["user"]["avatar_url"],
-            "created_at_str": data["created_at_datetime"].strftime("%b %d, %Y · %H:%M UTC")
+            "created_at_str": data["created_at_datetime"].strftime(
+                "%b %d, %Y · %H:%M UTC"
+            )
             if hasattr(data["created_at_datetime"], "strftime")
             else str(data["created_at"]),
             "article_title": article.get("title", "") if article else "",
             "article_cover_url": article.get("cover_url", "") if article else "",
-            "article_text": data.get("article_full_text") or (article.get("full_text", "") if article else ""),
+            "article_text": data.get("article_full_text")
+            or (article.get("full_text", "") if article else ""),
             "article_preview": article.get("preview_text", "") if article else "",
             "original_text": data.get("text", ""),
             "translated_text": translated_text,
@@ -677,39 +737,42 @@ class TwitterMonitorPlugin(Star):
         }
 
         # 长文章分块渲染
-        article_text = data.get("article_full_text") or (article.get("full_text", "") if article else "")
+        article_text = data.get("article_full_text") or (
+            article.get("full_text", "") if article else ""
+        )
         MAX_CHUNK = 2000
 
         def split_into_chunks(text):
             """Split text into ~MAX_CHUNK chunks at paragraph boundaries."""
-            paras = text.split('\n\n')
+            paras = text.split("\n\n")
             chunks, cur, cl = [], [], 0
             for p in paras:
                 plen = len(p)
                 if cl + plen > MAX_CHUNK and cur:
-                    chunks.append('\n\n'.join(cur))
+                    chunks.append("\n\n".join(cur))
                     cur, cl = [], 0
                 # if a single paragraph exceeds MAX_CHUNK, force-split at sentence
                 if plen > MAX_CHUNK:
                     import re as _re
-                    sentences = _re.split(r'(?<=[。！？.!?])', p)
+
+                    sentences = _re.split(r"(?<=[。！？.!?])", p)
                     s_chunk, s_cl = [], 0
                     for s in sentences:
                         if s_cl + len(s) > MAX_CHUNK and s_chunk:
-                            cur.append(''.join(s_chunk))
+                            cur.append("".join(s_chunk))
                             cl += len(cur[-1]) + 2
                             s_chunk, s_cl = [s], len(s)
                         else:
                             s_chunk.append(s)
                             s_cl += len(s)
                     if s_chunk:
-                        cur.append(''.join(s_chunk))
+                        cur.append("".join(s_chunk))
                         cl += len(cur[-1]) + 2
                 else:
                     cur.append(p)
                     cl += plen + 2
             if cur:
-                chunks.append('\n\n'.join(cur))
+                chunks.append("\n\n".join(cur))
             return chunks
 
         if len(article_text) > MAX_CHUNK:
@@ -724,7 +787,11 @@ class TwitterMonitorPlugin(Star):
             card_img_urls = []
             for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
                 sub = dict(card_data)
-                sub["article_title"] = card_data["article_title"] if i == 0 else f"(续 {i+1}/{len(chunks)})"
+                sub["article_title"] = (
+                    card_data["article_title"]
+                    if i == 0
+                    else f"(续 {i + 1}/{len(chunks)})"
+                )
                 sub["article_text"] = ""  # 原文过长时只显示预览摘要
                 if i > 0:
                     sub["article_preview"] = ""
@@ -753,7 +820,9 @@ class TwitterMonitorPlugin(Star):
     async def _dump_render_debug(self, html: str, card_data: dict, png_path: str):
         debug_dir = os.path.join(
             getattr(self.context, "astrbot_root", os.getcwd()),
-            "data", "config", "debug_render"
+            "data",
+            "config",
+            "debug_render",
         )
         os.makedirs(debug_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -784,6 +853,7 @@ class TwitterMonitorPlugin(Star):
         png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.png")
         try:
             from jinja2 import Template
+
             html = Template(template).render(card_data)
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html)
@@ -792,7 +862,10 @@ class TwitterMonitorPlugin(Star):
                 ctx = await browser.new_context(device_scale_factor=2)
                 page = await ctx.new_page()
                 await page.set_viewport_size({"width": 620, "height": 100})
-                await page.goto(f"file:///{html_path.replace(chr(92), '/')}", wait_until="networkidle")
+                await page.goto(
+                    f"file:///{html_path.replace(chr(92), '/')}",
+                    wait_until="networkidle",
+                )
                 await page.wait_for_timeout(2000)
                 h = await page.evaluate("document.body.scrollHeight")
                 await page.set_viewport_size({"width": 620, "height": h})
@@ -804,8 +877,11 @@ class TwitterMonitorPlugin(Star):
         except Exception as e:
             logger.error(f"Local card render failed: {e}")
             try:
-                card_img_url = await self.html_render(template, card_data,
-                    options={"type": "png", "full_page": True, "timeout": 15000})
+                card_img_url = await self.html_render(
+                    template,
+                    card_data,
+                    options={"type": "png", "full_page": True, "timeout": 15000},
+                )
                 return card_img_url
             except Exception as e2:
                 logger.error(f"Remote card render also failed: {e2}")
@@ -837,7 +913,9 @@ class TwitterMonitorPlugin(Star):
                     else:
                         card_chain.chain.append(CompImage.fromFileSystem(url))
                     if first_card:
-                        card_chain.message(f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}")
+                        card_chain.message(
+                            f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
+                        )
                         first_card = False
                     logger.info(f"[Push] Card to {session_umo}")
                     await self.context.send_message(session_umo, card_chain)
@@ -845,13 +923,18 @@ class TwitterMonitorPlugin(Star):
                 if first_card:
                     fallback = MessageChain()
                     if info["translated_text"]:
-                        fallback.message(f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}")
+                        fallback.message(
+                            f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}"
+                        )
                     else:
-                        fallback.message(f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}")
+                        fallback.message(
+                            f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}"
+                        )
                     await self.context.send_message(session_umo, fallback)
 
                 # 图片合并到一条群合并转发消息
                 from astrbot.api.message_components import Node, Plain
+
                 img_contents = []
                 for img in info.get("images", []):
                     iurl = img.get("media_url", "")
@@ -908,7 +991,11 @@ class TwitterMonitorPlugin(Star):
         text = data.get("text", "")
         article = data.get("article")
         if article:
-            full = data.get("article_full_text") or article.get("full_text") or article.get("preview_text", "")
+            full = (
+                data.get("article_full_text")
+                or article.get("full_text")
+                or article.get("preview_text", "")
+            )
             text = f"{article.get('title', '')}\n\n{full}"
 
         # 追加引用推文
@@ -924,7 +1011,8 @@ class TwitterMonitorPlugin(Star):
 
         # 翻译前过滤掉链接，防止非多模态模型误以为要它看图
         import re as _re
-        clean_text = _re.sub(r'https?://\S+', '', text).strip()
+
+        clean_text = _re.sub(r"https?://\S+", "", text).strip()
         if not clean_text:
             clean_text = text
 
