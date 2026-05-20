@@ -244,8 +244,10 @@ class TwitterClient:
         data["urls"] = raw_entities.get("urls", [])
         # 用 tweet.full_text 覆盖可能截断的 tweet.text
         full_text = data.get("full_text", "")
+        logger.debug(f"extract: tweet.text len={len(data.get('text',''))}, full_text len={len(full_text)}, full_text exists={bool(full_text)}")
         if full_text and len(full_text) > len(data.get("text", "")):
             data["text"] = full_text
+            logger.debug(f"extract: overrode text with full_text (len={len(full_text)})")
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {}) if article else {}
