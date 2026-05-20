@@ -539,6 +539,14 @@ class TwitterMonitorPlugin(Star):
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
                 _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
                 _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
+                # 头像 1×1 平均色通常偏灰，提高饱和度让匹配更有色彩
+                _mx, _mn = max(_pr, _pg, _pb), min(_pr, _pg, _pb)
+                if _mx > _mn:
+                    s = 255 / (_mx - _mn)
+                    def _boost(c): return int(max(0, min(255, (_mx - c) * s * 0.4)))
+                    _pr = _mx - _boost(_pr)
+                    _pg = _mx - _boost(_pg)
+                    _pb = _mx - _boost(_pb)
                 logger.warning(f"Seed extracted: RGB=({_pr},{_pg},{_pb}) from {len(_r.content)} bytes")
                 return (_pr, _pg, _pb)
         except Exception as e:
