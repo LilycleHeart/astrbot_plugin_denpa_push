@@ -242,11 +242,10 @@ class TwitterClient:
         raw_legacy = raw.get("legacy", {})
         raw_entities = raw_legacy.get("entities", {})
         data["urls"] = raw_entities.get("urls", [])
-        # 用 raw_legacy.full_text 覆盖可能截断的 tweet.text
-        raw_full = raw_legacy.get("full_text", "")
-        if raw_full and len(raw_full) > len(data.get("text", "")):
-            data["text"] = raw_full
-            data["full_text"] = raw_full
+        # 用 tweet.full_text 覆盖可能截断的 tweet.text
+        full_text = data.get("full_text", "")
+        if full_text and len(full_text) > len(data.get("text", "")):
+            data["text"] = full_text
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {}) if article else {}
