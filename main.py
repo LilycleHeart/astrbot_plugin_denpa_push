@@ -524,6 +524,8 @@ class TwitterMonitorPlugin(Star):
             import httpx
             from PIL import Image
             import io
+            import colorsys
+            from collections import Counter
 
             proxy = self.config.get("proxy", None)
             headers = {
@@ -537,18 +539,34 @@ class TwitterMonitorPlugin(Star):
                 _r = await _c.get(avatar_url, headers=headers)
                 _r.raise_for_status()
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
-                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                # 头像 1×1 平均色通常偏灰，提高饱和度让匹配更有色彩
-                _mx, _mn = max(_pr, _pg, _pb), min(_pr, _pg, _pb)
-                if _mx > _mn:
-                    s = 255 / (_mx - _mn)
-                    def _boost(c): return int(max(0, min(255, (_mx - c) * s * 0.4)))
-                    _pr = _mx - _boost(_pr)
-                    _pg = _mx - _boost(_pg)
-                    _pb = _mx - _boost(_pb)
-                logger.warning(f"Seed extracted: RGB=({_pr},{_pg},{_pb}) from {len(_r.content)} bytes")
-                return (_pr, _pg, _pb)
+                _img = _img.resize((48, 48), resample=Image.Resampling.LANCZOS)
+
+                # 量化+评分：找最饱和、出现频率最高的颜色（仿 NetEase 项目 QuantizerCelebi + Score）
+                pixels = list(_img.getdata())
+                # 过滤透明/半透明像素
+                pixels = [(r, g, b) for r, g, b, a in pixels if a > 128]
+                if not pixels:
+                    return (103, 80, 164)
+
+                # 量化：RGB 每通道除以 32 取整再乘回，约 32^3 = 32768 色桶
+                def quantize(rgb):
+                    return tuple((c // 32) * 32 for c in rgb)
+
+                # 统计每个量化色的频率
+                freq = Counter(quantize(p) for p in pixels)
+
+                # 评分：频率 * (1 + 饱和度因子)
+                def score_color(rgb):
+                    r, g, b = [x / 255.0 for x in rgb]
+                    h, l, s = colorsys.rgb_to_hls(r, g, b)
+                    # 饱和度越高分数越高，极亮/极暗的颜色降权
+                    brightness_factor = 1.0 - abs(l - 0.5) * 1.2
+                    return freq[quantize(rgb)] * (1 + s * 3) * max(0.3, brightness_factor)
+
+                # 找最高分的颜色
+                best = max(freq.keys(), key=score_color)
+                logger.warning(f"Seed extracted: RGB={best} from {len(pixels)} pixels, {len(freq)} unique colors")
+                return best
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return (103, 80, 164)
