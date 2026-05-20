@@ -519,6 +519,27 @@ class TwitterMonitorPlugin(Star):
 
         return (116 * f(y / 100) - 16, 500 * (f(x / 95.047) - f(y / 100)), 200 * (f(y / 100) - f(z / 108.883)))
 
+    async def _extract_seed_color(self, avatar_url: str):
+        try:
+            import httpx
+            from PIL import Image
+            import io
+
+            proxy = self.config.get("proxy", None)
+            async with httpx.AsyncClient(
+                proxy=proxy if proxy else None, timeout=10
+            ) as _c:
+                _r = await _c.get(avatar_url)
+                _r.raise_for_status()
+                _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
+                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
+                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
+                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
+                return (_pr, _pg, _pb)
+        except Exception as e:
+            logger.warning(f"Seed color extraction failed: {e}")
+            return (103, 80, 164)
+
     def _generate_palette(self, seed_rgb):
         h = int(__import__("datetime").datetime.now(
             __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
