@@ -539,7 +539,7 @@ class TwitterMonitorPlugin(Star):
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
                 _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
                 _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
+                logger.warning(f"Seed extracted: RGB=({_pr},{_pg},{_pb}) from {len(r.content)} bytes")
                 return (_pr, _pg, _pb)
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
@@ -578,7 +578,7 @@ class TwitterMonitorPlugin(Star):
             bg_darken = preset["bg-darken"]
 
             palette = self._derive_preset_palette(primary, secondary, bg, bg_darken, is_dark)
-            logger.debug(f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): {json.dumps(palette)}")
+            logger.warning(f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): primary_rgb={preset['primary']}")
             return palette, is_dark
         except Exception as e:
             logger.warning(f"Preset palette failed: {e}")
@@ -743,19 +743,19 @@ class TwitterMonitorPlugin(Star):
 
         raw_avatar = data["user"]["avatar_url"]
         avatar_url = raw_avatar.replace("_normal.", "_400x400.")
-        logger.debug(f"Avatar URL: {raw_avatar} -> {avatar_url}")
+        logger.warning(f"Avatar URL: {raw_avatar} -> {avatar_url}")
         seed_rgb = await self._extract_seed_color(avatar_url)
-        logger.debug(f"Seed RGB: {seed_rgb}")
+        logger.warning(f"Seed RGB: {seed_rgb}")
         # 如果种子色太灰（接近无色），用 user_id 派生个颜色避免全灰
         if max(seed_rgb) - min(seed_rgb) < 40:
             uid = int(data["user"]["id"])
-            logger.debug(f"Seed too gray, deriving from user_id {uid}")
+            logger.warning(f"Seed too gray, deriving from user_id {uid}")
             seed_rgb = (
                 (uid * 37 + 123) % 200 + 28,
                 (uid * 73 + 45) % 200 + 28,
                 (uid * 101 + 89) % 200 + 28,
             )
-            logger.debug(f"Derived seed: {seed_rgb}")
+            logger.warning(f"Derived seed: {seed_rgb}")
         palette, is_dark = self._generate_palette(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
