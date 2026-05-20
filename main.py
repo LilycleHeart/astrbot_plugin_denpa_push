@@ -469,7 +469,6 @@ class TwitterMonitorPlugin(Star):
             import httpx
             from PIL import Image
             import io
-            import math
 
             proxy = self.config.get("proxy", None)
             async with httpx.AsyncClient(
@@ -478,116 +477,10 @@ class TwitterMonitorPlugin(Star):
                 _r = await _c.get(avatar_url)
                 _r.raise_for_status()
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-
-            logger.debug(f"Seed: fetched {avatar_url}, size={_img.size}")
-            _img = _img.resize((48, 48), resample=Image.Resampling.LANCZOS)
-
-            def _rgb_to_hsl(r, g, b):
-                r, g, b = r / 255, g / 255, b / 255
-                mx, mn = max(r, g, b), min(r, g, b)
-                h, s, l = 0, 0, (mx + mn) / 2
-                if mx != mn:
-                    d = mx - mn
-                    s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
-                    if mx == r:
-                        h = (g - b) / d + (6 if g < b else 0)
-                    elif mx == g:
-                        h = (b - r) / d + 2
-                    else:
-                        h = (r - g) / d + 4
-                    h /= 6
-                return h, s, l
-
-            def _chroma(r, g, b):
-                mx, mn = max(r, g, b), min(r, g, b)
-                return mx - mn
-
-            # Collect non-transparent pixels and score by population * chroma
-            pixels = _img.load()
-            color_counts = {}
-            for y in range(48):
-                for x in range(48):
-                    r, g, b, a = pixels[x, y]
-                    if a < 128:
-                        continue
-                    key = ((r >> 3) << 15) | ((g >> 3) << 10) | ((b >> 3) << 5)
-                    color_counts[key] = color_counts.get(key, 0) + 1
-
-            logger.debug(f"Seed: valid_pixels={sum(color_counts.values())}, quantized_colors={len(color_counts)}")
-
-            if not color_counts:
-                logger.debug("Seed: no valid pixels, using fallback")
-                return (103, 80, 164)
-
-            scored = []
-            for key, count in color_counts.items():
-                r = (key >> 15) & 0x1F
-                g = (key >> 10) & 0x1F
-                b = (key >> 5) & 0x1F
-                r = r * 8 + 4
-                g = g * 8 + 4
-                b = b * 8 + 4
-                c = _chroma(r, g, b)
-                if c < 15:
-                    continue
-                _, s, l = _rgb_to_hsl(r, g, b)
-                score = count * s
-                scored.append((score, r, g, b))
-
-            if not scored:
-                logger.debug("Seed: no scored colors (all chroma<15), using fallback")
-                return (103, 80, 164)
-
-            scored.sort(reverse=True)
-            # Log top 5
-            top5 = [(s, (r,g,b)) for s,r,g,b in scored[:5]]
-            logger.debug(f"Seed: top5_scored={top5}")
-            _, r, g, b = scored[0]
-
-            mix = lambda a, bb, p: int(a * (1 - p) + bb * p)
-            lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-            logger.debug(f"Seed: selected=RGB({r},{g},{b}), lum={lum:.0f}")
-
-            if lum < 60:
-                t = 0.3 * (1 - lum / 60)
-                r = mix(r, 255, t)
-                g = mix(g, 255, t)
-                b = mix(b, 255, t)
-                logger.debug(f"Seed: dark normalize t={t:.2f} -> RGB({r},{g},{b})")
-            elif lum > 180:
-                t = 0.5 * ((lum - 180) / 76)
-                r = mix(r, 0, t)
-                g = mix(g, 0, t)
-                b = mix(b, 0, t)
-                logger.debug(f"Seed: light normalize t={t:.2f} -> RGB({r},{g},{b})")
-
-            h, s, l = _rgb_to_hsl(r, g, b)
-            logger.debug(f"Seed: pre-clamp HSL=({h:.2f},{s:.2f},{l:.2f})")
-            s = max(0.3, min(0.8, s))
-            l = max(0.45, min(0.75, l))
-            logger.debug(f"Seed: post-clamp HSL=({h:.2f},{s:.2f},{l:.2f})")
-
-            # HSL back to RGB
-            def _hsl_to_rgb(h, s, l):
-                if s == 0:
-                    return (int(l * 255),) * 3
-                def hue2rgb(p, q, t):
-                    if t < 0: t += 1
-                    if t > 1: t -= 1
-                    if t < 1/6: return p + (q - p) * 6 * t
-                    if t < 1/2: return q
-                    if t < 2/3: return p + (q - p) * (2/3 - t) * 6
-                    return p
-                q = l * (1 + s) if l < 0.5 else l + s - l * s
-                p = 2 * l - q
-                return (int(hue2rgb(p, q, h + 1/3) * 255),
-                        int(hue2rgb(p, q, h) * 255),
-                        int(hue2rgb(p, q, h - 1/3) * 255))
-
-            r, g, b = _hsl_to_rgb(h, s, l)
-
-            logger.debug(f"Seed color extracted: RGB=({r},{g},{b})")
-            return (r, g, b)
+                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
+                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
+                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
+                return (_pr, _pg, _pb)
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return (103, 80, 164)
