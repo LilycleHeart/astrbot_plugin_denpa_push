@@ -529,6 +529,7 @@ class TwitterMonitorPlugin(Star):
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": "https://x.com/",
             }
             async with httpx.AsyncClient(
                 proxy=proxy if proxy else None, timeout=10
@@ -740,7 +741,16 @@ class TwitterMonitorPlugin(Star):
         if image_translations:
             translated_text = f"{translated_text}\n\n{image_translations}"
 
-        seed_rgb = await self._extract_seed_color(data["user"]["avatar_url"])
+        avatar_url = data["user"]["avatar_url"].replace("_normal.", "_400x400.")
+        seed_rgb = await self._extract_seed_color(avatar_url)
+        # 如果种子色太灰（接近无色），用 user_id 派生个颜色避免全灰
+        if max(seed_rgb) - min(seed_rgb) < 40:
+            uid = int(data["user"]["id"])
+            seed_rgb = (
+                (uid * 37 + 123) % 200 + 28,
+                (uid * 73 + 45) % 200 + 28,
+                (uid * 101 + 89) % 200 + 28,
+            )
         palette, is_dark = self._generate_palette(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
