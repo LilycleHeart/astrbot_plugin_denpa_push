@@ -440,9 +440,9 @@ class DenpaPushPlugin(Star):
                 colors = prominent_colors_from_image(_img, max_colors=128)
                 if not colors:
                     return (103, 80, 164)
-                # colors 是 ARGB hex 格式 #ffRRGGBB
+                # colors 是 RRGGBB hex 格式 #rrggbb
                 h = colors[0].lstrip("#")
-                rgb = (int(h[2:4], 16), int(h[4:6], 16), int(h[6:8], 16))
+                rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
                 logger.warning(
                     f"Seed extracted: RGB={rgb} from {len(_r.content)} bytes, top colors: {colors[:3]}"
                 )
@@ -493,7 +493,7 @@ class DenpaPushPlugin(Star):
                 "surface_container_rgb": rgb_str(scheme.surface_container),
             }
             logger.warning(
-                f"Dynamic palette from seed=#{hex_color} (dark={is_dark}): primary={scheme.primary}"
+                f"Dynamic palette from seed={hex_color} (dark={is_dark}): primary={scheme.primary}"
             )
             return palette, is_dark
         except Exception as e:
@@ -980,6 +980,15 @@ class DenpaPushPlugin(Star):
         quoted = data.get("quoted_tweet", {})
         quoted_text = quoted.get("text", "")
         quoted_user = quoted.get("user", {})
+        quoted_article = quoted.get("article", {})
+        if quoted_article:
+            qa_full = (
+                quoted_article.get("full_text")
+                or quoted_article.get("preview_text", "")
+            )
+            qa_full = _re.sub(r"<[^>]+>", "", qa_full).strip()
+            if qa_full:
+                quoted_text = f"{quoted_article.get('title', '')}\n\n{qa_full}"
         if quoted_text:
             q_name = quoted_user.get("name", "")
             text = f"{text}\n\n[引用 @{quoted_user.get('screen_name', '')} ({q_name})]:\n{quoted_text}"
