@@ -339,8 +339,6 @@ class TwitterClient:
 
         # Extract quoted tweet if present in the raw data (available from TweetResultByRestId but not from twikit's get_tweet_by_id)
         quoted_raw = raw.get("quoted_status_result", {}).get("result", {})
-        if not quoted_raw:
-            quoted_raw = raw.get("retweeted_status_result", {}).get("result", {})
         if quoted_raw:
             q_legacy = quoted_raw.get("legacy", {})
             q_core = (
@@ -382,6 +380,9 @@ class TwitterClient:
                 },
                 "media": q_media,
             }
+
+        if not data.get("quoted_tweet") and hasattr(tweet, "retweeted_tweet") and tweet.retweeted_tweet:
+            data["quoted_tweet"] = TwitterClient.extract_tweet_data(tweet.retweeted_tweet)
 
         return data
 
