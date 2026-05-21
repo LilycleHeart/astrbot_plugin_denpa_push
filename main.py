@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
-from astrbot.api.message_components import Image as CompImage, Video as CompVideo
+from astrbot.api.message_components import Image as CompImage, Video as CompVideo, Plain
 from astrbot.api.star import Context, Star, register
 
 from .twitter_client import TwitterClient
@@ -18,7 +18,7 @@ DATA_FILE = "astrbot_plugin_denpa_push_data.json"
 @register(
     "astrbot_plugin_denpa_push",
     "astrbot_user",
-    "電波プッシュ · 捕捉 X 推文的電波，自動翻譯並生成卡片推送給你",
+    "Twitter/X 推文监控、翻译与推送插件",
     "1.0.0",
 )
 class DenpaPushPlugin(Star):
@@ -37,16 +37,17 @@ class DenpaPushPlugin(Star):
         return os.path.join(root, DATA_DIR, DATA_FILE)
 
     async def initialize(self):
-        import importlib.util
+        try:
+            import twikit
 
-        if importlib.util.find_spec("twikit") is None:
+        except ImportError:
             logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
         self._load_data()
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
-        logger.info("DenpaPush plugin initialized")
+        logger.info("Twitter Monitor plugin initialized")
 
     def _apply_twitter_credentials(self):
         auth_token = self.config.get("twitter_auth_token", "")
@@ -276,16 +277,17 @@ class DenpaPushPlugin(Star):
                 )
             )
             return results
-        tweet_id = m.group(2)
+        username, tweet_id = m.group(1), m.group(2)
         try:
             results.append(event.plain_result("正在获取推文..."))
             tweet = await self.twitter.get_tweet_by_id(tweet_id)
             data = TwitterClient.extract_tweet_data(tweet)
             info = await self._build_card_data(data)
 
-            # 1. 卡片 PNG 直接发送
-            if info["card_img_url"]:
-                results.append(event.image_result(info["card_img_url"]))
+            # 1. 卡片 PNG 直接发送（多张长文章分块）
+            for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
+                if url:
+                    results.append(event.image_result(url))
             results.append(
                 event.plain_result(
                     f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
@@ -416,385 +418,115 @@ class DenpaPushPlugin(Star):
 
             await asyncio.sleep(interval)
 
-    # NetEase 预设色板（来自 material-you-theme-netease）
-    SCHEME_PRESETS = {
-        "dark-blue": {
-            "primary": (189, 230, 251),
-            "bg": (30, 37, 41),
-            "bg-darken": (23, 29, 32),
-        },
-        "dark-gray": {
-            "primary": (255, 255, 255),
-            "bg": (32, 32, 32),
-            "bg-darken": (25, 25, 25),
-        },
-        "dark-green": {
-            "primary": (183, 241, 222),
-            "bg": (26, 36, 33),
-            "bg-darken": (21, 28, 25),
-        },
-        "dark-orange": {
-            "primary": (255, 200, 182),
-            "bg": (39, 30, 27),
-            "bg-darken": (30, 23, 21),
-        },
-        "dark-purple": {
-            "primary": (216, 196, 241),
-            "bg": (34, 31, 38),
-            "bg-darken": (26, 24, 30),
-        },
-        "dark-red": {
-            "primary": (253, 180, 180),
-            "bg": (39, 27, 27),
-            "bg-darken": (30, 21, 21),
-        },
-        "dark-pink": {
-            "primary": (255, 217, 228),
-            "bg": (54, 41, 41),
-            "bg-darken": (33, 26, 26),
-        },
-        "dark-rose-pine": {
-            "primary": (235, 188, 186),
-            "secondary": (224, 222, 244),
-            "bg": (35, 33, 54),
-            "bg-darken": (57, 53, 82),
-        },
-        "tokyo-night": {
-            "primary": (181, 185, 214),
-            "bg": (36, 38, 56),
-            "bg-darken": (28, 29, 43),
-        },
-        "one-dark-blue": {
-            "primary": (113, 189, 242),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-green": {
-            "primary": (167, 203, 139),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-cyan": {
-            "primary": (101, 193, 205),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-red": {
-            "primary": (231, 130, 135),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-pink": {
-            "primary": (255, 121, 198),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-yellow": {
-            "primary": (218, 170, 120),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "one-dark-purple": {
-            "primary": (209, 144, 227),
-            "secondary": (171, 178, 191),
-            "bg": (40, 44, 52),
-            "bg-darken": (33, 37, 43),
-        },
-        "osu-pink": {
-            "primary": (255, 102, 171),
-            "secondary": (240, 219, 228),
-            "bg": (42, 34, 38),
-            "bg-darken": (28, 23, 25),
-        },
-        "osu-purple": {
-            "primary": (140, 102, 255),
-            "secondary": (224, 219, 240),
-            "bg": (36, 34, 42),
-            "bg-darken": (24, 23, 28),
-        },
-        "osu-blue": {
-            "primary": (102, 204, 255),
-            "secondary": (219, 233, 240),
-            "bg": (34, 40, 42),
-            "bg-darken": (23, 26, 28),
-        },
-        "osu-green": {
-            "primary": (115, 255, 102),
-            "secondary": (221, 240, 219),
-            "bg": (35, 42, 34),
-            "bg-darken": (23, 28, 23),
-        },
-        "osu-orange": {
-            "primary": (255, 153, 102),
-            "secondary": (240, 226, 219),
-            "bg": (42, 37, 34),
-            "bg-darken": (28, 25, 23),
-        },
-        "osu-yellow": {
-            "primary": (255, 217, 102),
-            "secondary": (240, 235, 219),
-            "bg": (42, 40, 34),
-            "bg-darken": (28, 27, 23),
-        },
-        "cyberpunk": {
-            "primary": (252, 236, 12),
-            "bg": (19, 99, 119),
-            "bg-darken": (8, 74, 90),
-        },
-        "matrix": {"primary": (0, 255, 65), "bg": (6, 2, 8), "bg-darken": (0, 22, 0)},
-        "dracula-mint": {
-            "primary": (47, 222, 182),
-            "secondary": (226, 226, 228),
-            "bg": (41, 45, 62),
-            "bg-darken": (33, 36, 50),
-        },
-        "discord": {
-            "primary": (88, 101, 242),
-            "secondary": (255, 255, 255),
-            "bg": (54, 57, 63),
-            "bg-darken": (47, 49, 54),
-        },
-        "pure-black": {
-            "primary": (240, 240, 240),
-            "bg": (0, 0, 0),
-            "bg-darken": (20, 20, 20),
-        },
-        "light-blue": {
-            "primary": (34, 197, 253),
-            "secondary": (18, 51, 84),
-            "bg": (245, 247, 250),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-gray": {
-            "primary": (97, 113, 124),
-            "secondary": (41, 41, 42),
-            "bg": (247, 247, 247),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-green": {
-            "primary": (42, 225, 142),
-            "secondary": (25, 72, 62),
-            "bg": (246, 249, 249),
-            "bg-darken": (229, 236, 235),
-            "light": True,
-        },
-        "light-orange": {
-            "primary": (255, 130, 101),
-            "secondary": (86, 59, 37),
-            "bg": (250, 248, 247),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-purple": {
-            "primary": (159, 116, 231),
-            "secondary": (64, 43, 77),
-            "bg": (249, 247, 249),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-red": {
-            "primary": (255, 89, 102),
-            "secondary": (87, 41, 32),
-            "bg": (250, 247, 246),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-pink": {
-            "primary": (255, 130, 171),
-            "secondary": (99, 10, 39),
-            "bg": (250, 247, 246),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "light-rose-pine": {
-            "primary": (215, 130, 126),
-            "secondary": (87, 82, 121),
-            "bg": (242, 233, 225),
-            "bg-darken": (250, 244, 237),
-            "light": True,
-        },
-        "cerulean": {
-            "primary": (66, 141, 185),
-            "secondary": (33, 33, 33),
-            "bg": (243, 248, 251),
-            "bg-darken": (223, 238, 243),
-            "light": True,
-        },
-        "wechat": {
-            "primary": (7, 193, 96),
-            "secondary": (34, 34, 34),
-            "bg": (245, 245, 245),
-            "bg-darken": (218, 218, 218),
-            "light": True,
-        },
-        "tim": {
-            "primary": (29, 110, 255),
-            "secondary": (34, 34, 34),
-            "bg": (244, 246, 248),
-            "bg-darken": (255, 255, 255),
-            "light": True,
-        },
-        "Cloud & Moon": {
-            "primary": (93, 131, 194),
-            "secondary": (87, 111, 147),
-            "bg": (237, 241, 248),
-            "bg-darken": (247, 250, 245),
-            "light": True,
-        },
-    }
-
-    @staticmethod
-    def _rgb_to_lab(rgb):
-        r, g, b = [x / 255.0 for x in rgb]
-        r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
-        g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
-        b = b / 12.92 if b <= 0.03928 else ((b + 0.055) / 1.055) ** 2.4
-        x = (r * 0.4124 + g * 0.3576 + b * 0.1805) * 100
-        y = (r * 0.2126 + g * 0.7152 + b * 0.0722) * 100
-        z = (r * 0.0193 + g * 0.1192 + b * 0.9505) * 100
-
-        def f(t):
-            return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
-
-        return (
-            116 * f(y / 100) - 16,
-            500 * (f(x / 95.047) - f(y / 100)),
-            200 * (f(y / 100) - f(z / 108.883)),
-        )
-
-    @staticmethod
-    def _lab_distance(lab1, lab2):
-        return (
-            (lab1[0] - lab2[0]) ** 2
-            + (lab1[1] - lab2[1]) ** 2
-            + (lab1[2] - lab2[2]) ** 2
-        ) ** 0.5
-
-    @staticmethod
-    def _derive_preset_palette(primary, secondary, bg, bg_darken, is_dark):
-        if not secondary:
-
-            def lum(rgb):
-                r, g, b = [x / 255.0 for x in rgb]
-                return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-            pl = lum(primary)
-            on_p = (255, 255, 255) if pl < 0.55 else (30, 30, 30)
-            secondary = (
-                on_p
-                if is_dark
-                else tuple(int(on_p[i] * 0.6 + bg[i] * 0.4) for i in range(3))
-            )
-
-        def hx(rgb):
-            return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-
-        return {
-            "primary": hx(primary),
-            "secondary": hx(secondary),
-            "bg": hx(bg),
-            "bg-darken": hx(bg_darken),
-            "primary_rgb": f"{primary[0]},{primary[1]},{primary[2]}",
-            "secondary_rgb": f"{secondary[0]},{secondary[1]},{secondary[2]}",
-            "bg_rgb": f"{bg[0]},{bg[1]},{bg[2]}",
-            "bg_darken_rgb": f"{bg_darken[0]},{bg_darken[1]},{bg_darken[2]}",
-        }
-
     async def _extract_seed_color(self, avatar_url: str):
         try:
             import httpx
             from PIL import Image
             import io
+            from material_color_utilities import prominent_colors_from_image
 
             proxy = self.config.get("proxy", None)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": "https://x.com/",
+            }
             async with httpx.AsyncClient(
                 proxy=proxy if proxy else None, timeout=10
             ) as _c:
-                _r = await _c.get(avatar_url)
+                _r = await _c.get(avatar_url, headers=headers)
                 _r.raise_for_status()
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-                _img = _img.resize((1, 1), resample=Image.Resampling.LANCZOS)
-                _pr, _pg, _pb, _pa = _img.getpixel((0, 0))
-                logger.debug(f"Seed color extracted: RGB=({_pr},{_pg},{_pb})")
-                return (_pr, _pg, _pb)
+                colors = prominent_colors_from_image(_img, max_colors=128)
+                if not colors:
+                    return (103, 80, 164)
+                # colors 是 RRGGBB hex 格式 #rrggbb
+                h = colors[0].lstrip("#")
+                rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+                logger.warning(
+                    f"Seed extracted: RGB={rgb} from {len(_r.content)} bytes, top colors: {colors[:3]}"
+                )
+                return rgb
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return (103, 80, 164)
 
     def _generate_palette(self, seed_rgb):
-        h = int(__import__("datetime").datetime.now(
-            __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
-        ).strftime("%H"))
+        h = int(
+            __import__("datetime")
+            .datetime.now(
+                __import__("datetime").timezone(
+                    __import__("datetime").timedelta(hours=8)
+                )
+            )
+            .strftime("%H")
+        )
         is_dark = h >= 18 or h < 6
 
         try:
-            seed_lab = self._rgb_to_lab(seed_rgb)
-            best_name, best_dist = None, float("inf")
-            presets = self.SCHEME_PRESETS
+            from material_color_utilities import theme_from_color
 
-            for name, p in presets.items():
-                is_light = p.get("light", False)
-                if is_dark and is_light:
-                    continue
-                if not is_dark and not is_light:
-                    continue
-                p_lab = self._rgb_to_lab(p["primary"])
-                dist = self._lab_distance(seed_lab, p_lab)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_name = name
+            def rgb_str(c):
+                return f"{int(c[1:3], 16)}, {int(c[3:5], 16)}, {int(c[5:7], 16)}"
 
-            if not best_name:
-                best_name = "dark-blue" if is_dark else "light-blue"
-
-            preset = presets[best_name]
-            primary = preset["primary"]
-            secondary = preset.get("secondary", None)
-            bg = preset["bg"]
-            bg_darken = preset["bg-darken"]
-
-            palette = self._derive_preset_palette(
-                primary, secondary, bg, bg_darken, is_dark
-            )
-            logger.debug(
-                f"Matched preset '{best_name}' (dist={best_dist:.1f}, dark={is_dark}): {json.dumps(palette)}"
+            hex_color = f"#{seed_rgb[0]:02x}{seed_rgb[1]:02x}{seed_rgb[2]:02x}"
+            theme = theme_from_color(hex_color)
+            scheme = theme.schemes.dark if is_dark else theme.schemes.light
+            palette = {
+                "primary": scheme.primary,
+                "primary_rgb": rgb_str(scheme.primary),
+                "on_primary": scheme.on_primary,
+                "on_primary_rgb": rgb_str(scheme.on_primary),
+                "secondary": scheme.secondary,
+                "secondary_rgb": rgb_str(scheme.secondary),
+                "surface": scheme.surface,
+                "surface_rgb": rgb_str(scheme.surface),
+                "surface_variant": scheme.surface_variant,
+                "surface_variant_rgb": rgb_str(scheme.surface_variant),
+                "on_surface": scheme.on_surface,
+                "on_surface_rgb": rgb_str(scheme.on_surface),
+                "on_surface_variant": scheme.on_surface_variant,
+                "on_surface_variant_rgb": rgb_str(scheme.on_surface_variant),
+                "background": scheme.background,
+                "background_rgb": rgb_str(scheme.background),
+                "surface_container": scheme.surface_container,
+                "surface_container_rgb": rgb_str(scheme.surface_container),
+            }
+            logger.warning(
+                f"Dynamic palette from seed={hex_color} (dark={is_dark}): primary={scheme.primary}"
             )
             return palette, is_dark
         except Exception as e:
-            logger.warning(f"Preset palette failed: {e}")
+            logger.warning(f"Dynamic palette failed: {e}")
 
-        # Final hardcoded fallback
+        # Fallback hardcoded palettes
         if is_dark:
             return {
-                "primary": "#d0bcff",
-                "primary_rgb": "208,188,255",
-                "secondary": "#cac4d0",
-                "secondary_rgb": "202,196,208",
-                "bg": "#1c1b1f",
-                "bg_rgb": "28,27,31",
-                "bg-darken": "#141318",
-                "bg_darken_rgb": "20,19,24",
+                "primary": "#d0bcff", "primary_rgb": "208, 188, 255",
+                "on_primary": "#381e72", "on_primary_rgb": "56, 30, 114",
+                "secondary": "#cac4d0", "secondary_rgb": "202, 196, 208",
+                "surface": "#1c1b1f", "surface_rgb": "28, 27, 31",
+                "surface_variant": "#141318", "surface_variant_rgb": "20, 19, 24",
+                "on_surface": "#e6e1e5", "on_surface_rgb": "230, 225, 229",
+                "on_surface_variant": "#c9c5d0", "on_surface_variant_rgb": "201, 197, 208",
+                "background": "#141318", "background_rgb": "20, 19, 24",
+                "surface_container": "#1c1b1f", "surface_container_rgb": "28, 27, 31",
             }, is_dark
         return {
-            "primary": "#5700d2",
-            "primary_rgb": "87,0,210",
-            "secondary": "#554262",
-            "secondary_rgb": "85,66,98",
-            "bg": "#fdf7ff",
-            "bg_rgb": "253,247,255",
-            "bg-darken": "#efe5ff",
-            "bg_darken_rgb": "239,229,255",
+            "primary": "#5700d2", "primary_rgb": "87, 0, 210",
+            "on_primary": "#ffffff", "on_primary_rgb": "255, 255, 255",
+            "secondary": "#554262", "secondary_rgb": "85, 66, 98",
+            "surface": "#fdf7ff", "surface_rgb": "253, 247, 255",
+            "surface_variant": "#efe5ff", "surface_variant_rgb": "239, 229, 255",
+            "on_surface": "#1d1a24", "on_surface_rgb": "29, 26, 36",
+            "on_surface_variant": "#49454f", "on_surface_variant_rgb": "73, 69, 79",
+            "background": "#fdf7ff", "background_rgb": "253, 247, 255",
+            "surface_container": "#f0eaf8", "surface_container_rgb": "240, 234, 248",
         }, is_dark
 
     async def _build_card_data(self, data: dict) -> dict:
+        import re as _re
+
         article = data.get("article")
         if article and article.get("rest_id"):
             try:
@@ -804,6 +536,26 @@ class DenpaPushPlugin(Star):
                     data["article_full_text"] = full_text
             except Exception as e:
                 logger.warning(f"Full article fetch failed: {e}")
+        elif not article:
+            try:
+                full_text = await self.twitter.get_full_article_text(data["id"])
+                if full_text:
+                    data["text"] = full_text
+                    data["article_full_text"] = full_text
+                    title_m = _re.search(
+                        r"<h1[^>]*>(.*?)</h1>", full_text, _re.I | _re.S
+                    )
+                    title = _re.sub(
+                        r"<[^>]+>", "", title_m.group(1) if title_m else ""
+                    ).strip()
+                    data["article"] = {
+                        "title": title,
+                        "full_text": full_text,
+                        "preview_text": "",
+                        "rest_id": data["id"],
+                    }
+            except Exception as e:
+                logger.warning(f"Fallback article fetch failed: {e}")
 
         # 如果推文是引用推文但未提取到数据（twikit get_tweet_by_id 不返回 quoted_status_result），单独获取
         if data.get("is_quote") and not data.get("quoted_tweet"):
@@ -829,12 +581,7 @@ class DenpaPushPlugin(Star):
 
         translated_text = data.get("text", "")
         try:
-            translated_text = await asyncio.wait_for(
-                self._translate_text(data), timeout=120
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Text translation timed out, using original text")
-            translated_text = data.get("text", "(翻译超时)")
+            translated_text = await self._translate_text(data)
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
@@ -903,34 +650,31 @@ class DenpaPushPlugin(Star):
 
         import os as _os
 
-        # 读取卡片 HTML 模板
         tmpl_path = _os.path.join(
             _os.path.dirname(__file__), "templates", "tweet_card.html"
         )
-        try:
-            with open(tmpl_path, "r", encoding="utf-8") as f:
-                template = f.read()
-        except FileNotFoundError:
-            logger.error(f"Card template not found: {tmpl_path}")
-            return {
-                "card_img_urls": [],
-                "card_img_url": "",
-                "translated_text": "",
-                "images": [],
-                "gifs": [],
-                "videos": [],
-                "screen_name": "",
-                "user_name": "",
-                "user_id": "",
-                "tweet_url": "",
-            }
+        with open(tmpl_path, "r", encoding="utf-8") as f:
+            template = f.read()
 
         # 图片译文合并到文字译文末尾
         if image_translations:
             translated_text = f"{translated_text}\n\n{image_translations}"
 
-        # 从头像取色 → 匹配 NetEase 预设色板
-        seed_rgb = await self._extract_seed_color(data["user"]["avatar_url"])
+        raw_avatar = data["user"]["avatar_url"]
+        avatar_url = raw_avatar.replace("_normal.", "_400x400.")
+        logger.warning(f"Avatar URL: {raw_avatar} -> {avatar_url}")
+        seed_rgb = await self._extract_seed_color(avatar_url)
+        logger.warning(f"Seed RGB: {seed_rgb}")
+        # 如果种子色太灰（接近无色），用 user_id 派生个颜色避免全灰
+        if max(seed_rgb) - min(seed_rgb) < 40:
+            uid = int(data["user"]["id"])
+            logger.warning(f"Seed too gray, deriving from user_id {uid}")
+            seed_rgb = (
+                (uid * 37 + 123) % 200 + 28,
+                (uid * 73 + 45) % 200 + 28,
+                (uid * 101 + 89) % 200 + 28,
+            )
+            logger.warning(f"Derived seed: {seed_rgb}")
         palette, is_dark = self._generate_palette(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
@@ -940,7 +684,8 @@ class DenpaPushPlugin(Star):
             "created_at_str": data["created_at_datetime"].strftime(
                 "%b %d, %Y · %H:%M UTC"
             )
-            if hasattr(data["created_at_datetime"], "strftime")
+            if data.get("created_at_datetime")
+            and hasattr(data["created_at_datetime"], "strftime")
             else str(data["created_at"]),
             "article_title": article.get("title", "") if article else "",
             "article_cover_url": article.get("cover_url", "") if article else "",
@@ -968,8 +713,13 @@ class DenpaPushPlugin(Star):
         }
 
         # 长文章分块渲染
-        article_text = data.get("article_full_text") or (
+        import re as _re
+
+        article_raw = data.get("article_full_text") or (
             article.get("full_text", "") if article else ""
+        )
+        article_text = (
+            _re.sub(r"<[^>]+>", "", article_raw).strip() if article_raw else ""
         )
         MAX_CHUNK = 2000
 
@@ -982,6 +732,7 @@ class DenpaPushPlugin(Star):
                 if cl + plen > MAX_CHUNK and cur:
                     chunks.append("\n\n".join(cur))
                     cur, cl = [], 0
+                # if a single paragraph exceeds MAX_CHUNK, force-split at sentence
                 if plen > MAX_CHUNK:
                     import re as _re
 
@@ -1006,18 +757,16 @@ class DenpaPushPlugin(Star):
             return chunks
 
         if len(article_text) > MAX_CHUNK:
-            chunks = split_into_chunks(article_text)
             t_chunks = split_into_chunks(translated_text)
-            min_len = min(len(chunks), len(t_chunks))
-            chunks = chunks[:min_len]
-            t_chunks = t_chunks[:min_len]
+
+            # 译文块数决定卡片数，原文只用在第一张
             card_img_urls = []
-            for i, (chunk, t_chunk) in enumerate(zip(chunks, t_chunks)):
+            for i, t_chunk in enumerate(t_chunks):
                 sub = dict(card_data)
                 sub["article_title"] = (
                     card_data["article_title"]
                     if i == 0
-                    else f"(续 {i + 1}/{len(chunks)})"
+                    else f"(续 {i + 1}/{len(t_chunks)})"
                 )
                 sub["article_text"] = ""
                 if i > 0:
@@ -1072,16 +821,12 @@ class DenpaPushPlugin(Star):
 
     async def _render_card(self, template: str, card_data: dict) -> str:
         """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
-        import tempfile
-        import os as _os
+        import tempfile, os as _os, time as _time
         from playwright.async_api import async_playwright
 
-        html_path = _os.path.join(
-            tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.html"
-        )
-        png_path = _os.path.join(
-            tempfile.gettempdir(), f"astrbot_twitter_{id(self)}.png"
-        )
+        _tag = f"{id(self)}_{int(_time.time() * 1000000) % 1000000}"
+        html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.html")
+        png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.png")
         try:
             from jinja2 import Template
 
@@ -1101,9 +846,7 @@ class DenpaPushPlugin(Star):
                 h = await page.evaluate("document.body.scrollHeight")
                 await page.set_viewport_size({"width": 620, "height": h})
                 await page.wait_for_timeout(500)
-                await page.screenshot(
-                    path=png_path, full_page=True, omit_background=True
-                )
+                await page.screenshot(path=png_path, full_page=True)
                 await browser.close()
             await self._dump_render_debug(html, card_data, png_path)
             return png_path
@@ -1127,7 +870,6 @@ class DenpaPushPlugin(Star):
                 pass
 
     async def _process_and_push(self, data: dict, target_sessions: list):
-        """构建卡片并推送到所有目标会话。每会话独立 try 防止一个失败影响其他。"""
         if not target_sessions:
             return
 
@@ -1135,34 +877,39 @@ class DenpaPushPlugin(Star):
 
         for session_umo in target_sessions:
             try:
-                # 主消息：卡片 + 推主注明
-                chain = MessageChain()
-                if info["card_img_url"]:
-                    url = info["card_img_url"]
+                # 主消息：卡片（多张分块）+ 推主注明
+                card_urls = info.get("card_img_urls", [info.get("card_img_url", "")])
+                first_card = True
+                for url in card_urls:
+                    if not url:
+                        continue
+                    card_chain = MessageChain()
                     if url.startswith("http"):
-                        chain.chain.append(CompImage.fromURL(url))
+                        card_chain.chain.append(CompImage.fromURL(url))
                     else:
-                        chain.chain.append(CompImage.fromFileSystem(url))
-                    chain.message(
-                        f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
-                    )
-                elif info["translated_text"]:
-                    chain.message(
-                        f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}"
-                    )
-                else:
-                    chain.message(
-                        f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}"
-                    )
-
-                if chain.chain:
-                    logger.info(
-                        f"[Push] Card to {session_umo} ({len(chain.chain)} components)"
-                    )
-                    await self.context.send_message(session_umo, chain)
+                        card_chain.chain.append(CompImage.fromFileSystem(url))
+                    if first_card:
+                        card_chain.message(
+                            f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
+                        )
+                        first_card = False
+                    logger.info(f"[Push] Card to {session_umo}")
+                    await self.context.send_message(session_umo, card_chain)
+                    await asyncio.sleep(0.5)
+                if first_card:
+                    fallback = MessageChain()
+                    if info["translated_text"]:
+                        fallback.message(
+                            f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}"
+                        )
+                    else:
+                        fallback.message(
+                            f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}"
+                        )
+                    await self.context.send_message(session_umo, fallback)
 
                 # 图片合并到一条群合并转发消息
-                from astrbot.api.message_components import Node
+                from astrbot.api.message_components import Node, Plain
 
                 img_contents = []
                 for img in info.get("images", []):
@@ -1217,7 +964,8 @@ class DenpaPushPlugin(Star):
         return str(pid) if pid else ""
 
     async def _translate_text(self, data: dict) -> str:
-        """翻译推文正文（含文章标题、引用推文），过滤链接后调用 LLM 提供商。"""
+        import re as _re
+
         text = data.get("text", "")
         article = data.get("article")
         if article:
@@ -1226,12 +974,22 @@ class DenpaPushPlugin(Star):
                 or article.get("full_text")
                 or article.get("preview_text", "")
             )
+            full = _re.sub(r"<[^>]+>", "", full).strip()
             text = f"{article.get('title', '')}\n\n{full}"
 
         # 追加引用推文
         quoted = data.get("quoted_tweet", {})
         quoted_text = quoted.get("text", "")
         quoted_user = quoted.get("user", {})
+        quoted_article = quoted.get("article", {})
+        if quoted_article:
+            qa_full = (
+                quoted_article.get("full_text")
+                or quoted_article.get("preview_text", "")
+            )
+            qa_full = _re.sub(r"<[^>]+>", "", qa_full).strip()
+            if qa_full:
+                quoted_text = f"{quoted_article.get('title', '')}\n\n{qa_full}"
         if quoted_text:
             q_name = quoted_user.get("name", "")
             text = f"{text}\n\n[引用 @{quoted_user.get('screen_name', '')} ({q_name})]:\n{quoted_text}"
@@ -1239,37 +997,61 @@ class DenpaPushPlugin(Star):
         if not text or not text.strip():
             return "(无文字内容)"
 
-        # 翻译前过滤掉链接和 HTML 标签，防止非多模态模型误以为要它看图
-        import re as _re
-
-        clean_text = _re.sub(r"https?://\S+", "", text).strip()
-        clean_text = _re.sub(r"<[^>]+>", "", clean_text).strip()
-        if not clean_text:
-            clean_text = text
-
-        # 截断过长的文章正文，防止 LLM 调用超时
-        if len(clean_text) > 12000:
-            clean_text = clean_text[:12000] + "\n\n...(截断)"
+        # 过滤链接
+        text = _re.sub(r"https?://\S+", "", text).strip()
+        if not text:
+            return "(无文字内容)"
 
         target_lang = self.config.get("translation_language", "中文")
         provider_id = await self._get_provider_id()
         if not provider_id:
             provider_id = self.config.get("text_translate_provider", "")
 
-        if provider_id:
+        if not provider_id:
+            return text
+
+        MAX_CHUNK = 10000
+        translated_parts = []
+
+        paras = text.split("\n\n")
+        chunks, cur, cl = [], [], 0
+        for p in paras:
+            plen = len(p)
+            if cl + plen > MAX_CHUNK and cur:
+                chunks.append("\n\n".join(cur))
+                cur, cl = [], 0
+            cur.append(p)
+            cl += plen + 2
+        if cur:
+            chunks.append("\n\n".join(cur))
+
+        async def _do_chunk(i, chunk):
+            prefix = f"(第{i + 1}/{len(chunks)}部分)\n" if len(chunks) > 1 else ""
+            prompt = (
+                f"请将以下内容翻译成{target_lang}，只返回翻译结果:\n\n{prefix}{chunk}"
+            )
             try:
                 llm_resp = await self.context.llm_generate(
                     chat_provider_id=provider_id,
-                    prompt=f"请将以下内容翻译成{target_lang}，只返回翻译结果:\n\n{clean_text}",
+                    prompt=prompt,
                 )
                 if llm_resp and llm_resp.completion_text:
-                    return llm_resp.completion_text
+                    return llm_resp.completion_text.strip()
+                else:
+                    return chunk
             except Exception as e:
-                logger.warning(f"LLM translate failed: {e}")
-        return text
+                logger.warning(f"LLM translate chunk {i} failed: {e}")
+                return chunk
+
+        translated_parts = list(
+            await asyncio.gather(
+                *[_do_chunk(i, chunk) for i, chunk in enumerate(chunks)]
+            )
+        )
+
+        return "\n\n".join(translated_parts) if translated_parts else text
 
     async def _translate_images(self, data: dict) -> str:
-        """翻译推文图片中的文字。支持 multimodal（多模态）和 text_extraction（OCR+LLM）两种模式。"""
         images, _, _ = TwitterClient.extract_tweet_media(data)
         if not images:
             return ""
@@ -1289,32 +1071,29 @@ class DenpaPushPlugin(Star):
             if not img_url:
                 continue
 
-            try:
-                if mode == "multimodal":
+            if mode == "multimodal":
+                llm_resp = await self.context.llm_generate(
+                    chat_provider_id=provider_id,
+                    prompt=(
+                        f"理解图片内容并翻译成{target_lang}，自行组织格式使"
+                        f"用户能简单直接理解。尽量简短，不要使文本量过大影响阅读。"
+                        f"如果图片中没有文字输出'(无文字)'。"
+                    ),
+                    image_urls=[img_url],
+                )
+                result = llm_resp.completion_text or ""
+                if result and "(无文字)" not in result:
+                    translations.append(result)
+            elif mode == "text_extraction":
+                text_in_image = await self._ocr_image(img_url)
+                if text_in_image:
                     llm_resp = await self.context.llm_generate(
                         chat_provider_id=provider_id,
-                        prompt=(
-                            f"理解图片内容并翻译成{target_lang}，自行组织格式使"
-                            f"用户能简单直接理解。尽量简短，不要使文本量过大影响阅读。"
-                            f"如果图片中没有文字输出'(无文字)'。"
-                        ),
-                        image_urls=[img_url],
+                        prompt=f"将以下内容翻译成{target_lang}:\n\n{text_in_image}",
                     )
-                    result = llm_resp.completion_text if llm_resp else ""
-                    if result and "(无文字)" not in result:
+                    result = llm_resp.completion_text or ""
+                    if result:
                         translations.append(result)
-                elif mode == "text_extraction":
-                    text_in_image = await self._ocr_image(img_url)
-                    if text_in_image:
-                        llm_resp = await self.context.llm_generate(
-                            chat_provider_id=provider_id,
-                            prompt=f"将以下内容翻译成{target_lang}:\n\n{text_in_image}",
-                        )
-                        result = llm_resp.completion_text if llm_resp else ""
-                        if result:
-                            translations.append(result)
-            except Exception as e:
-                logger.warning(f"Image translation failed for {img_url[:40]}: {e}")
 
         if translations:
             return " | ".join(translations)

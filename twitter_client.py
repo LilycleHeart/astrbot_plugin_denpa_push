@@ -1,3 +1,5 @@
+import json
+from typing import Optional
 from twikit import Client
 from astrbot.api import logger
 
@@ -41,8 +43,7 @@ class TwitterClient:
     async def get_full_article_text(self, tweet_id: str) -> str:
         """Fetch full article text body via TweetResultByRestId with withArticlePlainText=True."""
         await self.ensure_ready()
-        import httpx
-        import json as _json
+        import httpx, json as _json
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -86,126 +87,114 @@ class TwitterClient:
             "features": features,
             "fieldToggles": field_toggles,
         }
-        try:
-            async with httpx.AsyncClient(
-                cookies=cookies, headers=headers, timeout=30
-            ) as c:
-                r = await c.get(url, params=params)
-        except Exception as e:
-            logger.warning(f"Article fetch network error: {e}")
-            return ""
-        if r.status_code != 200:
-            logger.warning(f"Article fetch failed: {r.status_code}")
-            return ""
-        data = r.json()
-        result = data.get("data", {}).get("tweetResult", {}).get("result", {})
+        async with httpx.AsyncClient(cookies=cookies, headers=headers, timeout=30) as c:
+            r = await c.get(url, params=params)
+            if r.status_code != 200:
+                logger.warning(f"Article fetch failed: {r.status_code}")
+                return ""
+            data = r.json()
+            result = data.get("data", {}).get("tweetResult", {}).get("result", {})
 
-        # Full article text from content_state blocks -> HTML
-        art_result = (
-            result.get("article", {}).get("article_results", {}).get("result", {})
-        )
-        content_state = art_result.get("content_state", {})
-        blocks = content_state.get("blocks", [])
-        if blocks:
-            entity_map = content_state.get("entityMap", [])
-            entities = {}
-            for entry in entity_map:
-                if isinstance(entry, dict) and "key" in entry:
-                    entities[str(entry["key"])] = entry["value"]
+            # Full article text from content_state blocks -> HTML
+            art_result = (
+                result.get("article", {}).get("article_results", {}).get("result", {})
+            )
+            content_state = art_result.get("content_state", {})
+            blocks = content_state.get("blocks", [])
+            if blocks:
+                entity_map = content_state.get("entityMap", [])
+                entities = {}
+                for entry in entity_map:
+                    if isinstance(entry, dict) and "key" in entry:
+                        entities[str(entry["key"])] = entry["value"]
 
-            def apply_entity_ranges(text, ranges):
-                if not ranges:
+                def apply_entity_ranges(text, ranges):
+                    if not ranges:
+                        return text
+                    chars = list(text)
+                    for er in sorted(
+                        ranges, key=lambda x: x.get("offset", 0), reverse=True
+                    ):
+                        key = str(er.get("key", ""))
+                        ent = entities.get(key, {})
+                        etype = ent.get("type", "")
+                        offset = er.get("offset", 0)
+                        length = er.get("length", 0)
+                        if etype == "TWEMOJI":
+                            url = ent.get("data", {}).get("url", "")
+                            img = f'<img src="{url}" style="width:1.2em;height:1.2em;vertical-align:middle" alt="emoji"/>'
+                            for i in range(offset, min(offset + length, len(chars))):
+                                chars[i] = ""
+                            chars[offset] = img
+                    return "".join(chars)
+
+                html_parts = []
+                in_list = False
+                for b in blocks:
+                    btype = b.get("type", "unstyled")
+                    text = b.get("text", "")
+                    if not text:
+                        continue
+                    text = apply_entity_ranges(text, b.get("entityRanges", []))
+                    if btype == "unstyled":
+                        if in_list:
+                            html_parts.append("</ul>")
+                            in_list = False
+                        html_parts.append(f"<p>{text}</p>")
+                    elif btype in ("unordered-list-item", "ordered-list-item"):
+                        if not in_list:
+                            html_parts.append("<ul>")
+                            in_list = True
+                        html_parts.append(f"<li>{text}</li>")
+                    elif btype.startswith("header-"):
+                        if in_list:
+                            html_parts.append("</ul>")
+                            in_list = False
+                        level = btype.replace("header-", "")
+                        html_parts.append(f"<h{level}>{text}</h{level}>")
+                    elif btype == "blockquote":
+                        if in_list:
+                            html_parts.append("</ul>")
+                            in_list = False
+                        html_parts.append(f"<blockquote>{text}</blockquote>")
+                    else:
+                        if in_list:
+                            html_parts.append("</ul>")
+                            in_list = False
+                        html_parts.append(f"<p>{text}</p>")
+                if in_list:
+                    html_parts.append("</ul>")
+
+                if html_parts:
+                    return "\n\n".join(html_parts)
+
+            note = (
+                result.get("note_tweet", {})
+                .get("note_tweet_results", {})
+                .get("result", {})
+            )
+            if note:
+                text = note.get("text", "")
+                if text:
                     return text
-                chars = list(text)
-                for er in sorted(
-                    ranges, key=lambda x: x.get("offset", 0), reverse=True
-                ):
-                    key = str(er.get("key", ""))
-                    ent = entities.get(key, {})
-                    etype = ent.get("type", "")
-                    offset = er.get("offset", 0)
-                    length = er.get("length", 0)
-                    if etype == "LINK":
-                        url = ent.get("data", {}).get("url", "")
-                        link_text = text[offset : offset + length]
-                        text = (
-                            text[:offset]
-                            + f'<a href="{url}">{link_text}</a>'
-                            + text[offset + length :]
-                        )
-                    elif etype == "TWEMOJI":
-                        url = ent.get("data", {}).get("url", "")
-                        img = f'<img src="{url}" style="width:1.2em;height:1.2em;vertical-align:middle" alt="emoji"/>'
-                        for i in range(offset, min(offset + length, len(chars))):
-                            chars[i] = ""
-                        chars[offset] = img
-                return "".join(chars)
-
-            html_parts = []
-            in_list = False
-            for b in blocks:
-                btype = b.get("type", "unstyled")
-                text = b.get("text", "")
-                if not text:
-                    continue
-                text = apply_entity_ranges(text, b.get("entityRanges", []))
-                if btype == "unstyled":
-                    if in_list:
-                        html_parts.append("</ul>")
-                        in_list = False
-                    html_parts.append(f"<p>{text}</p>")
-                elif btype in ("unordered-list-item", "ordered-list-item"):
-                    if not in_list:
-                        html_parts.append("<ul>")
-                        in_list = True
-                    html_parts.append(f"<li>{text}</li>")
-                elif btype.startswith("header-"):
-                    if in_list:
-                        html_parts.append("</ul>")
-                        in_list = False
-                    level = {"one": "1", "two": "2", "three": "3",
-                             "four": "4", "five": "5", "six": "6"}.get(
-                        btype.replace("header-", ""), "2"
-                    )
-                    html_parts.append(f"<h{level}>{text}</h{level}>")
-                elif btype == "blockquote":
-                    if in_list:
-                        html_parts.append("</ul>")
-                        in_list = False
-                    html_parts.append(f"<blockquote>{text}</blockquote>")
-                else:
-                    if in_list:
-                        html_parts.append("</ul>")
-                        in_list = False
-                    html_parts.append(f"<p>{text}</p>")
-            if in_list:
-                html_parts.append("</ul>")
-
-            if html_parts:
-                return "\n\n".join(html_parts)
-
-        legacy = result.get("legacy", {})
-        if legacy.get("full_text"):
-            return legacy["full_text"]
-        note = (
-            result.get("note_tweet", {})
-            .get("note_tweet_results", {})
-            .get("result", {})
-        )
-        if note:
-            text = note.get("text", "")
-            if text:
-                return text
-        return legacy.get("text", legacy.get("full_text", ""))
+            legacy = result.get("legacy", {})
+            if legacy.get("full_text"):
+                return legacy["full_text"]
+            return legacy.get("text", legacy.get("full_text", ""))
+        return ""
 
     @staticmethod
     def extract_tweet_data(tweet) -> dict:
+        try:
+            dt = tweet.created_at_datetime
+        except Exception:
+            dt = None
         data = {
             "id": tweet.id,
             "text": tweet.text or "",
             "full_text": getattr(tweet, "full_text", tweet.text or ""),
             "created_at": tweet.created_at,
-            "created_at_datetime": tweet.created_at_datetime,
+            "created_at_datetime": dt,
             "user": {
                 "id": tweet.user.id,
                 "name": tweet.user.name,
@@ -223,9 +212,61 @@ class TwitterClient:
             "media": [],
             "article": None,
             "urls": [],
+            "is_retweet": False,
+            "retweeted_user": None,
         }
 
-        if hasattr(tweet, "media") and tweet.media:
+        # Resolve retweet/repost content: use the original tweet's text and media
+        retweeted = getattr(tweet, "retweeted_tweet", None)
+        if retweeted is not None:
+            rt_text = getattr(retweeted, "full_text", retweeted.text or "")
+            if rt_text and len(rt_text) > len(data["text"]):
+                data["text"] = rt_text
+                data["full_text"] = rt_text
+            data["is_retweet"] = True
+            data["retweeted_user"] = {
+                "name": retweeted.user.name if retweeted.user else "",
+                "screen_name": retweeted.user.screen_name if retweeted.user else "",
+            }
+            # Use the original tweet's media
+            data["media"] = []
+            if hasattr(retweeted, "media") and retweeted.media:
+                for m in retweeted.media:
+                    if isinstance(m, dict):
+                        mtype = m.get("type", "unknown")
+                        poster = m.get("media_url_https", "")
+                        item = {
+                            "type": mtype,
+                            "media_url": poster,
+                            "url": m.get("url", ""),
+                            "expanded_url": m.get("expanded_url", ""),
+                        }
+                        if mtype in ("video", "animated_gif"):
+                            vi = m.get("video_info", {})
+                            variants = vi.get("variants", [])
+                            best_url, best_bitrate = "", -1
+                            for v in variants:
+                                if v.get("content_type") == "video/mp4":
+                                    br = v.get("bitrate", 0)
+                                    if br > best_bitrate:
+                                        best_bitrate = br
+                                        best_url = v.get("url", "")
+                            if best_url:
+                                item["video_url"] = best_url
+                        data["media"].append(item)
+            # Also pull note_tweet/article from retweeted tweet's raw data
+            rt_raw = getattr(retweeted, "_data", {})
+            rt_note = (
+                rt_raw.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {})
+            )
+            rt_note_text = rt_note.get("text", "")
+            if rt_note_text and len(rt_note_text) > len(data["text"]):
+                data["text"] = rt_note_text
+                data["full_text"] = rt_note_text
+            rt_article = rt_raw.get("article", {})
+            if rt_article:
+                data["article"] = rt_article
+        if not retweeted and hasattr(tweet, "media") and tweet.media:
             for m in tweet.media:
                 if isinstance(m, dict):
                     mtype = m.get("type", "unknown")
@@ -257,18 +298,36 @@ class TwitterClient:
         raw_legacy = raw.get("legacy", {})
         raw_entities = raw_legacy.get("entities", {})
         data["urls"] = raw_entities.get("urls", [])
-
-        # 提取 NoteTweet（长推文）全文，覆盖被截断的 text/full_text
-        note_tweet = raw.get("note_tweet", {})
-        note_result = note_tweet.get("note_tweet_results", {}).get("result", {})
-        if note_result:
-            note_text = note_result.get("text", "")
-            if isinstance(note_text, str) and len(note_text) > len(
-                data.get("text", "")
-            ):
-                data["text"] = note_text
-                data["full_text"] = note_text
-                data["has_note_tweet"] = True
+        # 用 raw_legacy.full_text 覆盖可能截断的 tweet.text
+        raw_full = raw_legacy.get("full_text", "")
+        logger.warning(
+            f"extract: tweet.text len={len(data.get('text', ''))}, tweet.full_text len={len(data.get('full_text', ''))}, raw_full len={len(raw_full)}"
+        )
+        if raw_full and len(raw_full) > len(data.get("text", "")):
+            data["text"] = raw_full
+            data["full_text"] = raw_full
+            logger.warning(
+                f"extract: overrode text with raw_full (len={len(raw_full)})"
+            )
+        # NoteTweet 的全文在 note_tweet 字段，legacy.full_text 只有预览
+        note_tweet = (
+            raw.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {})
+        )
+        note_text = note_tweet.get("text", "")
+        if note_text and len(note_text) > len(data["text"]):
+            data["text"] = note_text
+            data["full_text"] = note_text
+            logger.warning(
+                f"extract: overrode text with note_tweet (len={len(note_text)})"
+            )
+        # 旧版 extended_tweet 回退
+        ext_text = raw_legacy.get("extended_tweet", {}).get("full_text", "")
+        if ext_text and len(ext_text) > len(data["text"]):
+            data["text"] = ext_text
+            data["full_text"] = ext_text
+            logger.warning(
+                f"extract: overrode text with extended_tweet (len={len(ext_text)})"
+            )
         article = raw.get("article", {})
         art_result = (
             article.get("article_results", {}).get("result", {}) if article else {}
@@ -326,6 +385,9 @@ class TwitterClient:
                 "media": q_media,
             }
 
+        if not data.get("quoted_tweet") and hasattr(tweet, "retweeted_tweet") and tweet.retweeted_tweet:
+            data["quoted_tweet"] = TwitterClient.extract_tweet_data(tweet.retweeted_tweet)
+
         return data
 
     @staticmethod
@@ -339,8 +401,7 @@ class TwitterClient:
     async def fetch_quoted_tweet_data(self, tweet_id: str) -> dict:
         """Fetch quoted tweet data via TweetResultByRestId which includes quoted_status_result."""
         await self.ensure_ready()
-        import httpx
-        import json as _json
+        import httpx, json as _json
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -384,23 +445,15 @@ class TwitterClient:
             "features": features,
             "fieldToggles": field_toggles,
         }
-        try:
-            async with httpx.AsyncClient(
-                cookies=cookies, headers=headers, timeout=30
-            ) as c:
-                r = await c.get(url, params=params)
-        except Exception as e:
-            logger.warning(f"Quoted tweet fetch network error: {e}")
-            return {}
-        if r.status_code != 200:
-            return {}
-        try:
+        async with httpx.AsyncClient(cookies=cookies, headers=headers, timeout=30) as c:
+            r = await c.get(url, params=params)
+            if r.status_code != 200:
+                return {}
             result = r.json().get("data", {}).get("tweetResult", {}).get("result", {})
-        except Exception:
-            return {}
-        if not result:
-            return {}
-        return TwitterClient._parse_quoted_from_raw_result(result)
+            if not result:
+                return {}
+            # Parse quoted tweet directly from the raw result
+            return TwitterClient._parse_quoted_from_raw_result(result)
 
     @staticmethod
     def _parse_quoted_from_raw_result(result: dict) -> dict:
