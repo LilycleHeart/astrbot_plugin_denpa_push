@@ -185,12 +185,16 @@ class TwitterClient:
 
     @staticmethod
     def extract_tweet_data(tweet) -> dict:
+        try:
+            dt = tweet.created_at_datetime
+        except Exception:
+            dt = None
         data = {
             "id": tweet.id,
             "text": tweet.text or "",
             "full_text": getattr(tweet, "full_text", tweet.text or ""),
             "created_at": tweet.created_at,
-            "created_at_datetime": tweet.created_at_datetime,
+            "created_at_datetime": dt,
             "user": {
                 "id": tweet.user.id,
                 "name": tweet.user.name,

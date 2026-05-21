@@ -684,7 +684,8 @@ class DenpaPushPlugin(Star):
             "created_at_str": data["created_at_datetime"].strftime(
                 "%b %d, %Y · %H:%M UTC"
             )
-            if hasattr(data["created_at_datetime"], "strftime")
+            if data.get("created_at_datetime")
+            and hasattr(data["created_at_datetime"], "strftime")
             else str(data["created_at"]),
             "article_title": article.get("title", "") if article else "",
             "article_cover_url": article.get("cover_url", "") if article else "",
