@@ -502,26 +502,44 @@ class DenpaPushPlugin(Star):
         # Fallback hardcoded palettes
         if is_dark:
             return {
-                "primary": "#d0bcff", "primary_rgb": "208, 188, 255",
-                "on_primary": "#381e72", "on_primary_rgb": "56, 30, 114",
-                "secondary": "#cac4d0", "secondary_rgb": "202, 196, 208",
-                "surface": "#1c1b1f", "surface_rgb": "28, 27, 31",
-                "surface_variant": "#141318", "surface_variant_rgb": "20, 19, 24",
-                "on_surface": "#e6e1e5", "on_surface_rgb": "230, 225, 229",
-                "on_surface_variant": "#c9c5d0", "on_surface_variant_rgb": "201, 197, 208",
-                "background": "#141318", "background_rgb": "20, 19, 24",
-                "surface_container": "#1c1b1f", "surface_container_rgb": "28, 27, 31",
+                "primary": "#d0bcff",
+                "primary_rgb": "208, 188, 255",
+                "on_primary": "#381e72",
+                "on_primary_rgb": "56, 30, 114",
+                "secondary": "#cac4d0",
+                "secondary_rgb": "202, 196, 208",
+                "surface": "#1c1b1f",
+                "surface_rgb": "28, 27, 31",
+                "surface_variant": "#141318",
+                "surface_variant_rgb": "20, 19, 24",
+                "on_surface": "#e6e1e5",
+                "on_surface_rgb": "230, 225, 229",
+                "on_surface_variant": "#c9c5d0",
+                "on_surface_variant_rgb": "201, 197, 208",
+                "background": "#141318",
+                "background_rgb": "20, 19, 24",
+                "surface_container": "#1c1b1f",
+                "surface_container_rgb": "28, 27, 31",
             }, is_dark
         return {
-            "primary": "#5700d2", "primary_rgb": "87, 0, 210",
-            "on_primary": "#ffffff", "on_primary_rgb": "255, 255, 255",
-            "secondary": "#554262", "secondary_rgb": "85, 66, 98",
-            "surface": "#fdf7ff", "surface_rgb": "253, 247, 255",
-            "surface_variant": "#efe5ff", "surface_variant_rgb": "239, 229, 255",
-            "on_surface": "#1d1a24", "on_surface_rgb": "29, 26, 36",
-            "on_surface_variant": "#49454f", "on_surface_variant_rgb": "73, 69, 79",
-            "background": "#fdf7ff", "background_rgb": "253, 247, 255",
-            "surface_container": "#f0eaf8", "surface_container_rgb": "240, 234, 248",
+            "primary": "#5700d2",
+            "primary_rgb": "87, 0, 210",
+            "on_primary": "#ffffff",
+            "on_primary_rgb": "255, 255, 255",
+            "secondary": "#554262",
+            "secondary_rgb": "85, 66, 98",
+            "surface": "#fdf7ff",
+            "surface_rgb": "253, 247, 255",
+            "surface_variant": "#efe5ff",
+            "surface_variant_rgb": "239, 229, 255",
+            "on_surface": "#1d1a24",
+            "on_surface_rgb": "29, 26, 36",
+            "on_surface_variant": "#49454f",
+            "on_surface_variant_rgb": "73, 69, 79",
+            "background": "#fdf7ff",
+            "background_rgb": "253, 247, 255",
+            "surface_container": "#f0eaf8",
+            "surface_container_rgb": "240, 234, 248",
         }, is_dark
 
     async def _build_card_data(self, data: dict) -> dict:
@@ -983,9 +1001,8 @@ class DenpaPushPlugin(Star):
         quoted_user = quoted.get("user", {})
         quoted_article = quoted.get("article", {})
         if quoted_article:
-            qa_full = (
-                quoted_article.get("full_text")
-                or quoted_article.get("preview_text", "")
+            qa_full = quoted_article.get("full_text") or quoted_article.get(
+                "preview_text", ""
             )
             qa_full = _re.sub(r"<[^>]+>", "", qa_full).strip()
             if qa_full:

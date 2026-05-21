@@ -257,7 +257,9 @@ class TwitterClient:
             # Also pull note_tweet/article from retweeted tweet's raw data
             rt_raw = getattr(retweeted, "_data", {})
             rt_note = (
-                rt_raw.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {})
+                rt_raw.get("note_tweet", {})
+                .get("note_tweet_results", {})
+                .get("result", {})
             )
             rt_note_text = rt_note.get("text", "")
             if rt_note_text and len(rt_note_text) > len(data["text"]):
@@ -385,8 +387,14 @@ class TwitterClient:
                 "media": q_media,
             }
 
-        if not data.get("quoted_tweet") and hasattr(tweet, "retweeted_tweet") and tweet.retweeted_tweet:
-            data["quoted_tweet"] = TwitterClient.extract_tweet_data(tweet.retweeted_tweet)
+        if (
+            not data.get("quoted_tweet")
+            and hasattr(tweet, "retweeted_tweet")
+            and tweet.retweeted_tweet
+        ):
+            data["quoted_tweet"] = TwitterClient.extract_tweet_data(
+                tweet.retweeted_tweet
+            )
 
         return data
 
