@@ -724,8 +724,7 @@ class DenpaPushPlugin(Star):
             import httpx
             from PIL import Image
             import io
-            import colorsys
-            from collections import Counter
+            from material_color_utilities import prominent_colors_from_image
 
             proxy = self.config.get("proxy", None)
             headers = {
@@ -739,38 +738,16 @@ class DenpaPushPlugin(Star):
                 _r = await _c.get(avatar_url, headers=headers)
                 _r.raise_for_status()
                 _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-                _img = _img.resize((48, 48), resample=Image.Resampling.LANCZOS)
-
-                # 量化+评分：找最饱和、出现频率最高的颜色（仿 NetEase 项目 QuantizerCelebi + Score）
-                pixels = list(_img.getdata())
-                # 过滤透明/半透明像素
-                pixels = [(r, g, b) for r, g, b, a in pixels if a > 128]
-                if not pixels:
+                colors = prominent_colors_from_image(_img, max_colors=128)
+                if not colors:
                     return (103, 80, 164)
-
-                # 量化：RGB 每通道除以 32 取整再乘回，约 32^3 = 32768 色桶
-                def quantize(rgb):
-                    return tuple((c // 32) * 32 for c in rgb)
-
-                # 统计每个量化色的频率
-                freq = Counter(quantize(p) for p in pixels)
-
-                # 评分：频率 * (1 + 饱和度因子)
-                def score_color(rgb):
-                    r, g, b = [x / 255.0 for x in rgb]
-                    h, l, s = colorsys.rgb_to_hls(r, g, b)
-                    # 饱和度越高分数越高，极亮/极暗的颜色降权
-                    brightness_factor = 1.0 - abs(l - 0.5) * 1.2
-                    return (
-                        freq[quantize(rgb)] * (1 + s * 3) * max(0.3, brightness_factor)
-                    )
-
-                # 找最高分的颜色
-                best = max(freq.keys(), key=score_color)
+                # colors 是 ARGB hex 格式 #ffRRGGBB
+                h = colors[0].lstrip("#")
+                rgb = (int(h[2:4], 16), int(h[4:6], 16), int(h[6:8], 16))
                 logger.warning(
-                    f"Seed extracted: RGB={best} from {len(pixels)} pixels, {len(freq)} unique colors"
+                    f"Seed extracted: RGB={rgb} from {len(_r.content)} bytes, top colors: {colors[:3]}"
                 )
-                return best
+                return rgb
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {e}")
             return (103, 80, 164)
