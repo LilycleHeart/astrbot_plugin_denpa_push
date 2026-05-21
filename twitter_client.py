@@ -208,9 +208,61 @@ class TwitterClient:
             "media": [],
             "article": None,
             "urls": [],
+            "is_retweet": False,
+            "retweeted_user": None,
         }
 
-        if hasattr(tweet, "media") and tweet.media:
+        # Resolve retweet/repost content: use the original tweet's text and media
+        retweeted = getattr(tweet, "retweeted_tweet", None)
+        if retweeted is not None:
+            rt_text = getattr(retweeted, "full_text", retweeted.text or "")
+            if rt_text and len(rt_text) > len(data["text"]):
+                data["text"] = rt_text
+                data["full_text"] = rt_text
+            data["is_retweet"] = True
+            data["retweeted_user"] = {
+                "name": retweeted.user.name if retweeted.user else "",
+                "screen_name": retweeted.user.screen_name if retweeted.user else "",
+            }
+            # Use the original tweet's media
+            data["media"] = []
+            if hasattr(retweeted, "media") and retweeted.media:
+                for m in retweeted.media:
+                    if isinstance(m, dict):
+                        mtype = m.get("type", "unknown")
+                        poster = m.get("media_url_https", "")
+                        item = {
+                            "type": mtype,
+                            "media_url": poster,
+                            "url": m.get("url", ""),
+                            "expanded_url": m.get("expanded_url", ""),
+                        }
+                        if mtype in ("video", "animated_gif"):
+                            vi = m.get("video_info", {})
+                            variants = vi.get("variants", [])
+                            best_url, best_bitrate = "", -1
+                            for v in variants:
+                                if v.get("content_type") == "video/mp4":
+                                    br = v.get("bitrate", 0)
+                                    if br > best_bitrate:
+                                        best_bitrate = br
+                                        best_url = v.get("url", "")
+                            if best_url:
+                                item["video_url"] = best_url
+                        data["media"].append(item)
+            # Also pull note_tweet/article from retweeted tweet's raw data
+            rt_raw = getattr(retweeted, "_data", {})
+            rt_note = (
+                rt_raw.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {})
+            )
+            rt_note_text = rt_note.get("text", "")
+            if rt_note_text and len(rt_note_text) > len(data["text"]):
+                data["text"] = rt_note_text
+                data["full_text"] = rt_note_text
+            rt_article = rt_raw.get("article", {})
+            if rt_article:
+                data["article"] = rt_article
+        if not retweeted and hasattr(tweet, "media") and tweet.media:
             for m in tweet.media:
                 if isinstance(m, dict):
                     mtype = m.get("type", "unknown")
@@ -287,6 +339,8 @@ class TwitterClient:
 
         # Extract quoted tweet if present in the raw data (available from TweetResultByRestId but not from twikit's get_tweet_by_id)
         quoted_raw = raw.get("quoted_status_result", {}).get("result", {})
+        if not quoted_raw:
+            quoted_raw = raw.get("retweeted_status_result", {}).get("result", {})
         if quoted_raw:
             q_legacy = quoted_raw.get("legacy", {})
             q_core = (
