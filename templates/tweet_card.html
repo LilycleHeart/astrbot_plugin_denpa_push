@@ -13,13 +13,12 @@ body{
 .dark .card{--shadow:0 8px 30px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.2)}
 .light .card{--shadow:0 8px 30px rgba(0,0,0,0.08),0 2px 8px rgba(0,0,0,0.04)}
 .card{
-  width:620px;background:var(--md-background);border-radius:28px;
-  overflow:hidden;box-shadow:var(--shadow);
+  width:620px;background:transparent;border-radius:28px;
   display:flex;flex-direction:column;flex-shrink:0
 }
 .card-inner{
-  background:var(--md-surface-container);border-radius:0;
-  padding:20px;display:flex;flex-direction:column;gap:14px
+  background:var(--md-surface-container);border-radius:28px;
+  padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)
 }
 .header{display:flex;align-items:center;gap:14px}
 .avatar{
@@ -93,7 +92,7 @@ body{
 </style>
 </head>
 <body class="{{ 'dark' if is_dark else 'light' }}">
-<div class="card" style="--md-background:{{palette.background}};--md-background-rgb:{{palette.background_rgb}};--md-surface-container:{{palette.surface_container}};--md-surface-container-rgb:{{palette.surface_container_rgb}};--md-primary:{{palette.primary}};--md-primary-rgb:{{palette.primary_rgb}};--md-on-primary:{{palette.on_primary}};--md-on-primary-rgb:{{palette.on_primary_rgb}};--md-surface:{{palette.surface}};--md-surface-rgb:{{palette.surface_rgb}};--md-surface-variant:{{palette.surface_variant}};--md-surface-variant-rgb:{{palette.surface_variant_rgb}};--md-on-surface:{{palette.on_surface}};--md-on-surface-rgb:{{palette.on_surface_rgb}};--md-on-surface-variant:{{palette.on_surface_variant}};--md-on-surface-variant-rgb:{{palette.on_surface_variant_rgb}}">
+<div class="card" style="--md-surface-container:{{palette.surface_container}};--md-surface-container-rgb:{{palette.surface_container_rgb}};--md-primary:{{palette.primary}};--md-primary-rgb:{{palette.primary_rgb}};--md-on-primary:{{palette.on_primary}};--md-on-primary-rgb:{{palette.on_primary_rgb}};--md-surface:{{palette.surface}};--md-surface-rgb:{{palette.surface_rgb}};--md-surface-variant:{{palette.surface_variant}};--md-surface-variant-rgb:{{palette.surface_variant_rgb}};--md-on-surface:{{palette.on_surface}};--md-on-surface-rgb:{{palette.on_surface_rgb}};--md-on-surface-variant:{{palette.on_surface_variant}};--md-on-surface-variant-rgb:{{palette.on_surface_variant_rgb}}">
 
 <div class="card-inner">
 
