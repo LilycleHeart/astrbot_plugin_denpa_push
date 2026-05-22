@@ -864,7 +864,7 @@ class DenpaPushPlugin(Star):
                 h = await page.evaluate("document.body.scrollHeight")
                 await page.set_viewport_size({"width": 620, "height": h})
                 await page.wait_for_timeout(500)
-                await page.screenshot(path=png_path, full_page=True)
+                await page.screenshot(path=png_path, full_page=True, omit_background=True)
                 await browser.close()
             await self._dump_render_debug(html, card_data, png_path)
             return png_path
