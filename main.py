@@ -31,6 +31,7 @@ class DenpaPushPlugin(Star):
         self.monitor_task = None
         self._running = False
         self._data_path = self._get_data_path()
+        self._seed_cache = {}  # {avatar_url: rgb_tuple}
 
     def _get_data_path(self):
         root = getattr(self.context, "astrbot_root", os.getcwd())
@@ -419,6 +420,8 @@ class DenpaPushPlugin(Star):
             await asyncio.sleep(interval)
 
     async def _extract_seed_color(self, avatar_url: str):
+        if avatar_url in self._seed_cache:
+            return self._seed_cache[avatar_url]
         try:
             import httpx
             from PIL import Image
@@ -431,24 +434,48 @@ class DenpaPushPlugin(Star):
                 "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
                 "Referer": "https://x.com/",
             }
-            async with httpx.AsyncClient(
-                proxy=proxy if proxy else None, timeout=10
-            ) as _c:
-                _r = await _c.get(avatar_url, headers=headers)
-                _r.raise_for_status()
-                _img = Image.open(io.BytesIO(_r.content)).convert("RGBA")
-                colors = prominent_colors_from_image(_img, max_colors=128)
-                if not colors:
-                    return (103, 80, 164)
-                # colors 是 RRGGBB hex 格式 #rrggbb
-                h = colors[0].lstrip("#")
-                rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-                logger.warning(
-                    f"Seed extracted: RGB={rgb} from {len(_r.content)} bytes, top colors: {colors[:3]}"
-                )
-                return rgb
+            sizes = ["_400x400.", "_bigger.", "_normal."]
+            img_bytes = None
+            used_url = avatar_url
+            if "_normal." in avatar_url:
+                base = avatar_url.replace("_normal.", "{}")
+                async with httpx.AsyncClient(
+                    proxy=proxy if proxy else None, timeout=15
+                ) as _c:
+                    for s in sizes:
+                        try:
+                            u = base.format(s)
+                            _r = await _c.get(u, headers=headers)
+                            _r.raise_for_status()
+                            img_bytes = _r.content
+                            used_url = u
+                            break
+                        except Exception:
+                            continue
+            else:
+                async with httpx.AsyncClient(
+                    proxy=proxy if proxy else None, timeout=15
+                ) as _c:
+                    _r = await _c.get(avatar_url, headers=headers)
+                    _r.raise_for_status()
+                    img_bytes = _r.content
+            if not img_bytes:
+                return (103, 80, 164)
+            _img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
+            colors = prominent_colors_from_image(_img, max_colors=128)
+            if not colors:
+                return (103, 80, 164)
+            # colors 是 RRGGBB hex 格式 #rrggbb
+            h = colors[0].lstrip("#")
+            rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+            logger.warning(
+                f"Seed extracted: RGB={rgb} from {len(img_bytes)} bytes via {used_url.split('/')[-1][:40]}"
+            )
+            self._seed_cache[avatar_url] = rgb
+            return rgb
         except Exception as e:
-            logger.warning(f"Seed color extraction failed: {e}")
+            logger.warning(f"Seed color extraction failed: {type(e).__name__}: {e}")
+            self._seed_cache[avatar_url] = (103, 80, 164)
             return (103, 80, 164)
 
     def _generate_palette(self, seed_rgb):
