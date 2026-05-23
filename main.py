@@ -297,7 +297,28 @@ class DenpaPushPlugin(Star):
 
             # 2. 图片提前下载到临时文件发送（避免发送时 pbs.twimg.com 直连超时）
             from astrbot.api.message_components import Node, Plain
-            import tempfile, httpx as _httpx
+            import tempfile, httpx as _httpx, subprocess, os
+
+            async def _convert_to_gif(mp4_path):
+                try:
+                    gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
+                    proc = await asyncio.create_subprocess_exec(
+                        "ffmpeg",
+                        "-i",
+                        mp4_path,
+                        "-vf",
+                        "fps=10,scale=480:-1:flags=lanczos",
+                        "-y",
+                        gif_path,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    rc = await proc.wait()
+                    if rc == 0 and os.path.exists(gif_path):
+                        return gif_path
+                except Exception as e:
+                    logger.warning(f"GIF conversion failed: {e}")
+                return None
 
             async def _dl_file(url, suffix=".jpg"):
                 try:
@@ -339,11 +360,17 @@ class DenpaPushPlugin(Star):
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
                 if vurl:
-                    f = await _dl_file(vurl)
+                    f = await _dl_file(vurl, suffix=".mp4")
                     if f:
-                        results.append(
-                            event.chain_result([CompVideo.fromFileSystem(f)])
-                        )
+                        gif_path = await _convert_to_gif(f)
+                        if gif_path:
+                            results.append(
+                                event.chain_result([CompImage.fromFileSystem(gif_path)])
+                            )
+                        else:
+                            results.append(
+                                event.chain_result([CompVideo.fromFileSystem(f)])
+                            )
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
                 if vurl:
