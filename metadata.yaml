@@ -4,5 +4,3 @@ desc: 监控指定 Twitter/X 账号的最新推文，自动生成Material design
 version: v1.1.0
 author: 赤羽真白
 repo: https://github.com/LilycleHeart/astrbot_plugin_denpa_push
-system_deps:
-  - ffmpeg (用于 GIF 转换)

@@ -303,16 +303,24 @@ class DenpaPushPlugin(Star):
                 try:
                     import json, shutil
 
-                    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-                        logger.warning(
-                            "ffmpeg/ffprobe not found, GIF conversion skipped"
-                        )
-                        return None
+                    _ffmpeg = shutil.which("ffmpeg")
+                    _ffprobe = shutil.which("ffprobe")
+                    if not _ffmpeg or not _ffprobe:
+                        try:
+                            from imageio_ffmpeg import get_ffmpeg_exe, get_ffprobe_exe
+
+                            _ffmpeg = get_ffmpeg_exe()
+                            _ffprobe = get_ffprobe_exe()
+                        except ImportError:
+                            logger.warning(
+                                "imageio-ffmpeg not installed, GIF conversion unavailable"
+                            )
+                            return None
 
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
-                    # detect original fps and dimensions
+                    # detect original fps
                     probe = await asyncio.create_subprocess_exec(
-                        "ffprobe",
+                        _ffprobe,
                         "-v",
                         "error",
                         "-select_streams",
@@ -331,7 +339,7 @@ class DenpaPushPlugin(Star):
                     num, den = map(int, s["r_frame_rate"].split("/"))
                     fps = num / den if den else 15
                     proc = await asyncio.create_subprocess_exec(
-                        "ffmpeg",
+                        _ffmpeg,
                         "-i",
                         mp4_path,
                         "-vf",
