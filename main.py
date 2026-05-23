@@ -299,7 +299,7 @@ class DenpaPushPlugin(Star):
             from astrbot.api.message_components import Node, Plain
             import tempfile, httpx as _httpx
 
-            async def _dl_file(url):
+            async def _dl_file(url, suffix=".jpg"):
                 try:
                     proxy = self.config.get("proxy", None)
                     async with _httpx.AsyncClient(
@@ -307,7 +307,13 @@ class DenpaPushPlugin(Star):
                     ) as c:
                         r = await c.get(url)
                         r.raise_for_status()
-                        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                        ext = suffix
+                        # try to detect extension from url
+                        for s in [".mp4", ".gif", ".jpg", ".jpeg", ".png"]:
+                            if s in url.lower():
+                                ext = s
+                                break
+                        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
                         tmp.write(r.content)
                         tmp.close()
                         return tmp.name
@@ -335,13 +341,17 @@ class DenpaPushPlugin(Star):
                 if vurl:
                     f = await _dl_file(vurl)
                     if f:
-                        results.append(event.chain_result([CompVideo.fromURL(f)]))
+                        results.append(
+                            event.chain_result([CompVideo.fromFileSystem(f)])
+                        )
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
                 if vurl:
                     f = await _dl_file(vurl)
                     if f:
-                        results.append(event.chain_result([CompVideo.fromURL(f)]))
+                        results.append(
+                            event.chain_result([CompVideo.fromFileSystem(f)])
+                        )
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
             results.append(event.plain_result(f"推送失败: {str(e)[:100]}"))
