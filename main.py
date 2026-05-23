@@ -311,10 +311,8 @@ class DenpaPushPlugin(Star):
 
                             _ffmpeg = get_ffmpeg_exe()
                             _ffprobe = get_ffprobe_exe()
-                        except ImportError:
-                            logger.warning(
-                                "imageio-ffmpeg not installed, GIF conversion unavailable"
-                            )
+                        except Exception as _e:
+                            logger.warning(f"imageio-ffmpeg unavailable: {_e}")
                             return None
 
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
