@@ -1121,23 +1121,33 @@ class DenpaPushPlugin(Star):
             return ""
 
         if mode == "multimodal":
-            llm_resp = await self.context.llm_generate(
-                chat_provider_id=provider_id,
-                prompt=(
-                    f"图片是推文配图，理解内容并翻译成{target_lang}，"
-                    f"自行组织格式使用户能简单直接理解。"
-                    f"尽量简短，不要使文本量过大影响阅读。"
-                    f"如果多张图则逐一说明。"
-                    f"如果图片中没有文字输出'(无文字)'。"
-                ),
-                image_urls=img_urls,
+
+            async def _translate_one(url):
+                try:
+                    resp = await asyncio.wait_for(
+                        self.context.llm_generate(
+                            chat_provider_id=provider_id,
+                            prompt=(
+                                f"理解图片内容并翻译成{target_lang}，"
+                                f"自行组织格式使用户能简单直接理解。"
+                                f"尽量简短，不要使文本量过大影响阅读。"
+                                f"如果图片中没有文字输出'(无文字)'。"
+                            ),
+                            image_urls=[url],
+                        ),
+                        timeout=30,
+                    )
+                    return resp.completion_text or ""
+                except Exception:
+                    return ""
+
+            results = await asyncio.gather(
+                *[_translate_one(u) for u in img_urls], return_exceptions=True
             )
-            result = llm_resp.completion_text or ""
-            result = result.strip()
-            skip = all(
-                "(无文字)" in line for line in result.split("\n") if line.strip()
-            )
-            return "" if skip else result
+            parts = [
+                r for r in results if isinstance(r, str) and r and "(无文字)" not in r
+            ]
+            return " | ".join(parts)
         elif mode == "text_extraction":
             translations = []
             for img_url in img_urls:
