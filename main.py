@@ -295,26 +295,53 @@ class DenpaPushPlugin(Star):
                 )
             )
 
-            # 2. 图片合并到一条群合并转发消息
-            from astrbot.api.message_components import Node, Plain
+            # 2. 图片提前下载到临时文件发送（避免发送时 pbs.twimg.com 直连超时）
+            from astrbot.api.message_components import Node, Plain, CompImage, CompVideo
+            import tempfile, httpx as _httpx
+
+            async def _dl_file(url):
+                try:
+                    proxy = self.config.get("proxy", None)
+                    async with _httpx.AsyncClient(
+                        proxy=proxy if proxy else None, timeout=30
+                    ) as c:
+                        r = await c.get(url)
+                        r.raise_for_status()
+                        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                        tmp.write(r.content)
+                        tmp.close()
+                        return tmp.name
+                except Exception as e:
+                    logger.warning(f"Media download failed: {url[:60]} - {e}")
+                    return None
 
             uname = info.get("user_name", info["screen_name"])
+            img_files = await asyncio.gather(
+                *[
+                    _dl_file(img.get("media_url", ""))
+                    for img in info.get("images", [])
+                    if img.get("media_url", "")
+                ]
+            )
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
-            for img in info.get("images", []):
-                iurl = img.get("media_url", "")
-                if iurl:
-                    img_contents.append(CompImage.fromURL(iurl))
+            for f in img_files:
+                if f:
+                    img_contents.append(CompImage(file=f))
             if len(img_contents) > 1:
                 node = Node(uin="0", name=uname, content=img_contents)
                 results.append(event.chain_result([node]))
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
                 if vurl:
-                    results.append(event.chain_result([CompVideo.fromURL(vurl)]))
+                    f = await _dl_file(vurl)
+                    if f:
+                        results.append(event.chain_result([CompVideo(file=f)]))
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
                 if vurl:
-                    results.append(event.chain_result([CompVideo.fromURL(vurl)]))
+                    f = await _dl_file(vurl)
+                    if f:
+                        results.append(event.chain_result([CompVideo(file=f)]))
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
             results.append(event.plain_result(f"推送失败: {str(e)[:100]}"))
