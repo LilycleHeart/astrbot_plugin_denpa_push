@@ -301,7 +301,13 @@ class DenpaPushPlugin(Star):
 
             async def _convert_to_gif(mp4_path):
                 try:
-                    import json
+                    import json, shutil
+
+                    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+                        logger.warning(
+                            "ffmpeg/ffprobe not found, GIF conversion skipped"
+                        )
+                        return None
 
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
                     # detect original fps and dimensions
