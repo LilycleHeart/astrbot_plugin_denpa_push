@@ -878,40 +878,43 @@ class DenpaPushPlugin(Star):
             f.write(html)
 
         try:
-            from playwright.async_api import async_playwright
+            try:
+                from playwright.async_api import async_playwright
 
-            async with async_playwright() as pw:
-                browser = await pw.chromium.launch(headless=True)
-                ctx = await browser.new_context(device_scale_factor=2)
-                page = await ctx.new_page()
-                await page.set_viewport_size({"width": 620, "height": 100})
-                await page.goto(
-                    f"file:///{html_path.replace(chr(92), '/')}",
-                    wait_until="domcontentloaded",
-                    timeout=10000,
+                async with async_playwright() as pw:
+                    browser = await pw.chromium.launch(headless=True)
+                    ctx = await browser.new_context(device_scale_factor=2)
+                    page = await ctx.new_page()
+                    await page.set_viewport_size({"width": 620, "height": 100})
+                    await page.goto(
+                        f"file:///{html_path.replace(chr(92), '/')}",
+                        wait_until="domcontentloaded",
+                        timeout=10000,
+                    )
+                    await page.wait_for_timeout(300)
+                    h = await page.evaluate("document.body.scrollHeight")
+                    await page.set_viewport_size({"width": 620, "height": h})
+                    await page.wait_for_timeout(500)
+                    await page.screenshot(
+                        path=png_path, full_page=True, omit_background=True
+                    )
+                    await browser.close()
+                await self._dump_render_debug(html, card_data, png_path)
+                return png_path
+            except Exception as e:
+                logger.error(f"Local card render failed: {e}")
+
+            try:
+                card_img_url = await self.html_render(
+                    template,
+                    card_data,
+                    options={"type": "png", "full_page": True, "timeout": 15000},
                 )
-                await page.wait_for_timeout(300)
-                h = await page.evaluate("document.body.scrollHeight")
-                await page.set_viewport_size({"width": 620, "height": h})
-                await page.wait_for_timeout(500)
-                await page.screenshot(path=png_path, full_page=True, omit_background=True)
-                await browser.close()
-            await self._dump_render_debug(html, card_data, png_path)
-            return png_path
-        except Exception as e:
-            logger.error(f"Local card render failed: {e}")
-
-        try:
-            card_img_url = await self.html_render(
-                template,
-                card_data,
-                options={"type": "png", "full_page": True, "timeout": 15000},
-            )
-            return card_img_url
-        except Exception as e2:
-            logger.error(f"Remote card render also failed: {e2}")
-            return ""
-    finally:
+                return card_img_url
+            except Exception as e2:
+                logger.error(f"Remote card render also failed: {e2}")
+                return ""
+        finally:
             try:
                 if _os.path.exists(html_path):
                     _os.remove(html_path)
