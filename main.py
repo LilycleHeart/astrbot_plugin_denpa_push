@@ -303,7 +303,7 @@ class DenpaPushPlugin(Star):
                 try:
                     proxy = self.config.get("proxy", None)
                     async with _httpx.AsyncClient(
-                        proxy=proxy if proxy else None, timeout=30
+                        proxy=proxy if proxy else None, timeout=60
                     ) as c:
                         r = await c.get(url)
                         r.raise_for_status()
@@ -1162,10 +1162,13 @@ class DenpaPushPlugin(Star):
                             ),
                             image_urls=[url],
                         ),
-                        timeout=30,
+                        timeout=60,
                     )
                     return resp.completion_text or ""
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        f"Image LLM timeout/fail: {url[:50]} - {type(e).__name__}"
+                    )
                     return ""
 
             results = await asyncio.gather(
