@@ -676,7 +676,7 @@ class DenpaPushPlugin(Star):
         if images_for_translate:
             try:
                 image_translations = await asyncio.wait_for(
-                    self._translate_images(images_for_translate), timeout=120
+                    self._translate_images(images_for_translate), timeout=60
                 )
             except asyncio.TimeoutError:
                 logger.warning("Image translation timed out, skipping")
@@ -1114,26 +1114,32 @@ class DenpaPushPlugin(Star):
         if not provider_id:
             return "(未配置翻译提供商)"
 
-        translations = []
-        for img in images[:3]:
-            img_url = img.get("media_url", "")
-            if not img_url:
-                continue
+        img_urls = [
+            img.get("media_url", "") for img in images[:3] if img.get("media_url", "")
+        ]
+        if not img_urls:
+            return ""
 
-            if mode == "multimodal":
-                llm_resp = await self.context.llm_generate(
-                    chat_provider_id=provider_id,
-                    prompt=(
-                        f"理解图片内容并翻译成{target_lang}，自行组织格式使"
-                        f"用户能简单直接理解。尽量简短，不要使文本量过大影响阅读。"
-                        f"如果图片中没有文字输出'(无文字)'。"
-                    ),
-                    image_urls=[img_url],
-                )
-                result = llm_resp.completion_text or ""
-                if result and "(无文字)" not in result:
-                    translations.append(result)
-            elif mode == "text_extraction":
+        if mode == "multimodal":
+            llm_resp = await self.context.llm_generate(
+                chat_provider_id=provider_id,
+                prompt=(
+                    f"以下图片是多张连续的推文配图，逐一描述每张图片的日文/英文内容"
+                    f"并翻译成{target_lang}。每张图片的输出格式：\n"
+                    f"[图片1]: <描述和翻译>\n[图片2]: <描述和翻译>\n..."
+                    f"如果图片中没有文字则输出'(无文字)'。"
+                ),
+                image_urls=img_urls,
+            )
+            result = llm_resp.completion_text or ""
+            result = result.strip()
+            skip = all(
+                "(无文字)" in line for line in result.split("\n") if line.strip()
+            )
+            return "" if skip else result
+        elif mode == "text_extraction":
+            translations = []
+            for img_url in img_urls:
                 text_in_image = await self._ocr_image(img_url)
                 if text_in_image:
                     llm_resp = await self.context.llm_generate(
@@ -1143,9 +1149,8 @@ class DenpaPushPlugin(Star):
                     result = llm_resp.completion_text or ""
                     if result:
                         translations.append(result)
-
-        if translations:
-            return " | ".join(translations)
+            if translations:
+                return " | ".join(translations)
         return ""
 
     async def _ocr_image(self, img_url: str) -> str:
