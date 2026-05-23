@@ -301,13 +301,38 @@ class DenpaPushPlugin(Star):
 
             async def _convert_to_gif(mp4_path):
                 try:
+                    import json
+
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
+                    # detect original fps and dimensions
+                    probe = await asyncio.create_subprocess_exec(
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-select_streams",
+                        "v:0",
+                        "-show_entries",
+                        "stream=r_frame_rate,width,height",
+                        "-of",
+                        "json",
+                        mp4_path,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    out, _ = await probe.communicate()
+                    info = json.loads(out.decode())
+                    s = info["streams"][0]
+                    num, den = map(int, s["r_frame_rate"].split("/"))
+                    fps = num / den if den else 15
+                    w, h = int(s["width"]), int(s["height"])
+                    # scale to max 480 keeping aspect ratio
+                    scale = "480:-1" if w >= h else "-1:480"
                     proc = await asyncio.create_subprocess_exec(
                         "ffmpeg",
                         "-i",
                         mp4_path,
                         "-vf",
-                        "fps=10,scale=480:-1:flags=lanczos",
+                        f"fps={fps:.2f},scale={scale}:flags=lanczos",
                         "-y",
                         gif_path,
                         stdout=subprocess.DEVNULL,
