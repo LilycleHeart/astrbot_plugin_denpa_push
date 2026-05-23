@@ -3,5 +3,5 @@ jinja2
 playwright
 PyMCUlib>=1.0.0
 material-color-utilities>=0.2.0
-imageio-ffmpeg
+# ffmpeg (系统依赖，用于 GIF 转换。Debian/Ubuntu: apt install ffmpeg)
 # easyocr 可选，用于 text_extraction 图片文字识别模式
