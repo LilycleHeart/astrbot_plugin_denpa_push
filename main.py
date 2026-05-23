@@ -867,17 +867,19 @@ class DenpaPushPlugin(Star):
     async def _render_card(self, template: str, card_data: dict) -> str:
         """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
         import tempfile, os as _os, time as _time
-        from playwright.async_api import async_playwright
 
         _tag = f"{id(self)}_{int(_time.time() * 1000000) % 1000000}"
         html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.html")
         png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.png")
-        try:
-            from jinja2 import Template
+        from jinja2 import Template
 
-            html = Template(template).render(card_data)
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html)
+        html = Template(template).render(card_data)
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        try:
+            from playwright.async_api import async_playwright
+
             async with async_playwright() as pw:
                 browser = await pw.chromium.launch(headless=True)
                 ctx = await browser.new_context(device_scale_factor=2)
@@ -898,17 +900,18 @@ class DenpaPushPlugin(Star):
             return png_path
         except Exception as e:
             logger.error(f"Local card render failed: {e}")
-            try:
-                card_img_url = await self.html_render(
-                    template,
-                    card_data,
-                    options={"type": "png", "full_page": True, "timeout": 15000},
-                )
-                return card_img_url
-            except Exception as e2:
-                logger.error(f"Remote card render also failed: {e2}")
-                return ""
-        finally:
+
+        try:
+            card_img_url = await self.html_render(
+                template,
+                card_data,
+                options={"type": "png", "full_page": True, "timeout": 15000},
+            )
+            return card_img_url
+        except Exception as e2:
+            logger.error(f"Remote card render also failed: {e2}")
+            return ""
+    finally:
             try:
                 if _os.path.exists(html_path):
                     _os.remove(html_path)
