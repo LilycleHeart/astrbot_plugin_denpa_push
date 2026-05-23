@@ -1124,10 +1124,11 @@ class DenpaPushPlugin(Star):
             llm_resp = await self.context.llm_generate(
                 chat_provider_id=provider_id,
                 prompt=(
-                    f"以下图片是多张连续的推文配图，逐一描述每张图片的日文/英文内容"
-                    f"并翻译成{target_lang}。每张图片的输出格式：\n"
-                    f"[图片1]: <描述和翻译>\n[图片2]: <描述和翻译>\n..."
-                    f"如果图片中没有文字则输出'(无文字)'。"
+                    f"图片是推文配图，理解内容并翻译成{target_lang}，"
+                    f"自行组织格式使用户能简单直接理解。"
+                    f"尽量简短，不要使文本量过大影响阅读。"
+                    f"如果多张图则逐一说明。"
+                    f"如果图片中没有文字输出'(无文字)'。"
                 ),
                 image_urls=img_urls,
             )
