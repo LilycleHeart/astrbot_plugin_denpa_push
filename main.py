@@ -703,7 +703,7 @@ class DenpaPushPlugin(Star):
         if images_for_translate:
             try:
                 image_translations = await asyncio.wait_for(
-                    self._translate_images(images_for_translate), timeout=60
+                    self._translate_images(images_for_translate), timeout=120
                 )
             except asyncio.TimeoutError:
                 logger.warning("Image translation timed out, skipping")
