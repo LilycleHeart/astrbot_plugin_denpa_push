@@ -324,15 +324,12 @@ class DenpaPushPlugin(Star):
                     s = info["streams"][0]
                     num, den = map(int, s["r_frame_rate"].split("/"))
                     fps = num / den if den else 15
-                    w, h = int(s["width"]), int(s["height"])
-                    # scale to max 480 keeping aspect ratio
-                    scale = "480:-1" if w >= h else "-1:480"
                     proc = await asyncio.create_subprocess_exec(
                         "ffmpeg",
                         "-i",
                         mp4_path,
                         "-vf",
-                        f"fps={fps:.2f},scale={scale}:flags=lanczos",
+                        f"fps={fps:.2f}",
                         "-y",
                         gif_path,
                         stdout=subprocess.DEVNULL,
