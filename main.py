@@ -885,9 +885,10 @@ class DenpaPushPlugin(Star):
                 await page.set_viewport_size({"width": 620, "height": 100})
                 await page.goto(
                     f"file:///{html_path.replace(chr(92), '/')}",
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
+                    timeout=10000,
                 )
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(300)
                 h = await page.evaluate("document.body.scrollHeight")
                 await page.set_viewport_size({"width": 620, "height": h})
                 await page.wait_for_timeout(500)
