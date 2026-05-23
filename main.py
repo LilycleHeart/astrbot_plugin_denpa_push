@@ -669,15 +669,14 @@ class DenpaPushPlugin(Star):
                 .strip()
             )
         is_link_only = len(text_no_urls.strip()) < 5
-        has_article = bool(data.get("article"))
-        if is_link_only or has_article:
+        if is_link_only:
             images_for_translate = []
         else:
             images_for_translate = images
         if images_for_translate:
             try:
                 image_translations = await asyncio.wait_for(
-                    self._translate_images(data), timeout=120
+                    self._translate_images(images_for_translate), timeout=120
                 )
             except asyncio.TimeoutError:
                 logger.warning("Image translation timed out, skipping")
@@ -1102,8 +1101,7 @@ class DenpaPushPlugin(Star):
 
         return "\n\n".join(translated_parts) if translated_parts else text
 
-    async def _translate_images(self, data: dict) -> str:
-        images, _, _ = TwitterClient.extract_tweet_media(data)
+    async def _translate_images(self, images: list) -> str:
         if not images:
             return ""
 
