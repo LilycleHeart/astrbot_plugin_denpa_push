@@ -296,7 +296,7 @@ class DenpaPushPlugin(Star):
             )
 
             # 2. 图片提前下载到临时文件发送（避免发送时 pbs.twimg.com 直连超时）
-            from astrbot.api.message_components import Node, Plain, CompImage, CompVideo
+            from astrbot.api.message_components import Node, Plain
             import tempfile, httpx as _httpx
 
             async def _dl_file(url):
@@ -326,7 +326,7 @@ class DenpaPushPlugin(Star):
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
             for f in img_files:
                 if f:
-                    img_contents.append(CompImage(file=f))
+                    img_contents.append(CompImage.fromFileSystem(f))
             if len(img_contents) > 1:
                 node = Node(uin="0", name=uname, content=img_contents)
                 results.append(event.chain_result([node]))
@@ -335,13 +335,13 @@ class DenpaPushPlugin(Star):
                 if vurl:
                     f = await _dl_file(vurl)
                     if f:
-                        results.append(event.chain_result([CompVideo(file=f)]))
+                        results.append(event.chain_result([CompVideo.fromURL(f)]))
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
                 if vurl:
                     f = await _dl_file(vurl)
                     if f:
-                        results.append(event.chain_result([CompVideo(file=f)]))
+                        results.append(event.chain_result([CompVideo.fromURL(f)]))
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
             results.append(event.plain_result(f"推送失败: {str(e)[:100]}"))
@@ -1142,7 +1142,7 @@ class DenpaPushPlugin(Star):
             return "(未配置翻译提供商)"
 
         img_urls = [
-            img.get("media_url", "") for img in images[:3] if img.get("media_url", "")
+            img.get("media_url", "") for img in images[:4] if img.get("media_url", "")
         ]
         if not img_urls:
             return ""
