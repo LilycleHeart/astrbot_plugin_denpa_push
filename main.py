@@ -306,23 +306,14 @@ class DenpaPushPlugin(Star):
                     _ffmpeg = shutil.which("ffmpeg")
                     _ffprobe = shutil.which("ffprobe")
                     if not _ffmpeg or not _ffprobe:
-                        try:
-                            from imageio_ffmpeg import get_ffmpeg_exe
-                            import os as _os
-
-                            _ffmpeg = get_ffmpeg_exe()
-                            _ffprobe = _os.path.join(
-                                _os.path.dirname(_ffmpeg),
-                                _os.path.basename(_ffmpeg).replace(
-                                    "ffmpeg", "ffprobe", 1
-                                ),
-                            )
-                        except Exception as _e:
-                            logger.warning(f"imageio-ffmpeg unavailable: {_e}")
-                            return None
+                        logger.warning(
+                            "ffmpeg/ffprobe not found, GIF conversion unavailable. "
+                            "Install: apt install ffmpeg"
+                        )
+                        return None
 
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
-                    # detect original fps via ffprobe, fallback to 15
+                    # detect original fps via ffprobe
                     fps = 15
                     try:
                         probe = await asyncio.create_subprocess_exec(
