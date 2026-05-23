@@ -520,42 +520,36 @@ class DenpaPushPlugin(Star):
         is_dark = h >= 18 or h < 6
 
         try:
-            from material_color_utilities import (
-                Hct as _Hct,
-                SchemeVibrant,
-                MaterialDynamicColors as _MDC,
-            )
+            from material_color_utilities import theme_from_color
 
-            def _c(prop):
-                argb = getattr(_MDC, prop).getArgb(scheme)
-                h = f"#{argb:08x}"
-                rs = f"{((argb >> 16) & 0xFF)}, {((argb >> 8) & 0xFF)}, {argb & 0xFF}"
-                return h, rs
+            def rgb_str(c):
+                return f"{int(c[1:3], 16)}, {int(c[3:5], 16)}, {int(c[5:7], 16)}"
 
-            argb = (0xFF << 24) | (seed_rgb[0] << 16) | (seed_rgb[1] << 8) | seed_rgb[2]
-            scheme = SchemeVibrant(_Hct.fromInt(argb), is_dark, 0.0)
+            hex_color = f"#{seed_rgb[0]:02x}{seed_rgb[1]:02x}{seed_rgb[2]:02x}"
+            theme = theme_from_color(hex_color)
+            scheme = theme.schemes.dark if is_dark else theme.schemes.light
             palette = {
-                "primary": _c("primary")[0],
-                "primary_rgb": _c("primary")[1],
-                "on_primary": _c("on_primary")[0],
-                "on_primary_rgb": _c("on_primary")[1],
-                "secondary": _c("secondary")[0],
-                "secondary_rgb": _c("secondary")[1],
-                "surface": _c("surface")[0],
-                "surface_rgb": _c("surface")[1],
-                "surface_variant": _c("surface_variant")[0],
-                "surface_variant_rgb": _c("surface_variant")[1],
-                "on_surface": _c("on_surface")[0],
-                "on_surface_rgb": _c("on_surface")[1],
-                "on_surface_variant": _c("on_surface_variant")[0],
-                "on_surface_variant_rgb": _c("on_surface_variant")[1],
-                "background": _c("background")[0],
-                "background_rgb": _c("background")[1],
-                "surface_container": _c("surface_container")[0],
-                "surface_container_rgb": _c("surface_container")[1],
+                "primary": scheme.primary,
+                "primary_rgb": rgb_str(scheme.primary),
+                "on_primary": scheme.on_primary,
+                "on_primary_rgb": rgb_str(scheme.on_primary),
+                "secondary": scheme.secondary,
+                "secondary_rgb": rgb_str(scheme.secondary),
+                "surface": scheme.surface,
+                "surface_rgb": rgb_str(scheme.surface),
+                "surface_variant": scheme.surface_variant,
+                "surface_variant_rgb": rgb_str(scheme.surface_variant),
+                "on_surface": scheme.on_surface,
+                "on_surface_rgb": rgb_str(scheme.on_surface),
+                "on_surface_variant": scheme.on_surface_variant,
+                "on_surface_variant_rgb": rgb_str(scheme.on_surface_variant),
+                "background": scheme.background,
+                "background_rgb": rgb_str(scheme.background),
+                "surface_container": scheme.surface_container,
+                "surface_container_rgb": rgb_str(scheme.surface_container),
             }
             logger.warning(
-                f"Dynamic palette from seed=#{seed_rgb[0]:02x}{seed_rgb[1]:02x}{seed_rgb[2]:02x} (Vibrant, dark={is_dark}): primary={palette['primary']}"
+                f"Dynamic palette from seed={hex_color} (dark={is_dark}): primary={scheme.primary}"
             )
             return palette, is_dark
         except Exception as e:
