@@ -492,9 +492,25 @@ class DenpaPushPlugin(Star):
             colors = prominent_colors_from_image(_img, max_colors=128)
             if not colors:
                 return (103, 80, 164)
+            from material_color_utilities import Hct as _Hct
+
             # colors 是 RRGGBB hex 格式 #rrggbb
             h = colors[0].lstrip("#")
-            rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+            argb = (
+                (int(h[0:2], 16) << 16)
+                | (int(h[2:4], 16) << 8)
+                | int(h[4:6], 16)
+                | 0xFF000000
+            )
+            hct = _Hct.fromInt(argb)
+            if hct.chroma < 30:
+                boosted = _Hct(hct.hue, 36, hct.tone)
+                argb = boosted.toInt()
+                r, g, b = (argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF
+                rgb = (r, g, b)
+                logger.warning(f"Seed chroma too low ({hct.chroma:.1f}), boosted to 36")
+            else:
+                rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
             logger.warning(
                 f"Seed extracted: RGB={rgb} from {len(img_bytes)} bytes via {used_url.split('/')[-1][:40]}"
             )
