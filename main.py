@@ -322,26 +322,31 @@ class DenpaPushPlugin(Star):
                             return None
 
                     gif_path = mp4_path.rsplit(".", 1)[0] + ".gif"
-                    # detect original fps
-                    probe = await asyncio.create_subprocess_exec(
-                        _ffprobe,
-                        "-v",
-                        "error",
-                        "-select_streams",
-                        "v:0",
-                        "-show_entries",
-                        "stream=r_frame_rate,width,height",
-                        "-of",
-                        "json",
-                        mp4_path,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    out, _ = await probe.communicate()
-                    info = json.loads(out.decode())
-                    s = info["streams"][0]
-                    num, den = map(int, s["r_frame_rate"].split("/"))
-                    fps = num / den if den else 15
+                    # detect original fps via ffprobe, fallback to 15
+                    fps = 15
+                    try:
+                        probe = await asyncio.create_subprocess_exec(
+                            _ffprobe,
+                            "-v",
+                            "error",
+                            "-select_streams",
+                            "v:0",
+                            "-show_entries",
+                            "stream=r_frame_rate",
+                            "-of",
+                            "json",
+                            mp4_path,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        out, _ = await probe.communicate()
+                        info = json.loads(out.decode())
+                        num, den = map(
+                            int, info["streams"][0]["r_frame_rate"].split("/")
+                        )
+                        fps = num / den if den else 15
+                    except Exception:
+                        pass
                     proc = await asyncio.create_subprocess_exec(
                         _ffmpeg,
                         "-i",
