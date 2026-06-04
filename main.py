@@ -14,6 +14,34 @@ from .twitter_client import TwitterClient
 DATA_DIR = "data/config"
 DATA_FILE = "astrbot_plugin_denpa_push_data.json"
 
+# Shared persistent Playwright (module-level, survives plugin reload)
+_pw_instance = None
+_pw_browser = None
+
+
+async def _get_shared_browser():
+    """Lazy-init and return a persistent Chromium browser shared across all instances."""
+    global _pw_instance, _pw_browser
+    if _pw_browser and _pw_browser.is_connected():
+        return _pw_browser
+    if not _pw_instance:
+        from playwright.async_api import async_playwright
+
+        _pw_instance = await async_playwright().start()
+    _pw_browser = await _pw_instance.chromium.launch(headless=True)
+    return _pw_browser
+
+
+async def _close_shared_browser():
+    """Close shared Playwright and browser."""
+    global _pw_instance, _pw_browser
+    if _pw_browser:
+        await _pw_browser.close()
+        _pw_browser = None
+    if _pw_instance:
+        await _pw_instance.stop()
+        _pw_instance = None
+
 
 def _twitter_media_url(url: str, size: str = "orig") -> str:
     """Set Twitter media size suffix, handling both :name and ?name= formats."""
@@ -987,26 +1015,23 @@ class DenpaPushPlugin(Star):
 
         try:
             try:
-                from playwright.async_api import async_playwright
-
-                async with async_playwright() as pw:
-                    browser = await pw.chromium.launch(headless=True)
-                    ctx = await browser.new_context(device_scale_factor=2)
-                    page = await ctx.new_page()
-                    await page.set_viewport_size({"width": 620, "height": 100})
-                    await page.goto(
-                        f"file:///{html_path.replace(chr(92), '/')}",
-                        wait_until="domcontentloaded",
-                        timeout=10000,
-                    )
-                    await page.wait_for_timeout(300)
-                    h = await page.evaluate("document.body.scrollHeight")
-                    await page.set_viewport_size({"width": 620, "height": h})
-                    await page.wait_for_timeout(500)
-                    await page.screenshot(
-                        path=png_path, full_page=True, omit_background=True
-                    )
-                    await browser.close()
+                browser = await _get_shared_browser()
+                ctx = await browser.new_context(device_scale_factor=2)
+                page = await ctx.new_page()
+                await page.set_viewport_size({"width": 620, "height": 100})
+                await page.goto(
+                    f"file:///{html_path.replace(chr(92), '/')}",
+                    wait_until="domcontentloaded",
+                    timeout=10000,
+                )
+                await page.wait_for_timeout(300)
+                h = await page.evaluate("document.body.scrollHeight")
+                await page.set_viewport_size({"width": 620, "height": h})
+                await page.wait_for_timeout(500)
+                await page.screenshot(
+                    path=png_path, full_page=True, omit_background=True
+                )
+                await ctx.close()
                 await self._dump_render_debug(html, card_data, png_path)
                 return png_path
             except Exception as e:
