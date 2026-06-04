@@ -15,6 +15,20 @@ DATA_DIR = "data/config"
 DATA_FILE = "astrbot_plugin_denpa_push_data.json"
 
 
+def _twitter_media_url(url: str, size: str = "orig") -> str:
+    """Set Twitter media size suffix, handling both :name and ?name= formats."""
+    if not url or "pbs.twimg.com" not in url:
+        return url
+    # strip existing :name suffix
+    for s in (":thumb", ":small", ":medium", ":large", ":orig"):
+        if url.endswith(s):
+            url = url[: -len(s)]
+            break
+    # strip existing ?name= query param
+    url = re.sub(r"\?format=\w+&name=\w+", "", url)
+    return f"{url}:{size}"
+
+
 @register(
     "astrbot_plugin_denpa_push",
     "astrbot_user",
@@ -381,7 +395,7 @@ class DenpaPushPlugin(Star):
             uname = info.get("user_name", info["screen_name"])
             img_files = await asyncio.gather(
                 *[
-                    _dl_file(img.get("media_url", ""))
+                    _dl_file(_twitter_media_url(img.get("media_url", ""), "orig"))
                     for img in info.get("images", [])
                     if img.get("media_url", "")
                 ]
@@ -738,7 +752,9 @@ class DenpaPushPlugin(Star):
         quoted_user = quoted.get("user", {}) if quoted else {}
         quoted_media = quoted.get("media", []) if quoted else []
         quoted_thumbnails = [
-            m.get("media_url", "") for m in quoted_media[:2] if m.get("media_url", "")
+            _twitter_media_url(m.get("media_url", ""), "medium")
+            for m in quoted_media[:2]
+            if m.get("media_url", "")
         ]
         q_user_name = quoted_user.get("name", "")
         q_screen_name = quoted_user.get("screen_name", "")
@@ -792,7 +808,8 @@ class DenpaPushPlugin(Star):
         for m in all_media[:4]:
             poster = m.get("media_url", "")
             if poster:
-                thumbnail_urls.append(poster)
+                # card uses medium quality for faster rendering
+                thumbnail_urls.append(_twitter_media_url(poster, "medium"))
 
         import os as _os
 
