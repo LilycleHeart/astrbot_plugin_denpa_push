@@ -862,12 +862,18 @@ class DenpaPushPlugin(Star):
             "screen_name": data["user"]["screen_name"],
             "user_id": data["user"]["id"],
             "avatar_url": data["user"]["avatar_url"],
-            "created_at_str": data["created_at_datetime"].strftime(
-                "%b %d, %Y · %H:%M UTC"
+            "created_at_str": (
+                data["created_at_datetime"]
+                .astimezone(
+                    __import__("datetime").timezone(
+                        __import__("datetime").timedelta(hours=8)
+                    )
+                )
+                .strftime("%m月%d日 %H:%M")
             )
             if data.get("created_at_datetime")
             and hasattr(data["created_at_datetime"], "strftime")
-            else str(data["created_at"]),
+            else str(data.get("created_at", "")),
             "article_title": article.get("title", "") if article else "",
             "article_cover_url": article.get("cover_url", "") if article else "",
             "article_text": data.get("article_full_text")
