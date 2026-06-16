@@ -389,6 +389,7 @@ class TwitterClient:
 
         if (
             not data.get("quoted_tweet")
+            and tweet.is_quote_status
             and hasattr(tweet, "retweeted_tweet")
             and tweet.retweeted_tweet
         ):
