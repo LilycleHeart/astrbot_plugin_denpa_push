@@ -39,6 +39,13 @@ def _chain(components: list) -> MessageChain:
         chain.chain.append(c)
     return chain
 
+
+def _unwrap_event(event) -> AstrMessageEvent:
+    """兼容 AstrBot v4.26.0: event 可能是 ContextWrapper 或 AstrMessageEvent。"""
+    if hasattr(event, "context") and hasattr(event.context, "event"):
+        return event.context.event
+    return event
+
 # Shared persistent Playwright (module-level, survives plugin reload)
 _pw_instance = None
 _pw_browser = None
@@ -224,6 +231,7 @@ class DenpaPushPlugin(Star):
         Args:
             usernames(array[string]): 要关注的用户名，如 ["ApexLiveComms"]
         """
+        event = _unwrap_event(event)
         if isinstance(usernames, str):
             usernames = [usernames]
         for name in usernames:
@@ -236,6 +244,7 @@ class DenpaPushPlugin(Star):
         Args:
             usernames(array[string]): 要取消关注的用户名，如 ["apexlive"]
         """
+        event = _unwrap_event(event)
         if isinstance(usernames, str):
             usernames = [usernames]
         umo = event.unified_msg_origin
@@ -257,6 +266,7 @@ class DenpaPushPlugin(Star):
         Args:
             url(string): 推特链接，如 https://x.com/username/status/123456
         """
+        event = _unwrap_event(event)
         umo = event.unified_msg_origin
         for chain in await self._cmd_push(event, url):
             await self.context.send_message(umo, chain)
@@ -266,6 +276,7 @@ class DenpaPushPlugin(Star):
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
         """列出当前群聊已关注的 Twitter 用户。"""
+        event = _unwrap_event(event)
         umo = event.unified_msg_origin
         session_users = self.subscriptions.get(umo, {})
         lines = ["已关注用户:"]
@@ -276,6 +287,7 @@ class DenpaPushPlugin(Star):
     @filter.llm_tool(name="denpa_push")
     async def denpa_push(self, event: AstrMessageEvent):
         """开启或关闭当前会话的自动推送。"""
+        event = _unwrap_event(event)
         umo = event.unified_msg_origin
         if umo in self.monitored_sessions:
             self.monitored_sessions.discard(umo)
