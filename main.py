@@ -1257,9 +1257,9 @@ class DenpaPushPlugin(Star):
 
         async def _do_chunk(i, chunk):
             prefix = f"(第{i + 1}/{len(chunks)}部分)\n" if len(chunks) > 1 else ""
-            prompt = (
-                f"请将以下内容翻译成{target_lang}，只返回翻译结果:\n\n{prefix}{chunk}"
-            )
+            default_prompt = f"请将以下内容翻译成{{lang}}，只返回翻译结果:\n\n{{prefix}}{{text}}"
+            prompt_tpl = self.config.get("text_translate_prompt", "") or default_prompt
+            prompt = prompt_tpl.replace("{lang}", target_lang).replace("{prefix}", prefix).replace("{text}", chunk)
             try:
                 llm_resp = await self.context.llm_generate(
                     chat_provider_id=provider_id,
@@ -1301,18 +1301,21 @@ class DenpaPushPlugin(Star):
             return ""
 
         if mode == "multimodal":
+            default_img_prompt = (
+                f"理解图片内容并翻译成{{lang}}，"
+                f"自行组织格式使用户能简单直接理解。"
+                f"尽量简短，不要使文本量过大影响阅读。"
+                f"如果图片中没有文字输出'(无文字)'。"
+            )
+            img_prompt_tpl = self.config.get("image_translate_prompt", "") or default_img_prompt
 
             async def _translate_one(url):
                 try:
+                    prompt = img_prompt_tpl.replace("{lang}", target_lang)
                     resp = await asyncio.wait_for(
                         self.context.llm_generate(
                             chat_provider_id=provider_id,
-                            prompt=(
-                                f"理解图片内容并翻译成{target_lang}，"
-                                f"自行组织格式使用户能简单直接理解。"
-                                f"尽量简短，不要使文本量过大影响阅读。"
-                                f"如果图片中没有文字输出'(无文字)'。"
-                            ),
+                            prompt=prompt,
                             image_urls=[url],
                         ),
                         timeout=60,

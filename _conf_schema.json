@@ -40,6 +40,18 @@
     "default": "中文",
     "hint": "例如: 中文、English、日本語"
   },
+  "text_translate_prompt": {
+    "description": "文字翻译 Prompt",
+    "type": "text",
+    "default": "请将以下内容翻译成{lang}，只返回翻译结果:\n\n{prefix}{text}",
+    "hint": "可用变量: {lang}=目标语言, {text}=原文, {prefix}=分段标记。留空使用默认值"
+  },
+  "image_translate_prompt": {
+    "description": "图片翻译 Prompt（多模态模式）",
+    "type": "text",
+    "default": "理解图片内容并翻译成{lang}，自行组织格式使用户能简单直接理解。尽量简短，不要使文本量过大影响阅读。如果图片中没有文字输出'(无文字)'。",
+    "hint": "可用变量: {lang}=目标语言。留空使用默认值"
+  },
   "proxy": {
     "description": "代理地址（可选）",
     "type": "string",
