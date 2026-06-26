@@ -257,8 +257,11 @@ class DenpaPushPlugin(Star):
         Args:
             url(string): 推特链接，如 https://x.com/username/status/123456
         """
-        for r in await self._cmd_push(event, url):
-            yield r
+        umo = event.unified_msg_origin
+        for chain in await self._cmd_push(event, url):
+            await self.context.send_message(umo, chain)
+            await asyncio.sleep(0.3)
+        yield _plain("推文已发送")
 
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
