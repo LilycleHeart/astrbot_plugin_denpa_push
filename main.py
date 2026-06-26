@@ -302,12 +302,12 @@ class DenpaPushPlugin(Star):
             }
             self._save_data()
             self._start_monitor()
-            return _plain(
+            yield _plain(
                 f"本群已关注 @{username}（{user.name}），开始跟踪"
             )
         except Exception as e:
             logger.error(f"Failed to add user {username}: {e}")
-            return _plain(f"添加失败: {str(e)[:100]}")
+            yield _plain(f"添加失败: {str(e)[:100]}")
 
     async def _cmd_remove(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
