@@ -14,6 +14,31 @@ from .twitter_client import TwitterClient
 DATA_DIR = "data/config"
 DATA_FILE = "astrbot_plugin_denpa_push_data.json"
 
+
+def _plain(text: str) -> MessageChain:
+    """Create a plain text MessageChain."""
+    chain = MessageChain()
+    chain.chain.append(Plain(text))
+    return chain
+
+
+def _img(url: str) -> MessageChain:
+    """Create an image MessageChain from URL or file path."""
+    chain = MessageChain()
+    if url.startswith("http"):
+        chain.chain.append(CompImage.fromURL(url))
+    else:
+        chain.chain.append(CompImage.fromFileSystem(url))
+    return chain
+
+
+def _chain(components: list) -> MessageChain:
+    """Create a MessageChain from a list of components."""
+    chain = MessageChain()
+    for c in components:
+        chain.chain.append(c)
+    return chain
+
 # Shared persistent Playwright (module-level, survives plugin reload)
 _pw_instance = None
 _pw_browser = None
@@ -158,7 +183,7 @@ class DenpaPushPlugin(Star):
     async def twitter_cmd(self, event: AstrMessageEvent):
         parts = event.message_str.strip().split()
         if len(parts) < 2:
-            yield event.plain_result(
+            yield _plain(
                 "用法:\n"
                 "/twitter add <username>  - 关注用户\n"
                 "/twitter remove <username>  - 取消关注\n"
@@ -172,7 +197,7 @@ class DenpaPushPlugin(Star):
 
         auth_token = self.config.get("twitter_auth_token", "")
         if not auth_token:
-            yield event.plain_result(
+            yield _plain(
                 "请先在插件配置中设置 twitter_auth_token 和 twitter_ct0"
             )
             return
@@ -190,7 +215,7 @@ class DenpaPushPlugin(Star):
         elif sub == "monitor":
             yield await self._cmd_monitor(event)
         else:
-            yield event.plain_result(f"未知子指令: {sub}")
+            yield _plain(f"未知子指令: {sub}")
 
     @filter.llm_tool(name="twitter_add")
     async def twitter_add(self, event: AstrMessageEvent, usernames: list):
@@ -243,7 +268,7 @@ class DenpaPushPlugin(Star):
         lines = ["已关注用户:"]
         for name in session_users:
             lines.append(f"  @{name}")
-        yield event.plain_result("\n".join(lines) if len(lines) > 1 else "暂无关注用户")
+        yield _plain("\n".join(lines) if len(lines) > 1 else "暂无关注用户")
 
     @filter.llm_tool(name="denpa_push")
     async def denpa_push(self, event: AstrMessageEvent):
@@ -252,20 +277,20 @@ class DenpaPushPlugin(Star):
         if umo in self.monitored_sessions:
             self.monitored_sessions.discard(umo)
             self._save_data()
-            yield event.plain_result("已关闭本会话的自动推送")
+            yield _plain("已关闭本会话的自动推送")
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
             if any(self.subscriptions.get(s) for s in self.monitored_sessions):
                 self._start_monitor()
-            yield event.plain_result("已开启本会话的自动推送")
+            yield _plain("已开启本会话的自动推送")
 
     async def _cmd_add(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
         umo = event.unified_msg_origin
         session_users = self.subscriptions.setdefault(umo, {})
         if username in session_users:
-            return event.plain_result(f"本群已关注 @{username}")
+            yield _plain(f"本群已关注 @{username}")
         try:
             user = await self.twitter.get_user_by_screen_name(username)
             tweets = await self.twitter.get_user_tweets(user.id, count=1)
@@ -277,52 +302,52 @@ class DenpaPushPlugin(Star):
             }
             self._save_data()
             self._start_monitor()
-            return event.plain_result(
+            return _plain(
                 f"本群已关注 @{username}（{user.name}），开始跟踪"
             )
         except Exception as e:
             logger.error(f"Failed to add user {username}: {e}")
-            return event.plain_result(f"添加失败: {str(e)[:100]}")
+            return _plain(f"添加失败: {str(e)[:100]}")
 
     async def _cmd_remove(self, event: AstrMessageEvent, username: str):
         username = username.lstrip("@")
         umo = event.unified_msg_origin
         session_users = self.subscriptions.get(umo, {})
         if username not in session_users:
-            return event.plain_result(f"本群未关注 @{username}")
+            return _plain(f"本群未关注 @{username}")
         del session_users[username]
         if not session_users:
             del self.subscriptions[umo]
         self._save_data()
         if not self.subscriptions:
             self._stop_monitor()
-        return event.plain_result(f"本群已取消关注 @{username}")
+        return _plain(f"本群已取消关注 @{username}")
 
     async def _cmd_list(self, event: AstrMessageEvent):
         umo = event.unified_msg_origin
         session_users = self.subscriptions.get(umo, {})
         if not session_users:
-            return event.plain_result("本群暂无关注用户")
+            return _plain("本群暂无关注用户")
         lines = ["本群关注用户:"]
         for name, info in session_users.items():
             lines.append(
                 f"  @{name}  (最后ID: {info.get('last_tweet_id', 'N/A')[:12]}...)"
             )
-        return event.plain_result("\n".join(lines))
+        return _plain("\n".join(lines))
 
     async def _cmd_push(self, event: AstrMessageEvent, url: str):
         results = []
         m = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/(\d+)", url)
         if not m:
             results.append(
-                event.plain_result(
+                _plain(
                     "无效的推文链接，格式: https://x.com/username/status/123456"
                 )
             )
             return results
         username, tweet_id = m.group(1), m.group(2)
         try:
-            results.append(event.plain_result("正在获取推文..."))
+            results.append(_plain("正在获取推文..."))
             tweet = await self.twitter.get_tweet_by_id(tweet_id)
             data = TwitterClient.extract_tweet_data(tweet)
             info = await self._build_card_data(data)
@@ -330,9 +355,9 @@ class DenpaPushPlugin(Star):
             # 1. 卡片 PNG 直接发送（多张长文章分块）
             for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
                 if url:
-                    results.append(event.image_result(url))
+                    results.append(_img(url))
             results.append(
-                event.plain_result(
+                _plain(
                     f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
                 )
             )
@@ -434,7 +459,7 @@ class DenpaPushPlugin(Star):
                     img_contents.append(CompImage.fromFileSystem(f))
             if len(img_contents) > 1:
                 node = Node(uin="0", name=uname, content=img_contents)
-                results.append(event.chain_result([node]))
+                results.append(_chain([node]))
             for gif in info.get("gifs", []):
                 vurl = gif.get("video_url", gif.get("media_url", ""))
                 if vurl:
@@ -443,11 +468,11 @@ class DenpaPushPlugin(Star):
                         gif_path = await _convert_to_gif(f)
                         if gif_path:
                             results.append(
-                                event.chain_result([CompImage.fromFileSystem(gif_path)])
+                                _chain([CompImage.fromFileSystem(gif_path)])
                             )
                         else:
                             results.append(
-                                event.chain_result([CompVideo.fromFileSystem(f)])
+                                _chain([CompVideo.fromFileSystem(f)])
                             )
             for vid in info.get("videos", []):
                 vurl = vid.get("video_url", vid.get("media_url", ""))
@@ -455,11 +480,11 @@ class DenpaPushPlugin(Star):
                     f = await _dl_file(vurl)
                     if f:
                         results.append(
-                            event.chain_result([CompVideo.fromFileSystem(f)])
+                            _chain([CompVideo.fromFileSystem(f)])
                         )
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
-            results.append(event.plain_result(f"推送失败: {str(e)[:100]}"))
+            results.append(_plain(f"推送失败: {str(e)[:100]}"))
         return results
 
     async def _cmd_monitor(self, event: AstrMessageEvent):
@@ -467,13 +492,13 @@ class DenpaPushPlugin(Star):
         if umo in self.monitored_sessions:
             self.monitored_sessions.discard(umo)
             self._save_data()
-            return event.plain_result("已关闭本会话的自动推送")
+            return _plain("已关闭本会话的自动推送")
         else:
             self.monitored_sessions.add(umo)
             self._save_data()
             if any(self.subscriptions.get(s) for s in self.monitored_sessions):
                 self._start_monitor()
-            return event.plain_result("已开启本会话的自动推送")
+            return _plain("已开启本会话的自动推送")
 
     async def _monitor_loop(self):
         interval = max(1, int(self.config.get("poll_interval", 5))) * 60
