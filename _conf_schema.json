@@ -1,0 +1,74 @@
+{
+  "twitter_auth_token": {
+    "description": "Twitter/X 的 auth_token",
+    "type": "string",
+    "hint": "浏览器 DevTools → Application → Cookies → x.com → 复制 auth_token 的值"
+  },
+  "twitter_ct0": {
+    "description": "Twitter/X 的 ct0",
+    "type": "string",
+    "hint": "浏览器 DevTools → Application → Cookies → x.com → 复制 ct0 的值"
+  },
+  "poll_interval": {
+    "description": "轮询间隔（分钟）",
+    "type": "int",
+    "default": 5,
+    "hint": "每隔多少分钟检查一次新推文"
+  },
+  "text_translate_provider": {
+    "description": "文字翻译使用的 AI 提供商",
+    "_special": "select_provider",
+    "type": "string",
+    "hint": "选择用于翻译推文文字的 AI 模型"
+  },
+  "image_translate_provider": {
+    "description": "图片翻译使用的 AI 提供商",
+    "_special": "select_provider",
+    "type": "string",
+    "hint": "选择用于图片 OCR/翻译的 AI 模型（需要多模态能力）"
+  },
+  "image_translate_mode": {
+    "description": "图片翻译模式",
+    "type": "string",
+    "options": ["multimodal", "text_extraction"],
+    "default": "multimodal",
+    "hint": "multimodal=多模态直接翻译; text_extraction=提取文字后再翻译（需安装 easyocr）"
+  },
+  "translation_language": {
+    "description": "翻译目标语言",
+    "type": "string",
+    "default": "中文",
+    "hint": "例如: 中文、English、日本語"
+  },
+  "text_translate_prompt": {
+    "description": "文字翻译 Prompt",
+    "type": "text",
+    "default": "请将以下内容翻译成{lang}，只返回翻译结果:\n\n{prefix}{text}",
+    "hint": "可用变量: {lang}=目标语言, {text}=原文, {prefix}=分段标记。留空使用默认值"
+  },
+  "image_translate_prompt": {
+    "description": "图片翻译 Prompt（多模态模式）",
+    "type": "text",
+    "default": "理解图片内容并翻译成{lang}，自行组织格式使用户能简单直接理解。尽量简短，不要使文本量过大影响阅读。如果图片中没有文字输出'(无文字)'。",
+    "hint": "可用变量: {lang}=目标语言。留空使用默认值"
+  },
+  "color_source": {
+    "description": "卡片取色来源",
+    "type": "string",
+    "options": ["avatar", "first_image"],
+    "default": "avatar",
+    "hint": "avatar=从头像取色; first_image=从第一张图片取色（无图时降级为头像）"
+  },
+  "gif_encoder": {
+    "description": "GIF 编码器",
+    "type": "string",
+    "options": ["auto", "gifski", "ffmpeg"],
+    "default": "auto",
+    "hint": "auto=优先gifski否则ffmpeg; gifski=高质量需安装gifski; ffmpeg=palettegen调色板"
+  },
+  "proxy": {
+    "description": "代理地址（可选）",
+    "type": "string",
+    "hint": "如 http://127.0.0.1:7890，留空不使用代理"
+  }
+}
