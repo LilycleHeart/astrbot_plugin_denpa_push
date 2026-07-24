@@ -89,6 +89,16 @@ def _twitter_media_url(url: str, size: str = "orig") -> str:
     return f"{url}:{size}"
 
 
+def _file_to_data_uri(path: str) -> str:
+    """Read a local image file and return a base64 data URI."""
+    import base64, mimetypes
+
+    mime = mimetypes.guess_type(path)[0] or "image/jpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f"data:{mime};base64,{b64}"
+
+
 @register(
     "astrbot_plugin_denpa_push",
     "astrbot_user",
@@ -370,17 +380,6 @@ class DenpaPushPlugin(Star):
             results.append(_plain("正在获取推文..."))
             tweet = await self.twitter.get_tweet_by_id(tweet_id)
             data = TwitterClient.extract_tweet_data(tweet)
-            info = await self._build_card_data(data)
-
-            # 1. 卡片 PNG 直接发送（多张长文章分块）
-            for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
-                if url:
-                    results.append(_img(url))
-            results.append(
-                _plain(
-                    f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
-                )
-            )
 
             # 2. 图片提前下载到临时文件发送（避免发送时 pbs.twimg.com 直连超时）
             from astrbot.api.message_components import Node, Plain
@@ -499,14 +498,35 @@ class DenpaPushPlugin(Star):
                     logger.warning(f"Media download failed: {url[:60]} - {e}")
                     return None
 
-            uname = info.get("user_name", info["screen_name"])
+            # 提前下载图片，同时传给卡片渲染复用
+            images, gifs, videos = TwitterClient.extract_tweet_media(data)
+            media_url_to_path = {}
             img_files = await asyncio.gather(
                 *[
                     _dl_file(_twitter_media_url(img.get("media_url", ""), "orig"))
-                    for img in info.get("images", [])
+                    for img in images
                     if img.get("media_url", "")
                 ]
             )
+            for img, path in zip(
+                [img for img in images if img.get("media_url", "")], img_files
+            ):
+                if path:
+                    media_url_to_path[img["media_url"]] = path
+
+            info = await self._build_card_data(data, media_url_to_path)
+
+            # 1. 卡片 PNG 直接发送（多张长文章分块）
+            for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
+                if url:
+                    results.append(_img(url))
+            results.append(
+                _plain(
+                    f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
+                )
+            )
+
+            uname = info.get("user_name", info["screen_name"])
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
             for f in img_files:
                 if f:
@@ -792,7 +812,7 @@ class DenpaPushPlugin(Star):
             "surface_container_rgb": "240, 234, 248",
         }, is_dark
 
-    async def _build_card_data(self, data: dict) -> dict:
+    async def _build_card_data(self, data: dict, media_url_to_path: dict = None) -> dict:
         import re as _re
 
         article = data.get("article")
@@ -858,11 +878,15 @@ class DenpaPushPlugin(Star):
         quoted = data.get("quoted_tweet", {})
         quoted_user = quoted.get("user", {}) if quoted else {}
         quoted_media = quoted.get("media", []) if quoted else []
-        quoted_thumbnails = [
-            _twitter_media_url(m.get("media_url", ""), "medium")
-            for m in quoted_media[:2]
-            if m.get("media_url", "")
-        ]
+        quoted_thumbnails = []
+        for m in quoted_media[:2]:
+            mu = m.get("media_url", "")
+            if not mu:
+                continue
+            if media_url_to_path and mu in media_url_to_path:
+                quoted_thumbnails.append(_file_to_data_uri(media_url_to_path[mu]))
+            else:
+                quoted_thumbnails.append(_twitter_media_url(mu, "medium"))
         q_user_name = quoted_user.get("name", "")
         q_screen_name = quoted_user.get("screen_name", "")
         q_avatar = quoted_user.get("avatar_url", "")
@@ -915,8 +939,10 @@ class DenpaPushPlugin(Star):
         for m in all_media[:4]:
             poster = m.get("media_url", "")
             if poster:
-                # card uses medium quality for faster rendering
-                thumbnail_urls.append(_twitter_media_url(poster, "medium"))
+                if media_url_to_path and poster in media_url_to_path:
+                    thumbnail_urls.append(_file_to_data_uri(media_url_to_path[poster]))
+                else:
+                    thumbnail_urls.append(_twitter_media_url(poster, "medium"))
 
         import os as _os
 
@@ -1155,7 +1181,46 @@ class DenpaPushPlugin(Star):
         if not target_sessions:
             return
 
-        info = await self._build_card_data(data)
+        import tempfile, httpx as _httpx
+
+        async def _dl_file(url, suffix=".jpg"):
+            try:
+                proxy = self.config.get("proxy", None)
+                async with _httpx.AsyncClient(
+                    proxy=proxy if proxy else None, timeout=60
+                ) as c:
+                    r = await c.get(url)
+                    r.raise_for_status()
+                    ext = suffix
+                    for s in [".mp4", ".gif", ".jpg", ".jpeg", ".png"]:
+                        if s in url.lower():
+                            ext = s
+                            break
+                    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                    tmp.write(r.content)
+                    tmp.close()
+                    return tmp.name
+            except Exception as e:
+                logger.warning(f"Media download failed: {url[:60]} - {e}")
+                return None
+
+        # 提前下载图片，传给卡片渲染复用
+        images, gifs, videos = TwitterClient.extract_tweet_media(data)
+        media_url_to_path = {}
+        img_files = await asyncio.gather(
+            *[
+                _dl_file(_twitter_media_url(img.get("media_url", ""), "orig"))
+                for img in images
+                if img.get("media_url", "")
+            ]
+        )
+        for img, path in zip(
+            [img for img in images if img.get("media_url", "")], img_files
+        ):
+            if path:
+                media_url_to_path[img["media_url"]] = path
+
+        info = await self._build_card_data(data, media_url_to_path)
 
         for session_umo in target_sessions:
             try:
@@ -1194,10 +1259,9 @@ class DenpaPushPlugin(Star):
                 from astrbot.api.message_components import Node, Plain
 
                 img_contents = []
-                for img in info.get("images", []):
-                    iurl = img.get("media_url", "")
-                    if iurl:
-                        img_contents.append(CompImage.fromURL(iurl))
+                for f in img_files:
+                    if f:
+                        img_contents.append(CompImage.fromFileSystem(f))
                 if img_contents:
                     node = Node(
                         uin="0",
