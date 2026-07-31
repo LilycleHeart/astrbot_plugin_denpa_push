@@ -316,6 +316,56 @@
 .t-palette span { width: 12px; height: 12px; border-radius: 3px; }
 .t-palette .pal-label { font-size: 10px; color: var(--color-fg-3); margin-left: 6px; font-family: var(--font-family-mono); }
 
+/* —— 管理订阅：账号卡片网格（自适应列宽） —— */
+.sub-group { margin-bottom: var(--space-l); }
+.sub-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-s);
+}
+.sub-session-name {
+  font-size: 12px; font-family: var(--font-family-mono); color: var(--color-fg-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;
+}
+.sub-monitor-toggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--color-fg-2); cursor: pointer;
+}
+.sub-monitor-toggle input { width: 16px; height: 16px; accent-color: var(--color-brand); }
+
+.sub-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-s);
+}
+@media (max-width: 640px) {
+  .sub-account-grid { grid-template-columns: 1fr; }
+}
+.sub-account-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: var(--space-m);
+  border-radius: var(--radius-medium);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 15%, transparent);
+  background: color-mix(in srgb, var(--color-brand) 3%, transparent);
+  transition: transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+.sub-account-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+}
+.sub-av {
+  position: relative; width: 40px; height: 40px; border-radius: 50%;
+  flex-shrink: 0; overflow: hidden;
+}
+.sub-av-letter {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: #fff;
+}
+.sub-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sub-meta { flex: 1; min-width: 0; }
+.sub-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub-handle { font-size: 12px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* —— 日志列表 —— */
 .log-list { display: flex; flex-direction: column; gap: 2px; }
 .log-item {

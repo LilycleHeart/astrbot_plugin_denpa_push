@@ -600,42 +600,47 @@ function renderSubs(data) {
     const isMonitored = state.status?.monitored_sessions?.includes(session);
 
     const group = document.createElement("div");
-    group.style.marginBottom = "var(--space-l)";
+    group.className = "sub-group";
     group.innerHTML = `
-      <div class="flex" style="align-items:center;justify-content:space-between;margin-bottom:var(--space-s)">
-        <span style="font-size:12px;font-family:var(--font-family-mono);color:var(--color-fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${escapeHtml(session)}</span>
-        <label class="flex" style="align-items:center;gap:6px;font-size:12px;color:var(--color-fg-2);cursor:pointer">
-          <input type="checkbox" class="monitor-toggle" data-session="${escapeHtml(session)}" ${isMonitored ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--color-brand)" />
-          监控
+      <div class="sub-group-header">
+        <span class="sub-session-name" title="${escapeHtml(session)}">${escapeHtml(session)}</span>
+        <label class="sub-monitor-toggle">
+          <input type="checkbox" class="monitor-toggle" data-session="${escapeHtml(session)}" ${isMonitored ? "checked" : ""} />
+          <span>监控</span>
         </label>
       </div>
     `;
 
+    const grid = document.createElement("div");
+    grid.className = "sub-account-grid";
+
     names.forEach(name => {
-      const info = users[name];
+      const info = users[name] || {};
       const lastCheck = info.last_checked_at
         ? new Date(info.last_checked_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
         : "—";
+      const dispName = info.name || name;
+      const avatarUrl = info.avatar_url || "";
+      const letter = (name.charAt(0) || "?").toUpperCase();
+      const avHtml = avatarUrl
+        ? `<span class="sub-av-letter">${escapeHtml(letter)}</span><img class="sub-av-img" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'" />`
+        : `<span class="sub-av-letter">${escapeHtml(letter)}</span>`;
       const el = document.createElement("div");
-      el.className = "tweet-card";
-      el.style.background = "color-mix(in srgb, var(--color-brand) 3%, transparent)";
-      el.style.borderColor = "color-mix(in srgb, var(--color-brand) 15%, transparent)";
-      el.style.marginBottom = "var(--space-s)";
+      el.className = "sub-account-card";
       el.innerHTML = `
-        <div class="t-header">
-          <div class="t-av" style="background:var(--color-brand)">${name.charAt(0).toUpperCase()}</div>
-          <div class="t-meta">
-            <div class="t-name">@${escapeHtml(name)}</div>
-            <div class="t-handle">最后检查 ${lastCheck}</div>
-          </div>
-          <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}" data-session="${escapeHtml(session)}">
-            <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </button>
+        <div class="sub-av" style="background:var(--color-brand)">${avHtml}</div>
+        <div class="sub-meta">
+          <div class="sub-name">${escapeHtml(dispName)}</div>
+          <div class="sub-handle">@${escapeHtml(name)} · 最后检查 ${lastCheck}</div>
         </div>
+        <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}" data-session="${escapeHtml(session)}" title="取消追踪">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
       `;
-      group.appendChild(el);
+      grid.appendChild(el);
     });
 
+    group.appendChild(grid);
     container.appendChild(group);
   }
 

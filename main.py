@@ -261,8 +261,13 @@ class DenpaPushPlugin(Star):
             user = await self.twitter.get_user_by_screen_name(username)
             tweets = await self.twitter.get_user_tweets(user.id, count=1)
             last_id = tweets[0].id if tweets else "0"
+            avatar_url = getattr(user, "profile_image_url", "") or ""
+            if avatar_url:
+                avatar_url = avatar_url.replace("_normal.", "_400x400.")
             session_users[username] = {
                 "user_id": user.id,
+                "name": getattr(user, "name", "") or username,
+                "avatar_url": avatar_url,
                 "last_tweet_id": last_id,
                 "last_checked_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -672,8 +677,13 @@ class DenpaPushPlugin(Star):
             user = await self.twitter.get_user_by_screen_name(username)
             tweets = await self.twitter.get_user_tweets(user.id, count=1)
             last_id = tweets[0].id if tweets else "0"
+            avatar_url = getattr(user, "profile_image_url", "") or ""
+            if avatar_url:
+                avatar_url = avatar_url.replace("_normal.", "_400x400.")
             session_users[username] = {
                 "user_id": user.id,
+                "name": getattr(user, "name", "") or username,
+                "avatar_url": avatar_url,
                 "last_tweet_id": last_id,
                 "last_checked_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -954,6 +964,23 @@ class DenpaPushPlugin(Star):
                     user_id = info["user_id"]
                     tweets = await self.twitter.get_user_tweets(user_id, count=20)
 
+                    # Backfill avatar/display name for legacy subscriptions missing them
+                    if tweets and not info.get("avatar_url"):
+                        tu = getattr(tweets[0], "user", None)
+                        av = (getattr(tu, "profile_image_url", "") or "") if tu else ""
+                        if av:
+                            av = av.replace("_normal.", "_400x400.")
+                        disp_name = (getattr(tu, "name", "") or "") if tu else ""
+                        for sess_umo in user_sessions.get(username, []):
+                            sess_users = self.subscriptions.get(sess_umo)
+                            if sess_users and username in sess_users:
+                                if av:
+                                    sess_users[username]["avatar_url"] = av
+                                if disp_name:
+                                    sess_users[username]["name"] = disp_name
+                        self._save_data()
+                        logger.info(f"[Monitor] Backfilled avatar for @{username}")
+
                     # Highest last_tweet_id across sessions tracking this user
                     last_id = "0"
                     for sess_umo in user_sessions.get(username, []):
@@ -981,6 +1008,19 @@ class DenpaPushPlugin(Star):
                             await asyncio.sleep(2)
 
                         max_id = new_tweets[0].id
+                        latest_user = getattr(new_tweets[0], "user", None)
+                        latest_av = (
+                            (getattr(latest_user, "profile_image_url", "") or "")
+                            if latest_user
+                            else ""
+                        )
+                        if latest_av:
+                            latest_av = latest_av.replace("_normal.", "_400x400.")
+                        latest_name = (
+                            (getattr(latest_user, "name", "") or "")
+                            if latest_user
+                            else ""
+                        )
                         for sess_umo in user_sessions.get(username, []):
                             sess_users = self.subscriptions.get(sess_umo)
                             if sess_users and username in sess_users:
@@ -988,6 +1028,10 @@ class DenpaPushPlugin(Star):
                                 sess_users[username]["last_checked_at"] = datetime.now(
                                     timezone.utc
                                 ).isoformat()
+                                if latest_av:
+                                    sess_users[username]["avatar_url"] = latest_av
+                                if latest_name:
+                                    sess_users[username]["name"] = latest_name
                         self._save_data()
                         logger.info(
                             f"[Monitor] {username}: last_id updated to {max_id[:15]}.."
