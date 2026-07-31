@@ -165,8 +165,13 @@ function applyUiConfig() {
   if (ui.color_mode === "static" && ui.brand_color) {
     applyPalette(ui.brand_color, isDark);
   } else if (ui.color_mode === "dynamic") {
-    if (ui.background_accent) {
-      applyPalette(ui.background_accent, isDark);
+    if (ui.background_mode === "image" && ui.background_image) {
+      // 已有提取结果 → 同步套用；否则异步取色
+      if (ui.background_accent) {
+        applyPalette(ui.background_accent, isDark);
+      } else {
+        applyDynamicAccent(ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`);
+      }
     } else {
       applyPalette(DEFAULT_SOURCE, isDark);
     }
@@ -186,10 +191,6 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
-    // Material 动态取色：从背景图提取主色
-    if (!ui.background_accent) {
-      applyDynamicAccent(bgSrc);
-    }
   }
 
   // Radius
@@ -810,20 +811,38 @@ function bindSettingsEvents() {
   document.getElementById("btn-bg-upload")?.addEventListener("click", async () => {
     const file = bgFile?.files[0];
     if (!file) { toast("请先选择图片", "error"); return; }
+    const btn = document.getElementById("btn-bg-upload");
+    btn.disabled = true;
+    btn.textContent = "上传中...";
     try {
       const resp = await bridge.upload("bg/upload", file);
-      const dataUri = resp?.data || resp?.url || "";
-      if (dataUri) {
-        state.uiConfig.background_image = dataUri;
-        state.uiConfig.background_mode = "image";
+      // bridge.upload 返回格式不固定，兼容多种结构
+      const dataUri = resp.data || (resp.body && resp.body.data) || (typeof resp === "string" && resp.startsWith("data:") ? resp : "");
+      if (!dataUri) throw new Error("上传响应中未找到背景图数据");
+      state.uiConfig.background_image = dataUri;
+      state.uiConfig.background_accent = "";
+      state.uiConfig.background_mode = "image";
+      document.getElementById("bg-file-name").textContent = (resp && resp.filename) || file.name;
+      document.getElementById("ui-bg-mode").value = "image";
+      updateBgPreview();
+      // 直接应用背景
+      const body = document.body;
+      body.classList.remove("bg-mode-brand-gradient", "bg-mode-custom");
+      const bgLayer = document.getElementById("bg-layer");
+      if (bgLayer) bgLayer.style.backgroundImage = `url('${dataUri}')`;
+      // 立即触发动态取色
+      if (state.uiConfig.color_mode === "dynamic") {
         await applyDynamicAccent(dataUri);
-        applyUiConfig();
-        toast("背景图已上传", "success");
-      } else {
-        toast("上传响应异常", "error");
       }
+      applyUiConfig();
+      // 持久化
+      bridge.apiPost("dashboard/ui_config", state.uiConfig).catch(() => {});
+      toast("背景图上传成功", "success");
     } catch (e) {
-      toast("上传失败: " + (e?.message || ""), "error");
+      toast(`上传失败: ${e.message}`, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "上传";
     }
   });
   document.getElementById("btn-bg-remove")?.addEventListener("click", async () => {

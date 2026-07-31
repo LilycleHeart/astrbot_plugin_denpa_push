@@ -343,36 +343,35 @@ class DenpaPushPlugin(Star):
         return json_response({"history": list(self._push_history)})
 
     async def _api_bg_upload(self):
-        """上传背景图，base64 data URI 内联存储到 ui_config。"""
+        """上传 UI 背景图，以 base64 data URI 内联存储。"""
         import base64
-        from astrbot.api.web import request, json_response, error_response
-
-        try:
-            from astrbot.api.web import PluginUploadFile
-        except ImportError:
-            PluginUploadFile = None
+        import time as _time
+        from astrbot.api.web import request, json_response, error_response, PluginUploadFile
 
         files = await request.files()
         upload = files.get("file")
-        if PluginUploadFile and not isinstance(upload, PluginUploadFile):
+        if not isinstance(upload, PluginUploadFile):
             return error_response("缺少上传文件（字段名应为 file）", status_code=400)
-        if not upload:
-            return error_response("缺少上传文件", status_code=400)
 
-        ext = os.path.splitext(getattr(upload, "filename", "img.png"))[1].lower()
+        ext = os.path.splitext(upload.filename)[1].lower()
         if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
             return error_response("仅支持 jpg/png/webp/gif 图片", status_code=400)
 
+        # 取文件字节：优先用 body 属性，否则临时落盘读取后删除
         body = getattr(upload, "body", None)
         if body is None:
-            import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
-            await upload.save(tmp.name)
+            bg_dir = os.path.join(os.path.dirname(self._data_path), "backgrounds")
+            os.makedirs(bg_dir, exist_ok=True)
+            tmp_path = os.path.join(bg_dir, f"tmp_{int(_time.time())}{ext}")
+            await upload.save(tmp_path)
             try:
-                with open(tmp.name, "rb") as f:
+                with open(tmp_path, "rb") as f:
                     body = f.read()
             finally:
-                os.unlink(tmp.name)
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
         if len(body) > 20 * 1024 * 1024:
             return error_response("图片不能超过 20MB", status_code=400)
@@ -381,7 +380,7 @@ class DenpaPushPlugin(Star):
             ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             ".png": "image/png", ".webp": "image/webp",
             ".gif": "image/gif",
-        }.get(ext, "image/png")
+        }.get(ext, "application/octet-stream")
         data_uri = f"data:{mime};base64," + base64.b64encode(body).decode("ascii")
 
         # 持久化到 ui_config JSON
@@ -399,9 +398,14 @@ class DenpaPushPlugin(Star):
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(ui, f, ensure_ascii=False)
         except Exception as e:
-            logger.warning(f"[DenpaPush] 保存背景图失败: {e}")
+            logger.warning(f"[DenpaPush] 保存背景图配置失败: {e}")
 
-        return json_response({"saved": True, "data": data_uri})
+        logger.info(f"[DenpaPush] 背景图已上传（base64 内联，{len(body)} 字节）")
+        return json_response({
+            "saved": True,
+            "data": data_uri,
+            "filename": upload.filename,
+        })
 
     async def _api_bg_remove(self):
         """移除背景图。"""
