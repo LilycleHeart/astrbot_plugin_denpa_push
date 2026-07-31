@@ -234,7 +234,7 @@ class DenpaPushPlugin(Star):
         return json_response(self.subscriptions)
 
     async def _api_dashboard_subscribe(self):
-        """Dashboard 添加订阅（需要指定 session 或使用第一个 monitored session）。"""
+        """Dashboard 添加订阅（可指定 session，否则自动选择）。"""
         from astrbot.api.web import request, json_response, error_response
 
         payload = await request.json()
@@ -242,12 +242,13 @@ class DenpaPushPlugin(Star):
         if not username:
             return error_response("缺少 username", status_code=400)
 
-        # 选择目标 session: 优先用已有 monitored session，否则用第一个 subscription key
-        target_session = None
-        if self.monitored_sessions:
-            target_session = next(iter(self.monitored_sessions))
-        elif self.subscriptions:
-            target_session = next(iter(self.subscriptions))
+        # 选择目标 session: 优先用前端指定的，否则自动选
+        target_session = payload.get("session", "")
+        if not target_session:
+            if self.monitored_sessions:
+                target_session = next(iter(self.monitored_sessions))
+            elif self.subscriptions:
+                target_session = next(iter(self.subscriptions))
         if not target_session:
             return error_response("无可用会话，请先在群聊中使用 /twitter add 初始化", status_code=400)
 
@@ -275,7 +276,7 @@ class DenpaPushPlugin(Star):
             return error_response(f"添加失败: {str(e)[:120]}", status_code=500)
 
     async def _api_dashboard_unsubscribe(self):
-        """Dashboard 移除订阅（从所有 session 中移除该用户）。"""
+        """Dashboard 移除订阅（可指定 session，否则从所有 session 移除）。"""
         from astrbot.api.web import request, json_response, error_response
 
         payload = await request.json()
@@ -283,14 +284,26 @@ class DenpaPushPlugin(Star):
         if not username:
             return error_response("缺少 username", status_code=400)
 
+        target_session = payload.get("session", "")
         removed = False
-        for sess_umo in list(self.subscriptions.keys()):
-            session_users = self.subscriptions.get(sess_umo, {})
+
+        if target_session:
+            # 按会话级别移除
+            session_users = self.subscriptions.get(target_session, {})
             if username in session_users:
                 del session_users[username]
                 removed = True
                 if not session_users:
-                    del self.subscriptions[sess_umo]
+                    del self.subscriptions[target_session]
+        else:
+            # 从所有 session 移除
+            for sess_umo in list(self.subscriptions.keys()):
+                session_users = self.subscriptions.get(sess_umo, {})
+                if username in session_users:
+                    del session_users[username]
+                    removed = True
+                    if not session_users:
+                        del self.subscriptions[sess_umo]
 
         if not removed:
             return error_response(f"未找到 @{username}", status_code=404)

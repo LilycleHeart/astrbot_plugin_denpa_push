@@ -628,7 +628,7 @@ function renderSubs(data) {
             <div class="t-name">@${escapeHtml(name)}</div>
             <div class="t-handle">最后检查 ${lastCheck}</div>
           </div>
-          <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}">
+          <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}" data-session="${escapeHtml(session)}">
             <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
           </button>
         </div>
@@ -643,8 +643,9 @@ function renderSubs(data) {
   container.querySelectorAll(".btn-remove").forEach(btn => {
     btn.addEventListener("click", async () => {
       const name = btn.dataset.name;
+      const session = btn.dataset.session || "";
       try {
-        await bridge.apiPost("dashboard/unsubscribe", { username: name });
+        await bridge.apiPost("dashboard/unsubscribe", { username: name, session });
         toast(`已取消追踪 @${name}`, "success");
         refresh();
       } catch (e) {
@@ -852,8 +853,10 @@ async function init() {
     const input = document.getElementById("add-username");
     const name = input.value.trim().replace(/^@/, "");
     if (!name) return;
+    const sessionSelect = document.getElementById("session-select");
+    const session = sessionSelect && sessionSelect.value !== "__all__" ? sessionSelect.value : "";
     try {
-      await bridge.apiPost("dashboard/subscribe", { username: name });
+      await bridge.apiPost("dashboard/subscribe", { username: name, session });
       toast(`已开始追踪 @${name}`, "success");
       input.value = "";
       refresh();
