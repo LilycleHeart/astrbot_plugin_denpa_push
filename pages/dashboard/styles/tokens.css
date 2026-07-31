@@ -1,0 +1,71 @@
+/* ============================================================
+ * Signal Observatory — Design Tokens
+ * 电波推送 Dashboard 设计语言
+ * 主题世界 = 射电天文观测站; 唯一强调色 = 电波青(#00e5c8)
+ * 签名 = 全宽实时波形 Canvas
+ * ============================================================ */
+
+:root {
+  /* —— 信号色 (唯一强调) —— */
+  --signal: #00e5c8;
+  --signal-dim: #00b89e;
+  --signal-glow: rgba(0, 229, 200, 0.15);
+  --signal-ghost: rgba(0, 229, 200, 0.06);
+
+  /* —— 深空色阶 (画布→舱体逐级抬升) —— */
+  --space-0: #0a0e1a;
+  --space-1: #111827;
+  --space-2: #1a2236;
+  --space-3: #243044;
+  --space-4: #2e3d54;
+
+  /* —— 文字 —— */
+  --ink-1: #e8edf5;
+  --ink-2: #8b9ab5;
+  --ink-3: #5a6a85;
+  --ink-disabled: #3a4a62;
+
+  /* —— 描边 —— */
+  --stroke-1: rgba(139, 154, 181, 0.25);
+  --stroke-2: rgba(139, 154, 181, 0.12);
+  --stroke-signal: rgba(0, 229, 200, 0.4);
+
+  /* —— 状态色 —— */
+  --status-active: #00e5c8;
+  --status-idle: #f5a623;
+  --status-error: #ff4d6a;
+  --status-info: #5b9cf6;
+
+  /* —— 圆角 —— */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* —— 间距 —— */
+  --gap-xs: 4px;
+  --gap-sm: 8px;
+  --gap-md: 16px;
+  --gap-lg: 24px;
+  --gap-xl: 32px;
+  --gap-2xl: 48px;
+
+  /* —— 字体 —— */
+  --font-display: 'Space Grotesk', 'MiSans', system-ui, sans-serif;
+  --font-body: 'Inter', 'MiSans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+
+  /* —— 字号 —— */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+
+  /* —— 动画 (匀速, 无缓动) —— */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --ease: linear;
+}

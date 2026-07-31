@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+from collections import deque
 from datetime import datetime, timezone
 
 from astrbot.api import AstrBotConfig, logger
@@ -116,6 +117,9 @@ class DenpaPushPlugin(Star):
         self._running = False
         self._data_path = self._get_data_path()
         self._seed_cache = {}  # {image_url: rgb_tuple}
+        self._push_logs = deque(maxlen=100)  # dashboard 信号日志
+        self._total_pushes = 0
+        self._register_dashboard_apis(context)
 
     def _get_data_path(self):
         root = getattr(self.context, "astrbot_root", os.getcwd())
@@ -145,6 +149,131 @@ class DenpaPushPlugin(Star):
         if self.monitor_task:
             self.monitor_task.cancel()
             self.monitor_task = None
+
+    # ═══════════════════════════════════════════════════════════
+    # Dashboard API (Signal Observatory)
+    # ═══════════════════════════════════════════════════════════
+
+    def _register_dashboard_apis(self, context: Context) -> None:
+        """注册 Dashboard 后端 API。"""
+        apis = [
+            ("dashboard/status", self._api_dashboard_status, ["GET"], "面板状态"),
+            ("dashboard/subscriptions", self._api_dashboard_subscriptions, ["GET"], "订阅列表"),
+            ("dashboard/subscribe", self._api_dashboard_subscribe, ["POST"], "添加订阅"),
+            ("dashboard/unsubscribe", self._api_dashboard_unsubscribe, ["POST"], "移除订阅"),
+            ("dashboard/logs", self._api_dashboard_logs, ["GET"], "推送日志"),
+        ]
+        for route, handler, methods, desc in apis:
+            context.register_web_api(
+                f"/astrbot_plugin_denpa_push/{route}", handler, methods, desc
+            )
+
+    def _log_push(self, msg: str, log_type: str = "push"):
+        """记录一条 dashboard 信号日志。"""
+        self._push_logs.appendleft({
+            "time": datetime.now(timezone.utc).isoformat(),
+            "type": log_type,
+            "message": msg,
+        })
+
+    async def _api_dashboard_status(self):
+        """Dashboard 总览状态。"""
+        from astrbot.api.web import request, json_response
+
+        total_tracked = sum(len(users) for users in self.subscriptions.values())
+        return json_response({
+            "monitor_running": self._running,
+            "total_tracked": total_tracked,
+            "total_pushes": self._total_pushes,
+            "poll_interval": int(self.config.get("poll_interval", 5)),
+            "session_count": len(self.monitored_sessions),
+            "auth_configured": bool(self.config.get("twitter_auth_token", "")),
+            "playwright_ready": _pw_browser is not None and _pw_browser.is_connected(),
+            "translation_language": self.config.get("translation_language", "中文"),
+            "color_source": self.config.get("color_source", "avatar"),
+            "gif_encoder": self.config.get("gif_encoder", "auto"),
+            "proxy": self.config.get("proxy", ""),
+        })
+
+    async def _api_dashboard_subscriptions(self):
+        """返回全部订阅 {session: {username: info}}。"""
+        from astrbot.api.web import json_response
+
+        return json_response(self.subscriptions)
+
+    async def _api_dashboard_subscribe(self):
+        """Dashboard 添加订阅（需要指定 session 或使用第一个 monitored session）。"""
+        from astrbot.api.web import request, json_response, error_response
+
+        payload = await request.json()
+        username = (payload.get("username") or "").strip().lstrip("@")
+        if not username:
+            return error_response("缺少 username", status_code=400)
+
+        # 选择目标 session: 优先用已有 monitored session，否则用第一个 subscription key
+        target_session = None
+        if self.monitored_sessions:
+            target_session = next(iter(self.monitored_sessions))
+        elif self.subscriptions:
+            target_session = next(iter(self.subscriptions))
+        if not target_session:
+            return error_response("无可用会话，请先在群聊中使用 /twitter add 初始化", status_code=400)
+
+        session_users = self.subscriptions.setdefault(target_session, {})
+        if username in session_users:
+            return json_response({"ok": True, "message": f"@{username} 已在追踪中"})
+
+        try:
+            await self.twitter.ensure_ready()
+            user = await self.twitter.get_user_by_screen_name(username)
+            tweets = await self.twitter.get_user_tweets(user.id, count=1)
+            last_id = tweets[0].id if tweets else "0"
+            session_users[username] = {
+                "user_id": user.id,
+                "last_tweet_id": last_id,
+                "last_checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self.monitored_sessions.add(target_session)
+            self._save_data()
+            self._start_monitor()
+            self._log_push(f"开始追踪 @{username} ({user.name})", "info")
+            return json_response({"ok": True, "message": f"已追踪 @{username}"})
+        except Exception as e:
+            logger.error(f"[Dashboard] subscribe failed: {e}")
+            return error_response(f"添加失败: {str(e)[:120]}", status_code=500)
+
+    async def _api_dashboard_unsubscribe(self):
+        """Dashboard 移除订阅（从所有 session 中移除该用户）。"""
+        from astrbot.api.web import request, json_response, error_response
+
+        payload = await request.json()
+        username = (payload.get("username") or "").strip().lstrip("@")
+        if not username:
+            return error_response("缺少 username", status_code=400)
+
+        removed = False
+        for sess_umo in list(self.subscriptions.keys()):
+            session_users = self.subscriptions.get(sess_umo, {})
+            if username in session_users:
+                del session_users[username]
+                removed = True
+                if not session_users:
+                    del self.subscriptions[sess_umo]
+
+        if not removed:
+            return error_response(f"未找到 @{username}", status_code=404)
+
+        self._save_data()
+        if not self.subscriptions:
+            self._stop_monitor()
+        self._log_push(f"取消追踪 @{username}", "info")
+        return json_response({"ok": True, "message": f"已取消追踪 @{username}"})
+
+    async def _api_dashboard_logs(self):
+        """返回推送日志。"""
+        from astrbot.api.web import json_response
+
+        return json_response({"logs": list(self._push_logs)})
 
     def _load_data(self):
         try:
@@ -655,8 +784,10 @@ class DenpaPushPlugin(Star):
                         logger.warning(
                             f"[Monitor] Rate limited for {username}, aborting this round"
                         )
+                        self._log_push(f"@{username} 触发速率限制，本轮中止", "error")
                         break
                     logger.error(f"[Monitor] Error for {username}: {e}")
+                    self._log_push(f"@{username} 检查异常: {estr[:60]}", "error")
 
             await asyncio.sleep(interval)
 
@@ -1291,8 +1422,15 @@ class DenpaPushPlugin(Star):
                         logger.info(f"[Push] Video to {session_umo}")
                         await self.context.send_message(session_umo, vid_chain)
                         await asyncio.sleep(0.5)
+
+                self._total_pushes += 1
+                self._log_push(
+                    f"@{info['screen_name']} → {session_umo[:20]}…",
+                    "push",
+                )
             except Exception as e:
                 logger.error(f"[Push] Failed to push to {session_umo}: {e}")
+                self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")
 
     async def _get_provider_id(self) -> str:
         pid = self.config.get("text_translate_provider", "")
