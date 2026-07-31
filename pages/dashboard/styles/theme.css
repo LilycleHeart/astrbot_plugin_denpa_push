@@ -450,6 +450,20 @@ body {
   box-shadow: var(--glow-brand) !important;
 }
 
+/* 背景图模式（暗色）：可调暗色遮罩，压住高频花纹保证文字对比度 */
+[data-theme="dark"] .bg-image-active::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, var(--bg-scrim, 0.4));
+}
+.bg-image-active > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* 字体切换 */
 .font-builtin { --font-family: var(--font-stack-builtin); }
 .font-misans { --font-family: var(--font-stack-misans); }

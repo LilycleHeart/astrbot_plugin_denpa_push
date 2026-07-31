@@ -328,6 +328,7 @@ function applyUiConfig() {
     appEl.classList.toggle("shadow-off", ui.shadow_enabled === false);
     appEl.classList.toggle("font-builtin", ui.font_mode === "builtin");
     appEl.classList.toggle("font-misans", ui.font_mode !== "builtin");
+    appEl.classList.toggle("bg-image-active", !!(ui.background_mode === "image" && ui.background_image));
     root.style.setProperty("--glow-strength", ((ui.glow_intensity ?? 15) / 100).toString());
     root.style.setProperty("--shadow-strength", ((ui.shadow_intensity ?? 60) / 100).toString());
   }
