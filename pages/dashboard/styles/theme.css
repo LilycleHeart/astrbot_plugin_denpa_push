@@ -404,6 +404,14 @@ body {
 .tab-content.active {
   display: block;
   animation: signal-fade-in var(--motion-base) var(--motion-ease) both;
+  /* 与侧边栏完全同配方(统一表面令牌): 内容面板即一块大玻璃, 与侧栏/hero 视觉统一 */
+  background: var(--surface-bg);
+  -webkit-backdrop-filter: var(--surface-blur);
+          backdrop-filter: var(--surface-blur);
+  border: none;
+  border-radius: var(--radius-large);
+  padding: var(--space-l);
+  box-shadow: var(--shadow-4), var(--glow-brand);
 }
 
 /* ============================================================
@@ -413,12 +421,14 @@ body {
 .acrylic-off .card,
 .acrylic-off .sidebar,
 .acrylic-off .hero,
-.acrylic-off .stat-card {
+.acrylic-off .stat-card,
+.acrylic-off .tab-content.active {
   -webkit-backdrop-filter: none !important;
           backdrop-filter: none !important;
 }
 .acrylic-off .sidebar { background: var(--color-bg-1); }
 .acrylic-off .hero { background: var(--color-bg-1); }
+.acrylic-off .tab-content.active { background: var(--color-bg-1); }
 .acrylic-off .card { background: var(--color-bg-2); }
 .acrylic-off .stat-card { background: var(--color-bg-2); }
 
@@ -426,6 +436,7 @@ body {
 .glow-off .sidebar,
 .glow-off .hero,
 .glow-off .stat-card,
+.glow-off .tab-content.active,
 .glow-off .tab.active {
   box-shadow: var(--shadow-4) !important;
 }
@@ -434,6 +445,7 @@ body {
 .shadow-off .sidebar,
 .shadow-off .hero,
 .shadow-off .stat-card,
+.shadow-off .tab-content.active,
 .shadow-off .tab.active {
   box-shadow: var(--glow-brand) !important;
 }

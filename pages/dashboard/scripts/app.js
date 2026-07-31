@@ -62,63 +62,162 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
-// ─── M3 Palette Application ───
+// ─── M3 Palette Application (照搬 denpa_echo 完整实现) ───
+const paletteCache = {};
+const STATUS_SOURCES = { success: "#1B9C5D", warning: "#C98A1B" };
+const statusCache = {};
+function statusColors(isDark) {
+  const key = isDark ? "d" : "l";
+  if (statusCache[key]) return statusCache[key];
+  const mk = (src) => {
+    const s = isDark
+      ? themeFromSourceColor(argbFromHex(src)).schemes.dark
+      : themeFromSourceColor(argbFromHex(src)).schemes.light;
+    return { fg: hexFromArgb(s.primary), bg: hexFromArgb(s.primaryContainer) };
+  };
+  const v = { success: mk(STATUS_SOURCES.success), warning: mk(STATUS_SOURCES.warning) };
+  statusCache[key] = v;
+  return v;
+}
+
+function rgbStr(hex) {
+  const h = hex.replace("#", "");
+  return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`;
+}
+
+function alphaComposite(fg, bg, a) {
+  const ph = fg.replace("#", ""), bh = bg.replace("#", "");
+  const pr = parseInt(ph.slice(0, 2), 16), pg = parseInt(ph.slice(2, 4), 16), pb = parseInt(ph.slice(4, 6), 16);
+  const br = parseInt(bh.slice(0, 2), 16), bg2 = parseInt(bh.slice(2, 4), 16), bb = parseInt(bh.slice(4, 6), 16);
+  const r = Math.round(a * pr + (1 - a) * br);
+  const g = Math.round(a * pg + (1 - a) * bg2);
+  const b = Math.round(a * pb + (1 - a) * bb);
+  const to = (x) => x.toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+const SURFACE_TONES = {
+  light: { appBg: 98, low: 96, mid: 94, high: 92, highest: 90 },
+  dark: { appBg: 6, low: 10, mid: 12, high: 17, highest: 22 },
+};
+const SCRIM = { low: 0.05, mid: 0.08, high: 0.11, highest: 0.14 };
+
+function derivePalette(sourceHex, isDark) {
+  sourceHex = sourceHex || DEFAULT_SOURCE;
+  const key = sourceHex.toLowerCase() + (isDark ? ":d" : ":l");
+  if (paletteCache[key]) return paletteCache[key];
+  const argb = argbFromHex(sourceHex);
+  const theme = themeFromSourceColor(argb);
+  const s = isDark ? theme.schemes.dark : theme.schemes.light;
+  const tp = theme.palettes.primary;
+  const neutral = theme.palettes.neutral;
+  const nv = theme.palettes.neutralVariant;
+  const st = SURFACE_TONES[isDark ? "dark" : "light"];
+  const sc = (t) => hexFromArgb(neutral.tone(t));
+  const primaryHex = hexFromArgb(s.primary);
+  const cLow = sc(st.low), cMid = sc(st.mid), cHigh = sc(st.high), cHighest = sc(st.highest);
+  const appBg = sc(st.appBg);
+  const bg1 = alphaComposite(primaryHex, cLow, SCRIM.low);
+  const bg2 = alphaComposite(primaryHex, cMid, SCRIM.mid);
+  const bg3 = alphaComposite(primaryHex, cHigh, SCRIM.high);
+  const bg4 = alphaComposite(primaryHex, cHighest, SCRIM.highest);
+  const pal = {
+    brand: hexFromArgb(s.primary),
+    onBrand: hexFromArgb(s.onPrimary),
+    surface: hexFromArgb(s.primaryContainer),
+    onSurface: hexFromArgb(s.onPrimaryContainer),
+    hover: hexFromArgb(tp.tone(isDark ? 76 : 44)),
+    pressed: hexFromArgb(tp.tone(isDark ? 84 : 36)),
+    tint: hexFromArgb(tp.tone(isDark ? 24 : 90)),
+    weak: hexFromArgb(tp.tone(isDark ? 32 : 88)),
+    line: hexFromArgb(tp.tone(isDark ? 48 : 60)),
+    secondary: hexFromArgb(s.secondary),
+    onSecondary: hexFromArgb(s.onSecondary),
+    secondaryContainer: hexFromArgb(s.secondaryContainer),
+    onSecondaryContainer: hexFromArgb(s.onSecondaryContainer),
+    tertiary: hexFromArgb(s.tertiary),
+    onTertiary: hexFromArgb(s.onTertiary),
+    tertiaryContainer: hexFromArgb(s.tertiaryContainer),
+    onTertiaryContainer: hexFromArgb(s.onTertiaryContainer),
+    fg1: hexFromArgb(s.onSurface),
+    fg2: hexFromArgb(s.onSurfaceVariant),
+    fg3: hexFromArgb(nv.tone(isDark ? 66 : 40)),
+    fg4: hexFromArgb(s.outlineVariant),
+    fgInverted: hexFromArgb(s.inverseOnSurface),
+    appBg, bg1, bg2, bg3, bg4,
+    bgInv: hexFromArgb(s.inverseSurface),
+    stroke1: hexFromArgb(s.outline),
+    stroke2: hexFromArgb(s.outlineVariant),
+    stroke3: isDark ? hexFromArgb(nv.tone(40)) : hexFromArgb(nv.tone(90)),
+    fgTinted: hexFromArgb(tp.tone(isDark ? 80 : 36)),
+    fgTinted2: hexFromArgb(tp.tone(isDark ? 70 : 44)),
+    popupBg: isDark ? sc(st.high) : sc(st.highest),
+    popupFg: hexFromArgb(s.onSurface),
+    mica1: sc(isDark ? st.low : st.appBg),
+    mica2: sc(isDark ? st.appBg : st.low),
+    errorFg: hexFromArgb(s.error),
+    errorBg: hexFromArgb(s.errorContainer),
+  };
+  paletteCache[key] = pal;
+  return pal;
+}
+
+let _paletteCache = "";
 function applyPalette(sourceHex, isDark) {
+  const key = `${sourceHex}|${isDark}`;
+  if (key === _paletteCache) return;
+  _paletteCache = key;
+  const p = derivePalette(sourceHex, isDark);
+  const st = statusColors(isDark);
   const root = document.documentElement;
-  try {
-    const source = argbFromHex(sourceHex);
-    const theme = themeFromSourceColor(source);
-    const scheme = isDark ? theme.schemes.dark : theme.schemes.light;
-
-    const set = (prop, argb) => root.style.setProperty(prop, hexFromArgb(argb));
-
-    // Brand
-    set("--color-brand", scheme.primary);
-    set("--color-brand-on", scheme.onPrimary);
-    set("--color-brand-surface", scheme.primaryContainer);
-    set("--color-on-brand-surface", scheme.onPrimaryContainer);
-    set("--color-brand-tint", scheme.primaryContainer);
-    set("--color-brand-weak", scheme.primaryContainer);
-    set("--color-brand-line", scheme.outline);
-    set("--color-fg-tinted", scheme.primary);
-    set("--color-fg-tinted-2", scheme.primary);
-
-    // Secondary / Tertiary
-    set("--color-secondary", scheme.secondary);
-    set("--color-on-secondary", scheme.onSecondary);
-    set("--color-secondary-container", scheme.secondaryContainer);
-    set("--color-on-secondary-container", scheme.onSecondaryContainer);
-    set("--color-tertiary", scheme.tertiary);
-    set("--color-on-tertiary", scheme.onTertiary);
-    set("--color-tertiary-container", scheme.tertiaryContainer);
-    set("--color-on-tertiary-container", scheme.onTertiaryContainer);
-
-    // Neutrals
-    set("--color-fg-1", scheme.onSurface);
-    set("--color-fg-2", scheme.onSurfaceVariant);
-    set("--color-fg-3", scheme.outline);
-    set("--color-fg-4", scheme.surfaceVariant);
-    set("--color-app-bg", scheme.surface);
-    set("--color-bg-1", scheme.surfaceVariant);
-    set("--color-bg-2", scheme.secondaryContainer);
-    set("--color-stroke-1", scheme.outline);
-    set("--color-stroke-2", scheme.outlineVariant);
-
-    // Error
-    set("--color-error-fg", scheme.error);
-    set("--color-error-bg", scheme.errorContainer);
-
-    // Acrylic RGB from surfaceVariant
-    const svHex = hexFromArgb(scheme.surfaceVariant);
-    const r = parseInt(svHex.slice(1, 3), 16);
-    const g = parseInt(svHex.slice(3, 5), 16);
-    const b = parseInt(svHex.slice(5, 7), 16);
-    root.style.setProperty("--acrylic-rgb", `${r}, ${g}, ${b}`);
-    root.style.setProperty("--acrylic-rgb-low", `${r}, ${g}, ${b}`);
-    root.style.setProperty("--control-rgb", `${r}, ${g}, ${b}`);
-  } catch (e) {
-    console.warn("[DenpaPush] MCU palette error:", e);
-  }
+  const set = (k, v) => root.style.setProperty(k, v);
+  set("--color-brand", p.brand);
+  set("--color-brand-on", p.onBrand);
+  set("--color-brand-surface", p.surface);
+  set("--color-on-brand-surface", p.onSurface);
+  set("--color-brand-hover", p.hover);
+  set("--color-brand-pressed", p.pressed);
+  set("--color-brand-tint", p.tint);
+  set("--color-brand-weak", p.weak);
+  set("--color-brand-line", p.line);
+  set("--color-secondary", p.secondary);
+  set("--color-on-secondary", p.onSecondary);
+  set("--color-secondary-container", p.secondaryContainer);
+  set("--color-on-secondary-container", p.onSecondaryContainer);
+  set("--color-tertiary", p.tertiary);
+  set("--color-on-tertiary", p.onTertiary);
+  set("--color-tertiary-container", p.tertiaryContainer);
+  set("--color-on-tertiary-container", p.onTertiaryContainer);
+  set("--color-fg-1", p.fg1);
+  set("--color-fg-2", p.fg2);
+  set("--color-fg-3", p.fg3);
+  set("--color-fg-4", p.fg4);
+  set("--color-fg-inverted", p.fgInverted);
+  set("--color-app-bg", p.appBg);
+  set("--color-bg-1", p.bg1);
+  set("--color-bg-2", p.bg2);
+  set("--color-bg-3", p.bg3);
+  set("--color-bg-4", p.bg4);
+  set("--color-bg-inverted", p.bgInv);
+  set("--color-stroke-1", p.stroke1);
+  set("--color-stroke-2", p.stroke2);
+  set("--color-stroke-3", p.stroke3);
+  set("--color-fg-tinted", p.fgTinted);
+  set("--color-fg-tinted-2", p.fgTinted2);
+  set("--popup-bg", p.popupBg);
+  set("--popup-fg", p.popupFg);
+  set("--mica-tint-1", p.mica1);
+  set("--mica-tint-2", p.mica2);
+  set("--acrylic-rgb", rgbStr(p.bg2));
+  set("--acrylic-rgb-low", rgbStr(p.bg1));
+  set("--acrylic-rgb-high", rgbStr(p.bg4));
+  set("--control-rgb", rgbStr(p.bg3));
+  set("--color-success-fg", st.success.fg);
+  set("--color-success-bg", st.success.bg);
+  set("--color-warning-fg", st.warning.fg);
+  set("--color-warning-bg", st.warning.bg);
+  set("--color-error-fg", p.errorFg);
+  set("--color-error-bg", p.errorBg);
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -520,21 +619,23 @@ function renderSubs(data) {
 // ─── Render: Push History ───
 function renderHistory(data) {
   const items = data?.history || [];
-  const container = document.getElementById("recent-pushes");
-  if (!container) return;
+  const containers = [
+    document.getElementById("recent-pushes"),
+    document.getElementById("tracking-history"),
+  ].filter(Boolean);
+  if (!containers.length) return;
 
+  const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
   if (items.length === 0) {
-    container.innerHTML = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
+    containers.forEach(c => { c.innerHTML = emptyHtml; });
     return;
   }
 
-  container.innerHTML = "";
+  const fragment = document.createDocumentFragment();
   items.slice(0, 10).forEach(item => {
     const seed = item.seed_color || "var(--color-brand)";
     const pal = item.palette || {};
     const primary = pal.primary || seed;
-    const surface = pal.surface || "transparent";
-    const onSurface = pal.on_surface || "var(--color-fg-1)";
     const time = item.time ? new Date(item.time).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "";
 
     const el = document.createElement("div");
@@ -558,7 +659,12 @@ function renderHistory(data) {
         <span class="pal-label">seed: ${seed}</span>
       </div>
     `;
-    container.appendChild(el);
+    fragment.appendChild(el);
+  });
+
+  containers.forEach(c => {
+    c.innerHTML = "";
+    c.appendChild(fragment.cloneNode(true));
   });
 }
 
