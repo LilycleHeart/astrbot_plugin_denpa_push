@@ -1,136 +1,367 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>电波推送 · Signal Observatory</title>
+    <title>电波推送 控制台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
+    <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles/tokens.css" />
-    <link rel="stylesheet" href="./styles/main.css" />
+    <link rel="stylesheet" href="./styles/theme.css" />
+    <link rel="stylesheet" href="./styles/components.css" />
   </head>
   <body>
-    <div class="observatory" id="app">
+    <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
+    <div class="app-shell" id="app">
 
-      <!-- ═══ Header ═══ -->
-      <header class="header">
-        <div class="header-logo">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      <!-- ═══ Sidebar ═══ -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><polyline class="ecg-logo" points="1,12 5,12 7,12 9,5 11,19 13,8 15,14 17,12 19,12 23,12"/></svg>
+          </span>
+          <span class="sidebar-title">DenpaPush</span>
         </div>
-        <div class="header-info">
-          <h1 class="header-title">电波推送</h1>
-          <span class="header-sub">DenpaPush · Signal Observatory</span>
-        </div>
-        <div class="header-status inactive" id="monitor-status">
-          <span class="status-dot"></span>
-          <span id="status-text">离线</span>
-        </div>
-      </header>
 
-      <!-- ═══ 波形签名区 ═══ -->
-      <section class="waveform-section">
-        <canvas class="waveform-canvas" id="waveform"></canvas>
-        <div class="waveform-overlay">
-          <div class="wave-stat">
-            <span class="wave-stat-value" id="stat-subs">0</span>
-            <span class="wave-stat-label">追踪中</span>
-          </div>
-          <div class="wave-stat">
-            <span class="wave-stat-value" id="stat-pushes">0</span>
-            <span class="wave-stat-label">已推送</span>
-          </div>
-          <div class="wave-stat">
-            <span class="wave-stat-value" id="stat-interval">5m</span>
-            <span class="wave-stat-label">轮询间隔</span>
-          </div>
-        </div>
-      </section>
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="overview" title="状态总览">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+            <span class="tab-label">状态总览</span>
+          </button>
+          <button class="tab" data-tab="tracking" title="目前追踪">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <span class="tab-label">目前追踪</span>
+          </button>
+          <div class="sub-tabs" id="sub-tabs-tracking"></div>
+          <button class="tab" data-tab="logs" title="推送日志">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+            <span class="tab-label">推送日志</span>
+          </button>
+          <button class="tab" data-tab="config" title="配置">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span class="tab-label">配置</span>
+          </button>
+          <button class="tab" data-tab="settings" title="界面设置">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+            <span class="tab-label">界面设置</span>
+          </button>
+        </nav>
 
-      <!-- ═══ 舱体网格 ═══ -->
-      <div class="pod-grid">
+        <button class="sidebar-toggle" id="sidebar-toggle" title="收起 / 展开侧边栏">
+          <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.41 16.59L13.82 12l4.59-4.59L17 6l-6 6 6 6zM6 6h2v12H6z"/></svg>
+          <span class="tab-label">收起侧栏</span>
+        </button>
+      </aside>
 
-        <!-- 订阅管理 -->
-        <div class="pod pod-full">
-          <div class="pod-header">
-            <div class="pod-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            </div>
-            <span class="pod-title">信号源 · 订阅管理</span>
-            <div style="flex:1"></div>
-            <select class="session-select" id="session-select">
-              <option value="__all__">全部会话</option>
-            </select>
+      <!-- ═══ 主内容列 ═══ -->
+      <div class="main-area">
+
+        <!-- Hero: ECG 心电图 -->
+        <header class="hero">
+          <div class="hero-content">
+            <h1>电波推送 <span class="hero-en">DenpaPush</span></h1>
+            <p class="subtitle">Twitter/X 监控 · AI 翻译 · MD3 动态卡片 · 群聊推送</p>
           </div>
-          <ul class="sub-list" id="sub-list">
-            <li class="empty-state" id="sub-empty">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>
-              <p>暂无订阅，添加 Twitter 账号开始监控</p>
-            </li>
-          </ul>
-          <div class="add-form">
-            <input class="add-input" id="add-input" type="text" placeholder="@username" spellcheck="false" />
-            <button class="btn btn-signal" id="add-btn">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              追踪
+          <canvas id="ecg-canvas" class="hero-wave"></canvas>
+          <div class="hero-actions">
+            <span id="monitor-badge" class="badge badge-neutral">检测中</span>
+            <button class="btn btn-subtle btn-sm" id="btn-theme" title="切换主题">
+              <svg id="icon-theme" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px">
+                <path id="icon-theme-path" d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
+              </svg><span id="btn-theme-label">亮色主题</span>
             </button>
+            <button class="btn btn-subtle btn-sm" id="btn-refresh-all">刷新</button>
           </div>
-        </div>
+        </header>
 
-        <!-- 推送日志 -->
-        <div class="pod pod-full">
-          <div class="pod-header">
-            <div class="pod-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-            </div>
-            <span class="pod-title">信号日志</span>
-          </div>
-          <div class="log-list" id="log-list">
-            <div class="empty-state" id="log-empty">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-              <p>等待信号捕获…</p>
-            </div>
-          </div>
-        </div>
+        <!-- Tab Panels -->
+        <main class="tab-panels">
 
-        <!-- 配置速览 -->
-        <div class="pod">
-          <div class="pod-header">
-            <div class="pod-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          <!-- ── 状态总览 ── -->
+          <section class="tab-content active" id="tab-overview">
+            <div class="grid grid-4" id="overview-stats">
+              <div class="stat-card">
+                <span class="stat-label">监控循环</span>
+                <span class="stat-value-sm" id="stat-loop">—</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">今日推送</span>
+                <span class="stat-value" id="stat-pushes">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">追踪账号</span>
+                <span class="stat-value" id="stat-subs">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">轮询间隔</span>
+                <span class="stat-value-sm" id="stat-interval">—</span>
+              </div>
             </div>
-            <span class="pod-title">观测参数</span>
-          </div>
-          <div class="config-grid" id="config-grid">
-            <div class="config-row"><span class="config-key">轮询间隔</span><span class="config-val" id="cfg-interval">—</span></div>
-            <div class="config-row"><span class="config-key">翻译语言</span><span class="config-val" id="cfg-lang">—</span></div>
-            <div class="config-row"><span class="config-key">取色来源</span><span class="config-val" id="cfg-color">—</span></div>
-            <div class="config-row"><span class="config-key">GIF 编码</span><span class="config-val" id="cfg-gif">—</span></div>
-            <div class="config-row"><span class="config-key">代理</span><span class="config-val" id="cfg-proxy">—</span></div>
-          </div>
-        </div>
-
-        <!-- 运行状态 -->
-        <div class="pod">
-          <div class="pod-header">
-            <div class="pod-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+            <div class="card mt-l">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">最近推送</h2>
+                  <p class="card-subtitle">动态 MD3 配色卡片</p>
+                </div>
+              </div>
+              <div id="recent-pushes"></div>
             </div>
-            <span class="pod-title">运行状态</span>
-          </div>
-          <div class="config-grid">
-            <div class="config-row"><span class="config-key">监控循环</span><span class="config-val" id="rt-loop">—</span></div>
-            <div class="config-row"><span class="config-key">会话数</span><span class="config-val" id="rt-sessions">—</span></div>
-            <div class="config-row"><span class="config-key">Twitter 认证</span><span class="config-val" id="rt-auth">—</span></div>
-            <div class="config-row"><span class="config-key">Playwright</span><span class="config-val" id="rt-pw">—</span></div>
-          </div>
-        </div>
+          </section>
 
-      </div><!-- /pod-grid -->
-    </div><!-- /observatory -->
+          <!-- ── 目前追踪 ── -->
+          <section class="tab-content" id="tab-tracking">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">追踪列表</h2>
+                  <p class="card-subtitle">管理监控中的 Twitter 账号</p>
+                </div>
+              </div>
+              <div id="tracking-list"></div>
+              <div class="flex gap-s mt-m">
+                <input class="input" id="add-username" placeholder="@username" style="max-width:220px" spellcheck="false" />
+                <button class="btn btn-primary" id="btn-add-sub">
+                  <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                  追踪
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── 推送日志 ── -->
+          <section class="tab-content" id="tab-logs">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">信号日志</h2>
+                  <p class="card-subtitle">推送、异常与轮询记录</p>
+                </div>
+              </div>
+              <div class="log-list" id="log-list"></div>
+            </div>
+          </section>
+
+          <!-- ── 配置 ── -->
+          <section class="tab-content" id="tab-config">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">插件配置</h2>
+                  <p class="card-subtitle">对应 _conf_schema.json，保存后立即生效</p>
+                </div>
+              </div>
+
+              <div class="grid grid-2">
+                <div class="form-row">
+                  <label class="form-label">Twitter auth_token</label>
+                  <input class="input" id="cfg-twitter_auth_token" type="password" placeholder="浏览器 Cookies → x.com → auth_token" spellcheck="false" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Twitter ct0</label>
+                  <input class="input" id="cfg-twitter_ct0" type="password" placeholder="浏览器 Cookies → x.com → ct0" spellcheck="false" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">轮询间隔（分钟）</label>
+                  <input class="input" id="cfg-poll_interval" type="number" min="1" max="120" value="5" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">代理地址</label>
+                  <input class="input" id="cfg-proxy" type="text" placeholder="如 http://127.0.0.1:7890，留空直连" spellcheck="false" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">文字翻译提供商 ID</label>
+                  <input class="input" id="cfg-text_translate_provider" type="text" placeholder="AstrBot AI 提供商 ID" spellcheck="false" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">图片翻译提供商 ID</label>
+                  <input class="input" id="cfg-image_translate_provider" type="text" placeholder="需多模态能力" spellcheck="false" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">图片翻译模式</label>
+                  <select class="select" id="cfg-image_translate_mode">
+                    <option value="multimodal">multimodal（多模态直接翻译）</option>
+                    <option value="text_extraction">text_extraction（OCR 提取后翻译）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">翻译目标语言</label>
+                  <input class="input" id="cfg-translation_language" type="text" value="中文" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">卡片取色来源</label>
+                  <select class="select" id="cfg-color_source">
+                    <option value="avatar">avatar（头像取色）</option>
+                    <option value="first_image">first_image（首图取色）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">GIF 编码器</label>
+                  <select class="select" id="cfg-gif_encoder">
+                    <option value="auto">auto（优先 gifski）</option>
+                    <option value="gifski">gifski（高质量）</option>
+                    <option value="ffmpeg">ffmpeg（palettegen）</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row mt-m">
+                <label class="form-label">文字翻译 Prompt <span class="text-mono">可用: {lang} {text} {prefix}</span></label>
+                <textarea class="textarea" id="cfg-text_translate_prompt" rows="3" placeholder="留空使用默认"></textarea>
+              </div>
+              <div class="form-row mt-s">
+                <label class="form-label">图片翻译 Prompt <span class="text-mono">可用: {lang}</span></label>
+                <textarea class="textarea" id="cfg-image_translate_prompt" rows="3" placeholder="留空使用默认"></textarea>
+              </div>
+
+              <div class="flex gap-s mt-m">
+                <button class="btn btn-primary" id="btn-save-config">
+                  <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                  保存配置
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── 界面设置 ── -->
+          <section class="tab-content" id="tab-settings">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h2 class="card-title">界面设置</h2>
+                  <p class="card-subtitle">取色、背景、材质、字体与效果</p>
+                </div>
+              </div>
+              <div class="grid grid-2">
+                <div class="form-row">
+                  <label class="form-label">取色模式</label>
+                  <select class="select" id="ui-color-mode">
+                    <option value="dynamic">动态（最近推送取色）</option>
+                    <option value="static">静态（自定义颜色）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">背景模式</label>
+                  <select class="select" id="ui-bg-mode">
+                    <option value="theme">跟随主题</option>
+                    <option value="brand_gradient">主题色渐变</option>
+                    <option value="custom">自定义</option>
+                    <option value="image">背景图片</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">材质类型</label>
+                  <select class="select" id="ui-material-type">
+                    <option value="acrylic">亚克力（Acrylic，半透明模糊）</option>
+                    <option value="mica">云母（Mica，低模糊带壁纸色调）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">字体</label>
+                  <select class="select" id="ui-font">
+                    <option value="misans">MiSans（默认，需联网加载）</option>
+                    <option value="builtin">内置字体（系统字体栈）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">圆角大小（px） <span id="ui-radius-val" class="text-mono">14px</span></label>
+                  <input type="number" class="input" id="ui-radius" value="14" min="0" max="40" />
+                </div>
+              </div>
+
+              <!-- 开关 -->
+              <div class="grid grid-2" style="margin-top:var(--space-s)">
+                <div class="form-row" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="ui-acrylic-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
+                  <label class="form-label" style="margin:0">启用材质（关闭则转实底）</label>
+                </div>
+                <div class="form-row" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="ui-glow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
+                  <label class="form-label" style="margin:0">启用主题泛光</label>
+                </div>
+                <div class="form-row" style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" id="ui-shadow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
+                  <label class="form-label" style="margin:0">启用投影阴影</label>
+                </div>
+              </div>
+
+              <!-- 滑条 -->
+              <div class="grid grid-2" style="margin-top:var(--space-s)">
+                <div class="form-row">
+                  <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
+                  <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">模糊强度 <span id="ui-blur-val" class="text-mono">5px</span></label>
+                  <input type="range" class="slider" id="ui-blur" min="0" max="100" value="5" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">泛光强度 <span id="ui-glow-val" class="text-mono">15%</span></label>
+                  <input type="range" class="slider" id="ui-glow" min="0" max="100" value="15" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">阴影强度 <span id="ui-shadow-val" class="text-mono">60%</span></label>
+                  <input type="range" class="slider" id="ui-shadow" min="0" max="100" value="60" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">背景图暗色遮罩 <span id="ui-scrim-val" class="text-mono">40%</span></label>
+                  <input type="range" class="slider" id="ui-scrim" min="0" max="80" value="40" />
+                </div>
+              </div>
+
+              <!-- 颜色 -->
+              <div class="grid grid-2" style="margin-top:var(--space-s)">
+                <div class="form-row">
+                  <label class="form-label">主题色</label>
+                  <div class="flex gap-s">
+                    <input type="color" class="input" id="ui-brand-color-picker" value="#1d9bf0" style="width:60px;padding:4px" />
+                    <input class="input" id="ui-brand-color" value="#1d9bf0" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">自定义亮色背景</label>
+                  <div class="flex gap-s">
+                    <input type="color" class="input" id="ui-custom-bg-picker" value="#F5F6F8" style="width:60px;padding:4px" />
+                    <input class="input" id="ui-custom-bg" value="#F5F6F8" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">自定义暗色背景</label>
+                  <div class="flex gap-s">
+                    <input type="color" class="input" id="ui-custom-bg-dark-picker" value="#0C0E13" style="width:60px;padding:4px" />
+                    <input class="input" id="ui-custom-bg-dark" value="#0C0E13" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row mt-m" id="bg-image-row">
+                <label class="form-label">背景图片上传</label>
+                <div class="flex gap-s flex-wrap">
+                  <label class="file-drop" id="bg-drop" style="flex:1;min-width:200px">
+                    <input type="file" id="bg-image-file" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                    <div id="bg-file-name">点击或拖拽图片到此处（jpg/png/webp/gif，建议 ≤20MB）</div>
+                  </label>
+                  <button class="btn" id="btn-bg-upload">上传</button>
+                  <button class="btn btn-subtle" id="btn-bg-remove">移除</button>
+                </div>
+                <div id="bg-preview-wrap" class="mt-s" style="display:none">
+                  <img id="bg-preview" alt="背景预览" style="max-width:100%;max-height:160px;border-radius:var(--radius-xlarge);border:1px solid var(--color-stroke-2)" />
+                </div>
+              </div>
+              <div class="flex gap-s mt-m">
+                <button class="btn btn-primary" id="btn-save-ui">保存设置</button>
+                <button class="btn btn-subtle" id="btn-reset-ui">恢复默认</button>
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
 
     <div class="toast-container" id="toast-container"></div>
-
     <script type="module" src="./scripts/app.js"></script>
   </body>
 </html>

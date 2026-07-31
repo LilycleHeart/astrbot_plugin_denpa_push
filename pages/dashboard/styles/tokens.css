@@ -1,71 +1,282 @@
 /* ============================================================
- * Signal Observatory — Design Tokens
- * 电波推送 Dashboard 设计语言
- * 主题世界 = 射电天文观测站; 唯一强调色 = 电波青(#00e5c8)
- * 签名 = 全宽实时波形 Canvas
+ * DenpaPush Design Tokens — M3 动态令牌系统
+ * 照搬 denpa_echo 的 Signal 设计语言, 默认源色 = Twitter 蓝 (#1d9bf0)
+ * 运行时由 app.js 经 material-color-utilities 从最近推送的取色结果全量派生
+ *
+ * 与 app.js 桥接契约 (必须保留, 不得改名):
+ *  --color-brand* / --color-app-bg / --radius-large / --radius-xlarge
+ *  / bg-mode-* class / #app 背景图 / <html data-theme>
  * ============================================================ */
 
-:root {
-  /* —— 信号色 (唯一强调) —— */
-  --signal: #00e5c8;
-  --signal-dim: #00b89e;
-  --signal-glow: rgba(0, 229, 200, 0.15);
-  --signal-ghost: rgba(0, 229, 200, 0.06);
+:root,
+[data-theme="light"] {
+  /* —— 品牌色 (默认源 #1d9bf0 的 M3 light 派生; JS 运行时按源色全量重算) —— */
+  --color-brand: #0079bf;
+  --color-brand-on: #ffffff;
+  --color-brand-hover: #0085d1;
+  --color-brand-pressed: #006daa;
+  --color-brand-fg: var(--color-brand);
+  --color-brand-border: var(--color-brand);
+  --color-brand-bg: var(--color-brand);
+  --color-brand-bg-hover: var(--color-brand-hover);
+  --color-brand-bg-pressed: var(--color-brand-pressed);
+  --color-brand-surface: #d0e8ff;
+  --color-on-brand-surface: #001d33;
+  --color-brand-tint: #d0e8ff;
+  --color-brand-weak: #c4e2ff;
+  --color-brand-line: #4da3d4;
+  --color-fg-tinted: #006daa;
+  --color-fg-tinted-2: #0085d1;
 
-  /* —— 深空色阶 (画布→舱体逐级抬升) —— */
-  --space-0: #0a0e1a;
-  --space-1: #111827;
-  --space-2: #1a2236;
-  --space-3: #243044;
-  --space-4: #2e3d54;
+  /* —— 次要色组 —— */
+  --color-secondary: #52606d;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d6e4f4;
+  --color-on-secondary-container: #0f1d28;
+  /* —— 三级色组 —— */
+  --color-tertiary: #6a5778;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #f1daff;
+  --color-on-tertiary-container: #241431;
 
-  /* —— 文字 —— */
-  --ink-1: #e8edf5;
-  --ink-2: #8b9ab5;
-  --ink-3: #5a6a85;
-  --ink-disabled: #3a4a62;
+  /* —— 中性前景 —— */
+  --color-fg-1: #1a1c1e;
+  --color-fg-2: #43474e;
+  --color-fg-3: #5e636b;
+  --color-fg-4: #c6c6c6;
+  --color-fg-inverted: #f0f0f0;
+
+  /* —— 中性背景 —— */
+  --color-app-bg: #f8f9fa;
+  --color-bg-1: #e8eef4;
+  --color-bg-2: #dde5ed;
+  --color-bg-3: #d2dce6;
+  --color-bg-4: #c8d4df;
+  --color-bg-inverted: #2f3133;
 
   /* —— 描边 —— */
-  --stroke-1: rgba(139, 154, 181, 0.25);
-  --stroke-2: rgba(139, 154, 181, 0.12);
-  --stroke-signal: rgba(0, 229, 200, 0.4);
+  --color-stroke-1: #73777f;
+  --color-stroke-2: #c6c6c6;
+  --color-stroke-3: #e2e2e2;
+  --color-stroke-1-hover: var(--color-brand);
+  --color-stroke-accessible: var(--color-brand);
 
   /* —— 状态色 —— */
-  --status-active: #00e5c8;
-  --status-idle: #f5a623;
-  --status-error: #ff4d6a;
-  --status-info: #5b9cf6;
+  --color-success-fg: #006d3d;
+  --color-success-bg: #86fab1;
+  --color-warning-fg: #815500;
+  --color-warning-bg: #ffddb2;
+  --color-error-fg: #ba1a1a;
+  --color-error-bg: #ffdad6;
+  --color-info: var(--color-brand);
 
   /* —— 圆角 —— */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-pill: 999px;
-
-  /* —— 间距 —— */
-  --gap-xs: 4px;
-  --gap-sm: 8px;
-  --gap-md: 16px;
-  --gap-lg: 24px;
-  --gap-xl: 32px;
-  --gap-2xl: 48px;
+  --radius-small: 8px;
+  --radius-medium: 10px;
+  --radius-large: 14px;
+  --radius-xlarge: 14px;
+  --radius-circular: 999px;
 
   /* —— 字体 —— */
-  --font-display: 'Space Grotesk', 'MiSans', system-ui, sans-serif;
-  --font-body: 'Inter', 'MiSans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+  --font-stack-misans: "MiSans", "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-stack-builtin: "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-family: var(--font-stack-misans);
+  --font-family-display: "MiSans", "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+  --font-size-caption: 12px;
+  --line-caption: 16px;
+  --font-size-body: 14px;
+  --line-body: 20px;
+  --font-size-subtitle: 16px;
+  --line-subtitle: 22px;
+  --font-size-title: 18px;
+  --line-title: 24px;
+  --font-size-title-lg: 26px;
+  --line-title-lg: 32px;
+  --font-size-display: 30px;
+  --line-display: 36px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
 
-  /* —— 字号 —— */
-  --text-xs: 11px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-md: 16px;
-  --text-lg: 20px;
-  --text-xl: 24px;
-  --text-2xl: 32px;
+  /* —— 间距 —— */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-snudge: 6px;
+  --space-s: 8px;
+  --space-mnudge: 10px;
+  --space-m: 12px;
+  --space-l: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 40px;
 
-  /* —— 动画 (匀速, 无缓动) —— */
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --ease: linear;
+  /* —— 阴影 —— */
+  --shadow-strength: 0.6;
+  --shadow-2:  0 1px 2px rgba(17, 20, 28, calc(0.04 * var(--shadow-strength))), 0 1px 3px rgba(17, 20, 28, calc(0.05 * var(--shadow-strength)));
+  --shadow-4:  0 2px 8px rgba(17, 20, 28, calc(0.06 * var(--shadow-strength)));
+  --shadow-8:  0 6px 20px rgba(17, 20, 28, calc(0.08 * var(--shadow-strength)));
+  --shadow-16: 0 12px 32px rgba(17, 20, 28, calc(0.10 * var(--shadow-strength)));
+  --shadow-28: 0 20px 48px rgba(17, 20, 28, calc(0.12 * var(--shadow-strength)));
+
+  /* —— 动效 —— */
+  --motion-ultrafast: 60ms;
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-gentle: 250ms;
+  --motion-slow: 320ms;
+  --motion-ease: cubic-bezier(0.33, 0, 0.67, 1);
+
+  /* —— 焦点环 —— */
+  --focus-ring: 0 0 0 3px var(--color-brand);
+  --focus-ring-solid: 0 0 0 2px var(--color-stroke-accessible);
+
+  /* —— 材质 —— */
+  --material-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  --material-opacity: 0.45;
+  --material-blur: 5px;
+  --acrylic-rgb: 221, 229, 237;
+  --control-rgb: 210, 220, 230;
+  --acrylic-bg: rgba(var(--acrylic-rgb), var(--material-opacity));
+  --acrylic-bg-strong: rgba(var(--acrylic-rgb), var(--material-opacity));
+  --acrylic-stroke: transparent;
+  --acrylic-edge: transparent;
+  --acrylic-blur: blur(var(--material-blur)) saturate(1.6);
+  --surface-bg: var(--acrylic-bg) var(--material-noise);
+  --surface-blur: var(--acrylic-blur);
+  --acrylic-rgb-low: 232, 238, 244;
+  --acrylic-rgb-high: 200, 212, 223;
+  --surface-bg-low: rgba(var(--acrylic-rgb-low), var(--material-opacity)) var(--material-noise);
+  --surface-bg-high: rgba(var(--acrylic-rgb-high), var(--material-opacity)) var(--material-noise);
+
+  /* —— 控件 —— */
+  --control-bg: rgba(var(--control-rgb), 0.38);
+  --control-bg-hover: color-mix(in srgb, var(--color-brand) 6%, transparent);
+  --control-bg-focus: rgba(var(--control-rgb), 0.55);
+  --control-stroke: color-mix(in srgb, var(--color-brand) 22%, transparent);
+  --control-stroke-hover: color-mix(in srgb, var(--color-brand) 45%, transparent);
+  --popup-bg: #dde5ed;
+  --popup-fg: #1a1c1e;
+
+  /* —— 泛光 —— */
+  --glow-strength: 0.15;
+  --glow-range: 10px;
+  --glow-brand: 0 0 var(--glow-range) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --glow-brand-strong: 0 0 calc(var(--glow-range) * 1.45) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --glow-text: 0 0 calc(var(--glow-range) * 0.55) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --text-depth: 0 1px 1px rgba(17, 20, 28, 0.14);
+  --mica-tint-1: #f8f9fa;
+  --mica-tint-2: #f0f4f8;
+  --mica-surface: color-mix(in srgb, var(--color-bg-1) 78%, var(--color-app-bg));
+
+  /* —— 侧边栏 —— */
+  --sidebar-w: 224px;
+  --sidebar-w-collapsed: 64px;
+
+  color-scheme: light;
+}
+
+/* ============================================================
+ * 暗色主题
+ * ============================================================ */
+[data-theme="dark"] {
+  --color-brand: #8ecdf8;
+  --color-brand-on: #003450;
+  --color-brand-hover: #a0d6fa;
+  --color-brand-pressed: #7cc4f6;
+  --color-brand-fg: var(--color-brand);
+  --color-brand-border: var(--color-brand);
+  --color-brand-bg: var(--color-brand);
+  --color-brand-bg-hover: var(--color-brand-hover);
+  --color-brand-bg-pressed: var(--color-brand-pressed);
+  --color-brand-surface: #004a73;
+  --color-on-brand-surface: #d0e8ff;
+  --color-brand-tint: #003d5e;
+  --color-brand-weak: #004a73;
+  --color-brand-line: #4da3d4;
+  --color-fg-tinted: #8ecdf8;
+  --color-fg-tinted-2: #6bbcf5;
+
+  --color-secondary: #bac8d8;
+  --color-on-secondary: #243240;
+  --color-secondary-container: #3b4957;
+  --color-on-secondary-container: #d6e4f4;
+  --color-tertiary: #d5bee4;
+  --color-on-tertiary: #3a2948;
+  --color-tertiary-container: #513f5f;
+  --color-on-tertiary-container: #f1daff;
+
+  --color-fg-1: #e2e2e6;
+  --color-fg-2: #c6c6ca;
+  --color-fg-3: #9d9da3;
+  --color-fg-4: #43474e;
+  --color-fg-inverted: #2f3133;
+
+  --color-app-bg: #121316;
+  --color-bg-1: #1e2530;
+  --color-bg-2: #283040;
+  --color-bg-3: #333d4e;
+  --color-bg-4: #3f4a5c;
+  --color-bg-inverted: #e2e2e6;
+
+  --color-stroke-1: #8d9199;
+  --color-stroke-2: #43474e;
+  --color-stroke-3: #5e636b;
+  --color-stroke-1-hover: var(--color-brand);
+  --color-stroke-accessible: var(--color-brand);
+
+  --color-success-fg: #69dd96;
+  --color-success-bg: #00522d;
+  --color-warning-fg: #ffb94d;
+  --color-warning-bg: #624000;
+  --color-error-fg: #ffb4ab;
+  --color-error-bg: #93000a;
+  --color-info: var(--color-brand);
+
+  --shadow-strength: 0.6;
+  --shadow-2:  0 1px 2px rgba(0, 0, 0, calc(0.30 * var(--shadow-strength))), 0 1px 3px rgba(0, 0, 0, calc(0.34 * var(--shadow-strength)));
+  --shadow-4:  0 2px 10px rgba(0, 0, 0, calc(0.40 * var(--shadow-strength)));
+  --shadow-8:  0 8px 24px rgba(0, 0, 0, calc(0.46 * var(--shadow-strength)));
+  --shadow-16: 0 14px 36px rgba(0, 0, 0, calc(0.52 * var(--shadow-strength)));
+  --shadow-28: 0 22px 52px rgba(0, 0, 0, calc(0.58 * var(--shadow-strength)));
+
+  --focus-ring: 0 0 0 3px var(--color-brand);
+  --focus-ring-solid: 0 0 0 2px var(--color-stroke-accessible);
+
+  --material-opacity: 0.45;
+  --material-blur: 5px;
+  --acrylic-rgb: 40, 48, 64;
+  --control-rgb: 51, 61, 78;
+  --acrylic-bg: rgba(var(--acrylic-rgb), var(--material-opacity));
+  --acrylic-bg-strong: rgba(var(--acrylic-rgb), var(--material-opacity));
+  --acrylic-stroke: transparent;
+  --acrylic-edge: transparent;
+  --acrylic-blur: blur(var(--material-blur)) saturate(1.5);
+  --surface-bg: var(--acrylic-bg) var(--material-noise);
+  --surface-blur: var(--acrylic-blur);
+  --acrylic-rgb-low: 30, 37, 48;
+  --acrylic-rgb-high: 63, 74, 92;
+  --surface-bg-low: rgba(var(--acrylic-rgb-low), var(--material-opacity)) var(--material-noise);
+  --surface-bg-high: rgba(var(--acrylic-rgb-high), var(--material-opacity)) var(--material-noise);
+
+  --control-bg: rgba(var(--control-rgb), 0.35);
+  --control-bg-hover: color-mix(in srgb, var(--color-brand) 8%, transparent);
+  --control-bg-focus: rgba(var(--control-rgb), 0.55);
+  --control-stroke: color-mix(in srgb, var(--color-brand) 30%, transparent);
+  --control-stroke-hover: color-mix(in srgb, var(--color-brand) 55%, transparent);
+  --popup-bg: #283040;
+  --popup-fg: #e2e2e6;
+
+  --glow-range: 10px;
+  --glow-brand: 0 0 var(--glow-range) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --glow-brand-strong: 0 0 calc(var(--glow-range) * 1.45) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --glow-text: 0 0 calc(var(--glow-range) * 0.55) color-mix(in srgb, var(--color-brand) calc(var(--glow-strength) * 100%), transparent);
+  --text-depth: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --mica-tint-1: #1a1c1e;
+  --mica-tint-2: #121316;
+  --mica-surface: color-mix(in srgb, var(--color-bg-1) 70%, var(--color-app-bg));
+
+  color-scheme: dark;
 }

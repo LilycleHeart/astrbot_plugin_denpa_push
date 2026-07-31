@@ -162,6 +162,8 @@ class DenpaPushPlugin(Star):
             ("dashboard/subscribe", self._api_dashboard_subscribe, ["POST"], "添加订阅"),
             ("dashboard/unsubscribe", self._api_dashboard_unsubscribe, ["POST"], "移除订阅"),
             ("dashboard/logs", self._api_dashboard_logs, ["GET"], "推送日志"),
+            ("dashboard/ui_config", self._api_dashboard_ui_config, ["GET", "POST"], "界面设置持久化"),
+            ("dashboard/config", self._api_dashboard_config, ["GET", "POST"], "插件配置读写"),
         ]
         for route, handler, methods, desc in apis:
             context.register_web_api(
@@ -274,6 +276,61 @@ class DenpaPushPlugin(Star):
         from astrbot.api.web import json_response
 
         return json_response({"logs": list(self._push_logs)})
+
+    async def _api_dashboard_ui_config(self):
+        """界面设置持久化（独立 JSON 文件）。"""
+        from astrbot.api.web import request, json_response, error_response
+
+        path = os.path.join(
+            os.path.dirname(self._data_path), "denpa_push_ui_config.json"
+        )
+        if request.method == "GET":
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json_response(json.load(f))
+            except (FileNotFoundError, json.JSONDecodeError):
+                return json_response({})
+        else:
+            payload = await request.json()
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False)
+                return json_response({"saved": True})
+            except Exception as e:
+                return error_response(f"保存失败: {e}", status_code=500)
+
+    async def _api_dashboard_config(self):
+        """插件配置读写（对应 _conf_schema.json 声明的 key）。"""
+        from astrbot.api.web import request, json_response, error_response
+
+        SCHEMA_KEYS = [
+            "twitter_auth_token", "twitter_ct0", "poll_interval",
+            "text_translate_provider", "image_translate_provider",
+            "image_translate_mode", "translation_language",
+            "text_translate_prompt", "image_translate_prompt",
+            "color_source", "gif_encoder", "proxy",
+        ]
+        if request.method == "GET":
+            data = {k: self.config.get(k, "") for k in SCHEMA_KEYS}
+            # 脱敏: token 只显示前6位
+            for key in ("twitter_auth_token", "twitter_ct0"):
+                v = data.get(key, "")
+                if v and len(v) > 6:
+                    data[key + "_masked"] = v[:6] + "…" + v[-4:]
+            return json_response(data)
+        else:
+            payload = await request.json()
+            try:
+                for k in SCHEMA_KEYS:
+                    if k in payload:
+                        self.config[k] = payload[k]
+                self.config.save_config()
+                # 热更新凭据
+                self._apply_twitter_credentials()
+                return json_response({"saved": True})
+            except Exception as e:
+                return error_response(f"保存失败: {e}", status_code=500)
 
     def _load_data(self):
         try:
