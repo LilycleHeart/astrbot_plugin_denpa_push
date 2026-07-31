@@ -126,6 +126,29 @@ class DenpaPushPlugin(Star):
         root = getattr(self.context, "astrbot_root", os.getcwd())
         return os.path.join(root, DATA_DIR, DATA_FILE)
 
+    @property
+    def _push_history_path(self):
+        return os.path.join(os.path.dirname(self._data_path), "denpa_push_history.json")
+
+    def _load_push_history(self):
+        try:
+            if os.path.exists(self._push_history_path):
+                with open(self._push_history_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    self._push_history = deque(data[:50], maxlen=50)
+                    self._total_pushes = len(self._push_history)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to load push history: {e}")
+
+    def _save_push_history(self):
+        try:
+            os.makedirs(os.path.dirname(self._push_history_path), exist_ok=True)
+            with open(self._push_history_path, "w", encoding="utf-8") as f:
+                json.dump(list(self._push_history), f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to save push history: {e}")
+
     async def initialize(self):
         try:
             import twikit
@@ -134,6 +157,7 @@ class DenpaPushPlugin(Star):
             logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
         self._apply_twitter_credentials()
         self._load_data()
+        self._load_push_history()
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
@@ -1595,6 +1619,7 @@ class DenpaPushPlugin(Star):
                     "palette": info.get("palette", []),
                     "has_media": bool(info.get("gifs") or info.get("videos") or img_files),
                 })
+                self._save_push_history()
             except Exception as e:
                 logger.error(f"[Push] Failed to push to {session_umo}: {e}")
                 self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")

@@ -122,28 +122,44 @@ function applyPalette(sourceHex, isDark) {
 }
 
 // ─── Dynamic Accent from Background Image ───
-async function applyDynamicAccent(imgSrc) {
-  try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-      img.src = imgSrc;
-    });
-    // 缩到 64x64 再取色，避免全分辨率大图卡顿
-    const offscreen = document.createElement("canvas");
-    offscreen.width = 64;
-    offscreen.height = 64;
-    const octx = offscreen.getContext("2d");
-    octx.drawImage(img, 0, 0, 64, 64);
-    const color = sourceColorFromImage(offscreen);
-    const hex = hexFromArgb(color);
-    state.uiConfig.background_accent = hex;
-    applyPalette(hex, currentIsDark());
-  } catch (e) {
-    console.warn("[DenpaPush] dynamic accent extraction failed:", e);
+// 照搬 denpa_echo: MCU sourceColorFromImage 需要 Image 元素，不能传 canvas
+const dynamicSourceCache = {};
+function applyDynamicAccent(imageSrc) {
+  const isDark = currentIsDark();
+  const cacheKey = imageSrc.substring(0, 64);
+  if (dynamicSourceCache[cacheKey]) {
+    applyPalette(dynamicSourceCache[cacheKey], isDark);
+    return;
   }
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = async () => {
+    try {
+      // 缩小到 64x64 再取色，避免处理全分辨率大图卡顿
+      const size = 64;
+      const cvs = document.createElement("canvas");
+      cvs.width = size; cvs.height = size;
+      const c = cvs.getContext("2d");
+      c.drawImage(img, 0, 0, size, size);
+      const small = new Image();
+      small.src = cvs.toDataURL("image/png");
+      await new Promise((res) => { small.onload = res; });
+      const srcArgb = await sourceColorFromImage(small);
+      const hex = hexFromArgb(srcArgb);
+      dynamicSourceCache[cacheKey] = hex;
+      const ui = state.uiConfig;
+      if (ui.color_mode === "dynamic" && ui.background_mode === "image") {
+        applyPalette(hex, currentIsDark());
+        if (ui.background_accent !== hex) {
+          ui.background_accent = hex;
+          bridge.apiPost("dashboard/ui_config", state.uiConfig).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn("[DenpaPush] dynamic accent extraction failed:", e);
+    }
+  };
+  img.src = imageSrc;
 }
 
 // ─── UI Config ───
@@ -538,7 +554,7 @@ function renderHistory(data) {
       <div class="t-body">${escapeHtml(item.text || "")}</div>
       ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
       <div class="t-palette">
-        ${Object.values(pal).slice(0, 4).map(c => `<span style="background:${c}"></span>`).join("")}
+        ${Object.entries(pal).filter(([k, v]) => !k.endsWith("_rgb") && typeof v === "string" && v.startsWith("#")).slice(0, 4).map(([, c]) => `<span style="background:${c}"></span>`).join("")}
         <span class="pal-label">seed: ${seed}</span>
       </div>
     `;
