@@ -7,6 +7,7 @@ import {
   argbFromHex,
   hexFromArgb,
   themeFromSourceColor,
+  sourceColorFromImage,
 } from "./vendor/material-color-utilities.js";
 
 const bridge = window.AstrBotPluginPage;
@@ -120,6 +121,31 @@ function applyPalette(sourceHex, isDark) {
   }
 }
 
+// ─── Dynamic Accent from Background Image ───
+async function applyDynamicAccent(imgSrc) {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = imgSrc;
+    });
+    // 缩到 64x64 再取色，避免全分辨率大图卡顿
+    const offscreen = document.createElement("canvas");
+    offscreen.width = 64;
+    offscreen.height = 64;
+    const octx = offscreen.getContext("2d");
+    octx.drawImage(img, 0, 0, 64, 64);
+    const color = sourceColorFromImage(offscreen);
+    const hex = hexFromArgb(color);
+    state.uiConfig.background_accent = hex;
+    applyPalette(hex, currentIsDark());
+  } catch (e) {
+    console.warn("[DenpaPush] dynamic accent extraction failed:", e);
+  }
+}
+
 // ─── UI Config ───
 async function loadUiConfig() {
   try {
@@ -160,6 +186,10 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
+    // Material 动态取色：从背景图提取主色
+    if (!ui.background_accent) {
+      applyDynamicAccent(bgSrc);
+    }
   }
 
   // Radius
@@ -470,6 +500,51 @@ function renderSubs(data) {
   });
 }
 
+// ─── Render: Push History ───
+function renderHistory(data) {
+  const items = data?.history || [];
+  const container = document.getElementById("recent-pushes");
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
+    return;
+  }
+
+  container.innerHTML = "";
+  items.slice(0, 10).forEach(item => {
+    const seed = item.seed_color || "var(--color-brand)";
+    const pal = item.palette || {};
+    const primary = pal.primary || seed;
+    const surface = pal.surface || "transparent";
+    const onSurface = pal.on_surface || "var(--color-fg-1)";
+    const time = item.time ? new Date(item.time).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "";
+
+    const el = document.createElement("div");
+    el.className = "tweet-card";
+    el.style.background = `color-mix(in srgb, ${seed} 5%, transparent)`;
+    el.style.borderColor = `color-mix(in srgb, ${seed} 18%, transparent)`;
+    el.innerHTML = `
+      <div class="t-header">
+        <div class="t-av" style="background:${seed}">${(item.screen_name || "?").charAt(0).toUpperCase()}</div>
+        <div class="t-meta">
+          <div class="t-name" style="color:${primary}">${escapeHtml(item.user_name || item.screen_name)}</div>
+          <div class="t-handle">@${escapeHtml(item.screen_name)}</div>
+        </div>
+        <span class="t-time">${time}</span>
+        <span class="t-tag" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">✓ 已推送</span>
+      </div>
+      <div class="t-body">${escapeHtml(item.text || "")}</div>
+      ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
+      <div class="t-palette">
+        ${Object.values(pal).slice(0, 4).map(c => `<span style="background:${c}"></span>`).join("")}
+        <span class="pal-label">seed: ${seed}</span>
+      </div>
+    `;
+    container.appendChild(el);
+  });
+}
+
 // ─── Render: Logs ───
 function renderLogs(data) {
   if (!data) return;
@@ -519,14 +594,16 @@ async function loadPluginConfig() {
 // ─── Refresh ───
 async function refresh() {
   try {
-    const [status, subs, logs] = await Promise.all([
+    const [status, subs, logs, history] = await Promise.all([
       bridge.apiGet("dashboard/status"),
       bridge.apiGet("dashboard/subscriptions"),
       bridge.apiGet("dashboard/logs"),
+      bridge.apiGet("dashboard/history"),
     ]);
     if (status) { state.status = status; renderStatus(status); }
     if (subs) { state.subscriptions = subs; renderSubs(subs); }
     if (logs) { state.logs = logs; renderLogs(logs); }
+    if (history) { renderHistory(history); }
   } catch (e) {
     console.warn("[DenpaPush] refresh error:", e);
   }
@@ -735,13 +812,18 @@ function bindSettingsEvents() {
     if (!file) { toast("请先选择图片", "error"); return; }
     try {
       const resp = await bridge.upload("bg/upload", file);
-      if (resp) {
-        state.uiConfig.background_image = resp.url || resp.path || "uploaded";
+      const dataUri = resp?.data || resp?.url || "";
+      if (dataUri) {
+        state.uiConfig.background_image = dataUri;
+        state.uiConfig.background_mode = "image";
+        await applyDynamicAccent(dataUri);
         applyUiConfig();
         toast("背景图已上传", "success");
+      } else {
+        toast("上传响应异常", "error");
       }
     } catch (e) {
-      toast("上传失败", "error");
+      toast("上传失败: " + (e?.message || ""), "error");
     }
   });
   document.getElementById("btn-bg-remove")?.addEventListener("click", async () => {

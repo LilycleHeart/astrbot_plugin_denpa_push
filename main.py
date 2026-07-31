@@ -118,6 +118,7 @@ class DenpaPushPlugin(Star):
         self._data_path = self._get_data_path()
         self._seed_cache = {}  # {image_url: rgb_tuple}
         self._push_logs = deque(maxlen=100)  # dashboard 信号日志
+        self._push_history = deque(maxlen=50)  # dashboard 推送历史(含卡片详情)
         self._total_pushes = 0
         self._register_dashboard_apis(context)
 
@@ -164,6 +165,9 @@ class DenpaPushPlugin(Star):
             ("dashboard/logs", self._api_dashboard_logs, ["GET"], "推送日志"),
             ("dashboard/ui_config", self._api_dashboard_ui_config, ["GET", "POST"], "界面设置持久化"),
             ("dashboard/config", self._api_dashboard_config, ["GET", "POST"], "插件配置读写"),
+            ("dashboard/history", self._api_dashboard_history, ["GET"], "推送历史详情"),
+            ("bg/upload", self._api_bg_upload, ["POST"], "上传背景图"),
+            ("bg/remove", self._api_bg_remove, ["POST"], "移除背景图"),
         ]
         for route, handler, methods, desc in apis:
             context.register_web_api(
@@ -331,6 +335,94 @@ class DenpaPushPlugin(Star):
                 return json_response({"saved": True})
             except Exception as e:
                 return error_response(f"保存失败: {e}", status_code=500)
+
+    async def _api_dashboard_history(self):
+        """推送历史详情（含推文内容、翻译、色板）。"""
+        from astrbot.api.web import json_response
+
+        return json_response({"history": list(self._push_history)})
+
+    async def _api_bg_upload(self):
+        """上传背景图，base64 data URI 内联存储到 ui_config。"""
+        import base64
+        from astrbot.api.web import request, json_response, error_response
+
+        try:
+            from astrbot.api.web import PluginUploadFile
+        except ImportError:
+            PluginUploadFile = None
+
+        files = await request.files()
+        upload = files.get("file")
+        if PluginUploadFile and not isinstance(upload, PluginUploadFile):
+            return error_response("缺少上传文件（字段名应为 file）", status_code=400)
+        if not upload:
+            return error_response("缺少上传文件", status_code=400)
+
+        ext = os.path.splitext(getattr(upload, "filename", "img.png"))[1].lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+            return error_response("仅支持 jpg/png/webp/gif 图片", status_code=400)
+
+        body = getattr(upload, "body", None)
+        if body is None:
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            await upload.save(tmp.name)
+            try:
+                with open(tmp.name, "rb") as f:
+                    body = f.read()
+            finally:
+                os.unlink(tmp.name)
+
+        if len(body) > 20 * 1024 * 1024:
+            return error_response("图片不能超过 20MB", status_code=400)
+
+        mime = {
+            ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".png": "image/png", ".webp": "image/webp",
+            ".gif": "image/gif",
+        }.get(ext, "image/png")
+        data_uri = f"data:{mime};base64," + base64.b64encode(body).decode("ascii")
+
+        # 持久化到 ui_config JSON
+        path = os.path.join(
+            os.path.dirname(self._data_path), "denpa_push_ui_config.json"
+        )
+        try:
+            ui = {}
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    ui = json.load(f)
+            ui["background_image"] = data_uri
+            ui["background_mode"] = "image"
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(ui, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] 保存背景图失败: {e}")
+
+        return json_response({"saved": True, "data": data_uri})
+
+    async def _api_bg_remove(self):
+        """移除背景图。"""
+        from astrbot.api.web import json_response
+
+        path = os.path.join(
+            os.path.dirname(self._data_path), "denpa_push_ui_config.json"
+        )
+        try:
+            ui = {}
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    ui = json.load(f)
+            ui["background_image"] = ""
+            ui["background_accent"] = ""
+            ui["background_mode"] = "theme"
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(ui, f, ensure_ascii=False)
+        except Exception:
+            pass
+        return json_response({"removed": True})
 
     def _load_data(self):
         try:
@@ -1202,6 +1294,9 @@ class DenpaPushPlugin(Star):
             "has_q_article": bool(q_article_title or q_article_text),
             "palette": palette,
             "is_dark": is_dark,
+            "seed_color": "#%02x%02x%02x" % seed_rgb if seed_rgb else "",
+            "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data.get('id', '')}",
+            "text": data.get("text", ""),
         }
 
         # 长文章分块渲染
@@ -1485,6 +1580,17 @@ class DenpaPushPlugin(Star):
                     f"@{info['screen_name']} → {session_umo[:20]}…",
                     "push",
                 )
+                self._push_history.appendleft({
+                    "time": datetime.now(timezone.utc).isoformat(),
+                    "screen_name": info.get("screen_name", ""),
+                    "user_name": info.get("user_name", ""),
+                    "text": (info.get("text") or "")[:200],
+                    "translated_text": (info.get("translated_text") or "")[:200],
+                    "tweet_url": info.get("tweet_url", ""),
+                    "seed_color": info.get("seed_color", ""),
+                    "palette": info.get("palette", []),
+                    "has_media": bool(info.get("gifs") or info.get("videos") or img_files),
+                })
             except Exception as e:
                 logger.error(f"[Push] Failed to push to {session_umo}: {e}")
                 self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")
