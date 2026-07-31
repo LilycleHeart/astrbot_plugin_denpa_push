@@ -45,22 +45,6 @@
   color: var(--color-fg-3);
 }
 
-/* tab-content 内的 card 退化为透明容器 */
-.tab-content .card {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-          backdrop-filter: none;
-  box-shadow: none;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  animation: none;
-}
-.tab-content .card:hover {
-  box-shadow: none;
-  transform: none;
-}
-
 /* —— Stat Card —— */
 .stat-card {
   background: var(--surface-bg);
@@ -82,19 +66,6 @@
 .stat-card:hover {
   box-shadow: var(--shadow-4), var(--glow-brand-strong);
   transform: translateY(-1px);
-}
-.tab-content .stat-card {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-          backdrop-filter: none;
-  box-shadow: none;
-  border: none;
-  border-radius: 0;
-  animation: none;
-}
-.tab-content .stat-card:hover {
-  box-shadow: none;
-  transform: none;
 }
 .stat-label {
   font-family: var(--font-family-mono);
