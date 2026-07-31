@@ -189,6 +189,7 @@ class DenpaPushPlugin(Star):
             ("dashboard/logs", self._api_dashboard_logs, ["GET"], "推送日志"),
             ("dashboard/ui_config", self._api_dashboard_ui_config, ["GET", "POST"], "界面设置持久化"),
             ("dashboard/config", self._api_dashboard_config, ["GET", "POST"], "插件配置读写"),
+            ("dashboard/toggle_monitor", self._api_dashboard_toggle_monitor, ["POST"], "会话监控开关"),
             ("dashboard/history", self._api_dashboard_history, ["GET"], "推送历史详情"),
             ("bg/upload", self._api_bg_upload, ["POST"], "上传背景图"),
             ("bg/remove", self._api_bg_remove, ["POST"], "移除背景图"),
@@ -217,6 +218,7 @@ class DenpaPushPlugin(Star):
             "total_pushes": self._total_pushes,
             "poll_interval": int(self.config.get("poll_interval", 5)),
             "session_count": len(self.monitored_sessions),
+            "monitored_sessions": list(self.monitored_sessions),
             "auth_configured": bool(self.config.get("twitter_auth_token", "")),
             "playwright_ready": _pw_browser is not None and _pw_browser.is_connected(),
             "translation_language": self.config.get("translation_language", "中文"),
@@ -365,6 +367,32 @@ class DenpaPushPlugin(Star):
         from astrbot.api.web import json_response
 
         return json_response({"history": list(self._push_history)})
+
+    async def _api_dashboard_toggle_monitor(self):
+        """按会话开启/关闭监控推送。"""
+        from astrbot.api.web import request, json_response, error_response
+
+        payload = await request.json()
+        session = payload.get("session", "")
+        enabled = payload.get("enabled", True)
+        if not session:
+            return error_response("缺少 session", status_code=400)
+
+        if enabled:
+            self.monitored_sessions.add(session)
+            if any(self.subscriptions.get(s) for s in self.monitored_sessions):
+                self._start_monitor()
+        else:
+            self.monitored_sessions.discard(session)
+            if not self.monitored_sessions:
+                self._stop_monitor()
+
+        self._save_data()
+        self._log_push(
+            f"会话 {'开启' if enabled else '关闭'}监控: {session[:20]}…",
+            "info",
+        )
+        return json_response({"ok": True, "enabled": enabled})
 
     async def _api_bg_upload(self):
         """上传 UI 背景图，以 base64 data URI 内联存储。"""

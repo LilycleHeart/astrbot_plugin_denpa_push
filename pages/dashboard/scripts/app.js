@@ -549,59 +549,96 @@ function renderStatus(data) {
   }
 }
 
-// ─── Render: Subscriptions ───
+// ─── Render: Subscriptions (管理订阅 tab) ───
 function renderSubs(data) {
   if (!data) return;
-  const container = document.getElementById("tracking-list");
-  const subTabs = document.getElementById("sub-tabs-tracking");
+  const container = document.getElementById("subs-session-list");
+  const subTabs = document.getElementById("sub-tabs-subs");
+  const sessionSelect = document.getElementById("session-select");
+  if (!container) return;
   container.innerHTML = "";
-  subTabs.innerHTML = "";
+  if (subTabs) subTabs.innerHTML = "";
 
-  let items = [];
-  for (const [session, users] of Object.entries(data)) {
-    for (const [name, info] of Object.entries(users)) {
-      items.push({ name, info, session });
+  const sessions = Object.keys(data);
+
+  // Update session selector dropdown
+  if (sessionSelect) {
+    const curVal = sessionSelect.value;
+    sessionSelect.innerHTML = '<option value="__all__">全部会话</option>';
+    sessions.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s.length > 28 ? s.slice(0, 28) + "…" : s;
+      sessionSelect.appendChild(opt);
+    });
+    if (sessions.includes(curVal) || curVal === "__all__") sessionSelect.value = curVal;
+  }
+
+  // Sub-tabs in sidebar (flat account list)
+  if (subTabs) {
+    for (const [session, users] of Object.entries(data)) {
+      for (const name of Object.keys(users)) {
+        const btn = document.createElement("button");
+        btn.className = "sub-tab";
+        btn.innerHTML = `<span class="dot" style="background:var(--color-success-fg)"></span>@${escapeHtml(name)}`;
+        subTabs.appendChild(btn);
+      }
     }
   }
 
-  if (items.length === 0) {
-    container.innerHTML = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无追踪账号，使用下方输入框添加</p>';
+  if (sessions.length === 0) {
+    container.innerHTML = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无订阅，使用下方输入框添加</p>';
     return;
   }
 
-  // Sub-tabs in sidebar
-  items.forEach(({ name, info }) => {
-    const btn = document.createElement("button");
-    btn.className = "sub-tab";
-    btn.innerHTML = `<span class="dot" style="background:var(--color-success-fg)"></span>@${escapeHtml(name)}`;
-    subTabs.appendChild(btn);
-  });
+  const filterSession = sessionSelect ? sessionSelect.value : "__all__";
 
-  // Main list
-  items.forEach(({ name, info }) => {
-    const lastCheck = info.last_checked_at
-      ? new Date(info.last_checked_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-      : "—";
-    const el = document.createElement("div");
-    el.className = "tweet-card";
-    el.style.background = "color-mix(in srgb, var(--color-brand) 3%, transparent)";
-    el.style.borderColor = "color-mix(in srgb, var(--color-brand) 15%, transparent)";
-    el.innerHTML = `
-      <div class="t-header">
-        <div class="t-av" style="background:var(--color-brand)">${name.charAt(0).toUpperCase()}</div>
-        <div class="t-meta">
-          <div class="t-name">@${escapeHtml(name)}</div>
-          <div class="t-handle">最后检查 ${lastCheck}</div>
-        </div>
-        <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}">
-          <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
+  for (const [session, users] of Object.entries(data)) {
+    if (filterSession !== "__all__" && session !== filterSession) continue;
+    const names = Object.keys(users);
+    const isMonitored = state.status?.monitored_sessions?.includes(session);
+
+    const group = document.createElement("div");
+    group.style.marginBottom = "var(--space-l)";
+    group.innerHTML = `
+      <div class="flex" style="align-items:center;justify-content:space-between;margin-bottom:var(--space-s)">
+        <span style="font-size:12px;font-family:var(--font-family-mono);color:var(--color-fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${escapeHtml(session)}</span>
+        <label class="flex" style="align-items:center;gap:6px;font-size:12px;color:var(--color-fg-2);cursor:pointer">
+          <input type="checkbox" class="monitor-toggle" data-session="${escapeHtml(session)}" ${isMonitored ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--color-brand)" />
+          监控
+        </label>
       </div>
     `;
-    container.appendChild(el);
-  });
 
-  // Bind remove
+    names.forEach(name => {
+      const info = users[name];
+      const lastCheck = info.last_checked_at
+        ? new Date(info.last_checked_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+        : "—";
+      const el = document.createElement("div");
+      el.className = "tweet-card";
+      el.style.background = "color-mix(in srgb, var(--color-brand) 3%, transparent)";
+      el.style.borderColor = "color-mix(in srgb, var(--color-brand) 15%, transparent)";
+      el.style.marginBottom = "var(--space-s)";
+      el.innerHTML = `
+        <div class="t-header">
+          <div class="t-av" style="background:var(--color-brand)">${name.charAt(0).toUpperCase()}</div>
+          <div class="t-meta">
+            <div class="t-name">@${escapeHtml(name)}</div>
+            <div class="t-handle">最后检查 ${lastCheck}</div>
+          </div>
+          <button class="btn btn-subtle btn-sm btn-remove" data-name="${escapeHtml(name)}">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+      `;
+      group.appendChild(el);
+    });
+
+    container.appendChild(group);
+  }
+
+  // Bind remove buttons
   container.querySelectorAll(".btn-remove").forEach(btn => {
     btn.addEventListener("click", async () => {
       const name = btn.dataset.name;
@@ -611,6 +648,21 @@ function renderSubs(data) {
         refresh();
       } catch (e) {
         toast(e?.message || "操作失败", "error");
+      }
+    });
+  });
+
+  // Bind monitor toggles
+  container.querySelectorAll(".monitor-toggle").forEach(chk => {
+    chk.addEventListener("change", async () => {
+      const session = chk.dataset.session;
+      try {
+        await bridge.apiPost("dashboard/toggle_monitor", { session, enabled: chk.checked });
+        toast(chk.checked ? "已开启监控" : "已关闭监控", "success");
+        refresh();
+      } catch (e) {
+        toast(e?.message || "操作失败", "error");
+        chk.checked = !chk.checked;
       }
     });
   });
@@ -741,8 +793,8 @@ function switchTab(name) {
   const panel = document.getElementById(`tab-${name}`);
   if (panel) panel.classList.add("active");
   // Sub-tabs visibility
-  const sub = document.getElementById("sub-tabs-tracking");
-  if (sub) sub.classList.toggle("show", name === "tracking");
+  const sub = document.getElementById("sub-tabs-subs");
+  if (sub) sub.classList.toggle("show", name === "subs");
 }
 
 // ─── Init ───
@@ -810,6 +862,11 @@ async function init() {
   });
   document.getElementById("add-username").addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("btn-add-sub").click();
+  });
+
+  // Session filter change → re-render subscription list
+  document.getElementById("session-select")?.addEventListener("change", () => {
+    renderSubs(state.subscriptions);
   });
 
   // ─── Plugin config (schema) load/save ───
