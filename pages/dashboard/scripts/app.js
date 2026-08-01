@@ -701,52 +701,121 @@ function renderSubs(data) {
 }
 
 // ─── Render: Push History ───
+
+/** Convert ARGB int or hex string to CSS hex color */
+function argbToHex(v) {
+  if (typeof v === "string") return v.startsWith("#") ? v : v;
+  if (typeof v === "number") return hexFromArgb(v);
+  return String(v);
+}
+/** Convert ARGB int or hex to "r, g, b" string */
+function argbToRgbStr(v) {
+  return rgbStr(argbToHex(v));
+}
+
 function buildHistoryCard(item) {
-  const seed = item.seed_color || "var(--color-brand)";
   const pal = item.palette || {};
-  const primary = pal.primary || seed;
+  const seed = item.seed_color || argbToHex(pal.primary) || "#1d9bf0";
+  const isManual = item.source === "manual";
+
+  // Build CSS custom properties from palette (1:1 with template)
+  const cssVars = [
+    `--md-surface-container:${argbToHex(pal.surface_container || "#f0eaf8")}`,
+    `--md-surface-container-rgb:${argbToRgbStr(pal.surface_container || "#f0eaf8")}`,
+    `--md-primary:${argbToHex(pal.primary || seed)}`,
+    `--md-primary-rgb:${argbToRgbStr(pal.primary || seed)}`,
+    `--md-on-primary:${argbToHex(pal.on_primary || "#fff")}`,
+    `--md-on-primary-rgb:${argbToRgbStr(pal.on_primary || "#fff")}`,
+    `--md-surface:${argbToHex(pal.surface || "#fdf7ff")}`,
+    `--md-surface-rgb:${argbToRgbStr(pal.surface || "#fdf7ff")}`,
+    `--md-surface-variant:${argbToHex(pal.surface_variant || "#efe5ff")}`,
+    `--md-surface-variant-rgb:${argbToRgbStr(pal.surface_variant || "#efe5ff")}`,
+    `--md-on-surface:${argbToHex(pal.on_surface || "#1d1a24")}`,
+    `--md-on-surface-rgb:${argbToRgbStr(pal.on_surface || "#1d1a24")}`,
+    `--md-on-surface-variant:${argbToHex(pal.on_surface_variant || "#49454f")}`,
+    `--md-on-surface-variant-rgb:${argbToRgbStr(pal.on_surface_variant || "#49454f")}`,
+  ].join(";");
+
   const timeRaw = item.created_at_str
     || (item.time ? new Date(item.time).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
   const avUrl = item.avatar_url || "";
-  const letter = (item.screen_name || "?").charAt(0).toUpperCase();
+  const letter = (item.user_name || item.screen_name || "?").charAt(0).toUpperCase();
   const thumbs = item.thumbnail_urls || [];
   const imgN = item.image_count || 0, gifN = item.gif_count || 0, vidN = item.video_count || 0;
-  const badges = [];
-  if (imgN) badges.push(`📷 ${imgN}`);
-  if (gifN) badges.push(`🎞 ${gifN}`);
-  if (vidN) badges.push(`🎬 ${vidN}`);
+  const hasMedia = imgN > 0 || gifN > 0 || vidN > 0;
   const qSn = item.quoted_screen_name || "";
   const qTxt = item.quoted_text || "";
-  const isManual = item.source === "manual";
-  const sourceLabel = isManual ? "手动推送" : "已推送";
   const sessionInfo = item.session ? escapeHtml(item.session) : "";
+  const sourceLabel = isManual ? "手动推送" : "已推送";
+  const tweetUrl = item.tweet_url || "#";
 
   const el = document.createElement("div");
-  el.className = "tweet-card tl-item";
-  el.style.background = `color-mix(in srgb, ${seed} 5%, transparent)`;
-  el.style.borderColor = `color-mix(in srgb, ${seed} 18%, transparent)`;
+  el.className = "tl-entry tl-item";
   el.innerHTML = `
-    <div class="t-header">
-      <div class="t-av" style="background:${seed};position:relative;overflow:hidden">
-        <span class="t-av-letter">${escapeHtml(letter)}</span>
-        ${avUrl ? `<img class="t-av-img" src="${escapeHtml(avUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'" />` : ""}
+    <div class="tl-node" style="background:${seed}"></div>
+    <div class="tl-time-label">${escapeHtml(timeRaw)}</div>
+    <div class="tl-card-wrap">
+      <div class="tweet-card ${isManual ? "is-manual" : ""}" style="${cssVars}">
+        <div class="card-inner">
+          <div class="tc-header">
+            ${avUrl
+              ? `<div class="tc-avatar"><img src="${escapeHtml(avUrl)}" alt="avatar" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.textContent='${escapeHtml(letter)}'" /><span class="tc-avatar-fallback">${escapeHtml(letter)}</span></div>`
+              : `<div class="tc-avatar">${escapeHtml(letter)}</div>`
+            }
+            <div class="tc-header-text">
+              <div class="tc-name">${escapeHtml(item.user_name || item.screen_name)}</div>
+              <div class="tc-handle">@${escapeHtml(item.screen_name)} · ${escapeHtml(timeRaw)}</div>
+            </div>
+            <span class="tc-source ${isManual ? "tc-source-manual" : ""}">${isManual ? "✎" : "✓"} ${escapeHtml(sourceLabel)}</span>
+          </div>
+
+          <div class="tc-chip-row">
+            <span class="tc-chip tc-chip-original"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg> Original</span>
+          </div>
+
+          <div class="tc-orig-text">${escapeHtml(item.text || item.original_text || "")}</div>
+
+          ${qSn ? `
+          <div class="tc-quote-block">
+            <div class="tc-quote-indent"></div>
+            <div class="tc-quote-body">
+              <div class="tc-quote-header">
+                <div class="tc-quote-avatar">${escapeHtml((qSn).charAt(0).toUpperCase())}</div>
+                <div class="tc-quote-user">
+                  <div class="tc-quote-name">@${escapeHtml(qSn)}</div>
+                </div>
+              </div>
+              <div class="tc-quote-text">${escapeHtml(qTxt)}</div>
+            </div>
+          </div>` : ""}
+
+          <div class="tc-divider"></div>
+
+          <div class="tc-chip-row">
+            <span class="tc-chip tc-chip-translated"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> 中文翻译</span>
+          </div>
+
+          <div class="tc-trans-text">${escapeHtml(item.translated_text || "")}</div>
+
+          ${hasMedia ? `
+          <div class="tc-divider"></div>
+          <div class="tc-media-row">
+            <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg> ${imgN} images${gifN > 0 ? ` · ${gifN} gifs` : ""}${vidN > 0 ? ` · ${vidN} videos` : ""}
+          </div>
+          ${thumbs.length ? `
+          <div class="tc-media-grid">
+            ${thumbs.map(u => `<img src="${escapeHtml(u)}" alt="media" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`).join("")}
+          </div>` : ""}
+          ` : ""}
+
+          <div class="tc-divider"></div>
+
+          <div class="tc-footer">
+            ${sessionInfo ? `<span class="tc-session">会话: ${sessionInfo}</span>` : ""}
+            <a class="tc-link" href="${escapeHtml(tweetUrl)}" target="_blank" rel="noopener">查看原推 →</a>
+          </div>
+        </div>
       </div>
-      <div class="t-meta">
-        <div class="t-name" style="color:${primary}">${escapeHtml(item.user_name || item.screen_name)}</div>
-        <div class="t-handle">@${escapeHtml(item.screen_name)}</div>
-      </div>
-      <span class="t-time">${escapeHtml(timeRaw)}</span>
-      <span class="t-tag ${isManual ? "t-tag-manual" : ""}" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">${isManual ? "✎ " : "✓ "}${sourceLabel}</span>
-    </div>
-    <div class="t-body">${escapeHtml(item.text || "")}</div>
-    ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
-    ${thumbs.length ? `<div class="t-media">${thumbs.map(u => `<div style="background-image:url('${escapeHtml(u)}');background-size:cover;background-position:center" referrerpolicy="no-referrer"></div>`).join("")}</div>` : ""}
-    ${badges.length ? `<div class="t-badges">${badges.map(b => `<span class="t-badge">${escapeHtml(b)}</span>`).join("")}</div>` : ""}
-    ${qSn ? `<div class="t-quote"><span class="t-quote-name">@${escapeHtml(qSn)}</span> ${escapeHtml(qTxt)}</div>` : ""}
-    ${sessionInfo ? `<div class="t-session">会话: ${sessionInfo}</div>` : ""}
-    <div class="t-palette">
-      ${Object.entries(pal).filter(([k, v]) => !k.endsWith("_rgb") && typeof v === "string" && v.startsWith("#")).slice(0, 4).map(([, c]) => `<span style="background:${c}"></span>`).join("")}
-      <span class="pal-label">seed: ${seed}</span>
     </div>
   `;
   return el;
@@ -761,7 +830,7 @@ function renderHistory(data) {
 
   const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
 
-  // Overview (recent-pushes): always show first 10, no filter
+  // Overview (recent-pushes): always show first 10, no filter, compact mode (no timeline rail)
   const recentCt = document.getElementById("recent-pushes");
   if (recentCt) {
     recentCt.innerHTML = "";
@@ -769,7 +838,11 @@ function renderHistory(data) {
       recentCt.innerHTML = emptyHtml;
     } else {
       const frag = document.createDocumentFragment();
-      allItems.slice(0, 10).forEach(item => frag.appendChild(buildHistoryCard(item)));
+      allItems.slice(0, 10).forEach(item => {
+        const card = buildHistoryCard(item);
+        card.classList.add("tl-compact");
+        frag.appendChild(card);
+      });
       recentCt.appendChild(frag);
     }
   }
