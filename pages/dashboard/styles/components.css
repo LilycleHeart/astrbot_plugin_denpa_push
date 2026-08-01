@@ -451,10 +451,8 @@
 }
 .tl-card-wrap {
   min-width: 0;
-  transition: transform var(--motion-base) var(--motion-ease);
-}
-.tl-card-wrap:hover {
-  transform: translateY(-3px);
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+  transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px);
 }
 .tl-card-wrap:hover .card-inner {
   box-shadow: 0 8px 28px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04),
