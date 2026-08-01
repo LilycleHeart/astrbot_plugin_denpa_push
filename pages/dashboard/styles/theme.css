@@ -74,7 +74,7 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-large);
-  padding: var(--space-3xl) var(--space-2xl) 160px;
+  padding: var(--space-3xl) var(--space-2xl) 120px;
   background:
     radial-gradient(120% 90% at 82% -10%, color-mix(in srgb, var(--color-brand) 9%, transparent), transparent 60%),
     var(--surface-bg-low);
@@ -138,10 +138,68 @@ body {
   right: 0;
   bottom: 0;
   width: 100%;
-  height: 150px;
+  height: 120px;
   display: block;
   opacity: 0.92;
   z-index: 1;
+}
+
+/* ECG 控制面板 */
+.ecg-controls {
+  position: absolute;
+  right: var(--space-xl);
+  bottom: var(--space-l);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--space-l);
+  padding: 6px 14px;
+  border-radius: var(--radius-medium);
+  background: color-mix(in srgb, var(--color-app-bg) 50%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 12%, transparent);
+}
+.ecg-ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+.ecg-ctrl-label { color: var(--color-fg-3); text-transform: uppercase; letter-spacing: 0.5px; }
+.ecg-ctrl-value { color: var(--color-brand); font-weight: 700; font-size: 14px; }
+.ecg-ctrl-unit { color: var(--color-fg-3); font-size: 10px; }
+.ecg-ctrl-value-sm { color: var(--color-brand); font-size: 11px; min-width: 28px; text-align: right; }
+.ecg-ctrl-slider { gap: 6px; }
+.ecg-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-stroke-2);
+  outline: none;
+  cursor: pointer;
+}
+.ecg-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent);
+  cursor: pointer;
+}
+.ecg-slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  border: none;
+  cursor: pointer;
+}
+@media (max-width: 768px) {
+  .ecg-controls { gap: var(--space-m); padding: 4px 10px; }
+  .ecg-slider { width: 50px; }
 }
 
 @keyframes signal-fade-in {

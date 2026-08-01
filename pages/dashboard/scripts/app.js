@@ -570,6 +570,7 @@ class EcgWaveform {
     this._maxTrail = 6;
     this._resize();
     this._bindResize();
+    this._applySpeed();
     this._loop();
   }
 
@@ -587,8 +588,8 @@ class EcgWaveform {
     if (this.speedOverride !== null) {
       this.speed = this.speedOverride;
     } else {
-      // 自动：0推文=0.2，20推文=1.2，线性映射（匹配预览速度）
-      this.speed = (0.1 + (Math.min(this.pushCount, 20) / 20) * 0.5) * 2;
+      // 自动：0推文=0.2，50推文=1.2，线性映射（匹配预览速度）
+      this.speed = 0.2 + (Math.min(this.pushCount, 50) / 50) * 1.0;
     }
   }
 
@@ -613,6 +614,7 @@ class EcgWaveform {
     this._lastBeatEnd = 0;
     this.beatCounter = 0;
     this._trail = [];
+    this._applySpeed();
   }
 
   setSpeed(v) {
@@ -792,14 +794,12 @@ function _ecgColorMix(color, alpha) {
   return color;
 }
 
-// ─── FlipDigit: 翻页机数字 ───
+// ─── FlipDigit: 3D 立体分裂翻页数字 ───
 class FlipDigit {
   constructor(container) {
     this.container = container;
     this.current = container.dataset.initial || "0";
-    this.target = this.current;
     this.flipping = false;
-    this.queue = [];
     this._render();
   }
   _render() {
@@ -807,48 +807,72 @@ class FlipDigit {
       `<div class="fd-top"><span>${this.current}</span></div>` +
       `<div class="fd-bottom"><span>${this.current}</span></div>`;
   }
-  _sequence(from, to) {
-    if (from === to) return [];
-    const seq = [];
-    let d = parseInt(from);
-    const t = parseInt(to);
-    while (d !== t) { d = (d + 1) % 10; seq.push(String(d)); }
-    return seq;
+  _updateStatic(digit) {
+    const topSpan = this.container.querySelector(".fd-top span");
+    const botSpan = this.container.querySelector(".fd-bottom span");
+    if (topSpan) topSpan.textContent = digit;
+    if (botSpan) botSpan.textContent = digit;
   }
   setDigit(newDigit) {
-    if (newDigit === this.target) return;
-    const seq = this._sequence(this.target, newDigit);
-    this.target = newDigit;
-    this.queue.push(...seq);
-    this._processQueue();
-  }
-  _processQueue() {
-    if (this.flipping || this.queue.length === 0) return;
-    const speed = this.queue.length > 8 ? 80 : this.queue.length > 4 ? 120 : this.queue.length > 2 ? 160 : 220;
-    const nextDigit = this.queue.shift();
-    this._doFlip(this.current, nextDigit, speed);
+    if (newDigit === this.current || this.flipping) {
+      // 排队最后一个目标值，避免快速滚动时中间值堆积
+      this._pending = newDigit;
+      return;
+    }
+    if (newDigit === this.current) return;
+    this._doFlip(this.current, newDigit, 200);
   }
   _doFlip(oldDigit, newDigit, speed) {
     this.flipping = true;
-    const flip = document.createElement("div");
-    flip.className = "fd-flip";
-    flip.style.setProperty("--flip-dur", speed + "ms");
-    flip.innerHTML = `<div class="fd-flip-front">${oldDigit}</div><div class="fd-flip-back">${newDigit}</div>`;
-    this.container.appendChild(flip);
-    flip.offsetHeight;
-    flip.classList.add("fd-flipping");
-    const onEnd = () => {
-      flip.remove();
-      const topSpan = this.container.querySelector(".fd-top span");
-      const botSpan = this.container.querySelector(".fd-bottom span");
-      if (topSpan) topSpan.textContent = newDigit;
-      if (botSpan) botSpan.textContent = newDigit;
-      this.current = newDigit;
-      this.flipping = false;
-      this._processQueue();
+    const fd = this.container;
+
+    // Phase 1: 上翻页翻下 (0° → -90°)，显示旧数字上半
+    const upper = document.createElement("div");
+    upper.className = "fd-flip-upper";
+    upper.style.setProperty("--flip-dur", speed + "ms");
+    upper.innerHTML = `<div class="fd-flip-upper-front">${oldDigit}</div>`;
+    fd.appendChild(upper);
+    // 立即更新静态上半为新数字（被 upper flip 遮挡）
+    this._updateStaticTop(newDigit);
+    upper.offsetHeight;
+    upper.classList.add("fd-flip-upper-anim");
+
+    const finishUpper = () => {
+      upper.remove();
+      // Phase 2: 下翻页翻上 (90° → 0°)，显示新数字下半
+      const lower = document.createElement("div");
+      lower.className = "fd-flip-lower";
+      lower.style.setProperty("--flip-dur", speed + "ms");
+      lower.innerHTML = `<div class="fd-flip-lower-front">${newDigit}</div>`;
+      fd.appendChild(lower);
+      lower.offsetHeight;
+      lower.classList.add("fd-flip-lower-anim");
+
+      const finishLower = () => {
+        lower.remove();
+        this._updateStaticBottom(newDigit);
+        this.current = newDigit;
+        this.flipping = false;
+        // 处理排队的最终值
+        if (this._pending !== undefined && this._pending !== this.current) {
+          const next = this._pending;
+          this._pending = undefined;
+          this._doFlip(this.current, next, 200);
+        }
+      };
+      lower.addEventListener("animationend", finishLower, { once: true });
+      setTimeout(() => { if (this.flipping) { lower.remove(); finishLower(); } }, speed + 100);
     };
-    flip.addEventListener("animationend", onEnd, { once: true });
-    setTimeout(() => { if (this.flipping) { flip.remove(); onEnd(); } }, speed + 100);
+    upper.addEventListener("animationend", finishUpper, { once: true });
+    setTimeout(() => { if (this.flipping && fd.contains(upper)) { upper.remove(); finishUpper(); } }, speed + 100);
+  }
+  _updateStaticTop(digit) {
+    const topSpan = this.container.querySelector(".fd-top span");
+    if (topSpan) topSpan.textContent = digit;
+  }
+  _updateStaticBottom(digit) {
+    const botSpan = this.container.querySelector(".fd-bottom span");
+    if (botSpan) botSpan.textContent = digit;
   }
 }
 
@@ -965,6 +989,21 @@ function renderStatus(data) {
     // 仅在推送数变化时重置波形，避免每次刷新都跳变
     if (ecg.pushCount !== pushCount) {
       ecg.setPushCount(pushCount);
+    }
+    // 更新 ECG 控制面板显示
+    const pcEl = document.getElementById("ecg-push-count");
+    if (pcEl) pcEl.textContent = pushCount;
+    // 自动模式下同步速度滑块显示
+    const speedEl = document.getElementById("ecg-speed");
+    const speedValEl = document.getElementById("ecg-speed-val");
+    if (speedEl && ecg.speedOverride === null) {
+      speedEl.value = ecg.speed.toFixed(2);
+      if (speedValEl) speedValEl.textContent = "自动";
+    }
+    const compEl = document.getElementById("ecg-complexity");
+    const compValEl = document.getElementById("ecg-complexity-val");
+    if (compEl && ecg.complexityOverride === null) {
+      if (compValEl) compValEl.textContent = "自动";
     }
   }
 
@@ -1123,11 +1162,12 @@ function _deriveCardPalette(seed, isDark) {
     const nv = theme.palettes.neutralVariant;
     const neutral = theme.palettes.neutral;
     return {
-      surface_container: isDark ? hexFromArgb(neutral.tone(12)) : hexFromArgb(neutral.tone(94)),
+      // 暗色用 neutralVariant 色调匹配插件蓝灰暗色主题，亮色用 neutral 浅色
+      surface_container: isDark ? hexFromArgb(nv.tone(20)) : hexFromArgb(neutral.tone(94)),
       primary: hexFromArgb(s.primary),
       on_primary: hexFromArgb(s.onPrimary),
-      surface: hexFromArgb(s.surface),
-      surface_variant: hexFromArgb(s.surfaceVariant),
+      surface: isDark ? hexFromArgb(neutral.tone(16)) : hexFromArgb(s.surface),
+      surface_variant: isDark ? hexFromArgb(nv.tone(26)) : hexFromArgb(s.surfaceVariant),
       on_surface: hexFromArgb(s.onSurface),
       on_surface_variant: hexFromArgb(s.onSurfaceVariant),
     };
@@ -1302,7 +1342,19 @@ function renderHistory(data) {
         tlCt.innerHTML = emptyMsg;
       } else {
         const frag = document.createDocumentFragment();
-        items.slice(0, 50).forEach(item => frag.appendChild(buildHistoryCard(item)));
+        const sliced = items.slice(0, 50);
+        let lastDate = "";
+        sliced.forEach(item => {
+          const { dateStr } = _extractTimeDate(item);
+          if (dateStr !== lastDate) {
+            lastDate = dateStr;
+            const grp = document.createElement("div");
+            grp.className = "tl-date-group";
+            grp.textContent = dateStr;
+            frag.appendChild(grp);
+          }
+          frag.appendChild(buildHistoryCard(item));
+        });
         tlCt.appendChild(frag);
       }
       tlCt.classList.remove("tl-switching");
@@ -1423,6 +1475,40 @@ async function init() {
   syncThemeIcon();
 
   ecg = new EcgWaveform(document.getElementById("ecg-canvas"));
+
+  // ECG speed slider
+  const ecgSpeedEl = document.getElementById("ecg-speed");
+  const ecgSpeedVal = document.getElementById("ecg-speed-val");
+  if (ecgSpeedEl) {
+    ecgSpeedEl.addEventListener("input", () => {
+      const v = parseFloat(ecgSpeedEl.value);
+      ecg.setSpeed(v);
+      if (ecgSpeedVal) ecgSpeedVal.textContent = v.toFixed(1) + "x";
+    });
+    // Double-click to reset to auto
+    ecgSpeedEl.addEventListener("dblclick", () => {
+      ecg.speedOverride = null;
+      ecg._applySpeed();
+      ecgSpeedVal.textContent = "自动";
+      ecgSpeedEl.value = ecg.speed.toFixed(2);
+    });
+  }
+  // ECG complexity slider
+  const ecgCompEl = document.getElementById("ecg-complexity");
+  const ecgCompVal = document.getElementById("ecg-complexity-val");
+  if (ecgCompEl) {
+    ecgCompEl.addEventListener("input", () => {
+      const c = parseInt(ecgCompEl.value);
+      ecg.setComplexity(c);
+      if (ecgCompVal) ecgCompVal.textContent = c;
+    });
+    ecgCompEl.addEventListener("dblclick", () => {
+      ecg.complexityOverride = null;
+      ecg.setPushCount(ecg.pushCount);
+      ecgCompVal.textContent = "自动";
+      ecgCompEl.value = 0;
+    });
+  }
 
   // Tab clicks
   document.querySelectorAll(".tab[data-tab]").forEach(tab => {

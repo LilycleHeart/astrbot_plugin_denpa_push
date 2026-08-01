@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>时间线徽章 · 方案C 极简线条</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-brand: #8ecdf8;
+    --bg: #0C0E13;
+    --bg-card: #14171F;
+    --bg-card-2: #181C26;
+    --text: #E6EAF2;
+    --text-dim: #8A92A6;
+    --text-mute: #565E72;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: auto; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 160px;
+  }
+
+  .timeline {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  /* ============ 左侧竖轨 ============ */
+  .rail {
+    position: sticky;
+    top: 0;
+    width: 80px;
+    height: 100vh;
+    flex-shrink: 0;
+    align-self: flex-start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .rail-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    transform: translateX(-50%);
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(142, 205, 248, 0.12) 6%,
+      rgba(142, 205, 248, 0.55) 50%,
+      rgba(142, 205, 248, 0.12) 94%,
+      transparent 100%
+    );
+    box-shadow: 0 0 8px rgba(142, 205, 248, 0.55), 0 0 20px rgba(142, 205, 248, 0.28);
+    border-radius: 2px;
+  }
+
+  /* ============ 徽章 · 方案C 极简线条 ============ */
+  .badge {
+    position: sticky;
+    top: 55vh;
+    transform: translateY(-50%);
+    z-index: 10;
+
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 2px 4px;
+  }
+
+  /* 左侧竖线标记 —— 3px 宽，高度与时间文字匹配 */
+  .badge-mark {
+    width: 3px;
+    height: 24px;            /* 与 .badge-time 的字号一致 */
+    margin-top: 1px;
+    background: var(--color-brand);
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(142, 205, 248, 0.6);
+    flex-shrink: 0;
+  }
+
+  .badge-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .badge-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    height: 24px;
+  }
+
+  .badge-date {
+    font-size: 10px;
+    color: var(--color-brand);
+    letter-spacing: 2.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-top: 6px;
+    white-space: nowrap;
+  }
+
+  /* ============ 翻页机数字 FlipDigit ============ */
+  .fd-flip {
+    position: relative;
+    display: inline-block;
+    width: 0.62em;
+    height: 1em;
+    overflow: hidden;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    perspective: 320px;
+    vertical-align: top;
+  }
+  .fd-card {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transition: transform 0.55s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  }
+  .fd-card.is-flipped {
+    transform: rotateX(-180deg);
+  }
+  .fd-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #ffffff;
+  }
+  .fd-face-back {
+    transform: rotateX(180deg);
+  }
+  .fd-sep {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.06em;
+    color: var(--text-mute);
+    animation: fd-blink 1.6s ease-in-out infinite;
+  }
+  @keyframes fd-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+  }
+
+  /* ============ 推文卡片 Feed ============ */
+  .feed {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0 8px 30px;
+  }
+  .card {
+    background: linear-gradient(180deg, var(--bg-card), var(--bg-card-2));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    position: relative;
+    transition: border-color 0.3s, transform 0.3s;
+  }
+  .card:hover {
+    border-color: rgba(142, 205, 248, 0.22);
+    transform: translateY(-2px);
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #2a3550, #1a2030);
+    border: 1px solid rgba(142, 205, 248, 0.2);
+  }
+  .meta { display: flex; flex-direction: column; min-width: 0; }
+  .name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .handle { font-size: 12px; color: var(--text-mute); }
+  .card-time {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .card-body { font-size: 14px; line-height: 1.65; color: var(--text); }
+  .card-date {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-mute);
+    letter-spacing: 0.6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="timeline">
+    <aside class="rail">
+      <div class="rail-line"></div>
+      <div class="badge">
+        <div class="badge-mark"></div>
+        <div class="badge-text">
+          <div class="badge-time" id="badgeTime"></div>
+          <div class="badge-date" id="badgeDate"></div>
+        </div>
+      </div>
+    </aside>
+    <main class="feed" id="feed"></main>
+  </div>
+</div>
+
+<script>
+  /* ====== 模拟推文数据 ====== */
+  const TWEETS = [
+    { time: '08:12', date: '2026-08-01', name: 'Nova',  handle: '@nova_dev',   text: '清晨第一缕光透过百叶窗洒在键盘上，新的一天开始了。准备 push 昨晚写完的 commit。' },
+    { time: '09:45', date: '2026-08-01', name: 'Aria',  handle: '@aria_codes',  text: '刚部署完新的时间线组件，极简线条方案靠一根竖线和字重对比就撑住了视觉，克制即高级。' },
+    { time: '11:20', date: '2026-08-01', name: 'Kai',   handle: '@kai_design',  text: '设计稿改到第八版，这次应该能过审了吧。老板说"再活泼一点"，我理解为把字距从 2 调到 2.5。' },
+    { time: '13:05', date: '2026-08-01', name: 'Milo',  handle: '@milo_x',      text: '午餐去试了街角新开的拉面店，味增汤底很浓郁，溏心蛋流心程度刚好。下次带团队一起去。' },
+    { time: '14:33', date: '2026-08-01', name: 'Iris',  handle: '@iris_ml',     text: '训练了一整天的扩散模型，loss 终于收敛了。翻页机效果的数字跳动比进度条治愈多了。' },
+    { time: '16:48', date: '2026-08-01', name: 'Leo',   handle: '@leo_dev',     text: '调试了一下午 sticky 定位的问题，原来是父容器没有设置 align-self: flex-start，flex 拉伸把它弄坏了。' },
+    { time: '18:22', date: '2026-08-01', name: 'Sora',  handle: '@sora_ui',     text: '夕阳把整个办公室染成琥珀色，这种时候最适合摸鱼写 CSS。给竖轨的发光线加了个呼吸动画。' },
+    { time: '20:10', date: '2026-08-01', name: 'Ren',   handle: '@ren_night',   text: '夜跑五公里，耳机里循环着 lo-fi hip hop。回来打开电脑，时间线徽章还停在下午的位置。' },
+    { time: '22:55', date: '2026-08-01', name: 'Yuki',  handle: '@yuki_z',      text: '睡前再 review 一遍明天 demo 用的页面，三个徽章方案都跑通了，明早给产品看效果。稳住。' },
+  ];
+
+  /* ====== FlipDigit 翻页机数字类 ====== */
+  class FlipDigit {
+    constructor(timeEl, dateEl, opts = {}) {
+      this.timeEl = timeEl;
+      this.dateEl = dateEl;
+      this.opts = Object.assign({ digits: 4, separator: ':' }, opts);
+      this.slots = [];
+      this._buildSlots();
+    }
+
+    _buildSlots() {
+      this.timeEl.innerHTML = '';
+      const { digits, separator } = this.opts;
+      const half = Math.floor(digits / 2);
+      for (let i = 0; i < digits; i++) {
+        if (i === half && separator) {
+          const sep = document.createElement('span');
+          sep.className = 'fd-sep';
+          sep.textContent = separator;
+          this.timeEl.appendChild(sep);
+        }
+        this.slots.push(this._createSlot(this.timeEl));
+      }
+    }
+
+    _createSlot(parent) {
+      const el = document.createElement('span');
+      el.className = 'fd-flip';
+      const card = document.createElement('span');
+      card.className = 'fd-card';
+      const front = document.createElement('span');
+      front.className = 'fd-face fd-face-front';
+      const back = document.createElement('span');
+      back.className = 'fd-face fd-face-back';
+      card.appendChild(front);
+      card.appendChild(back);
+      el.appendChild(card);
+      parent.appendChild(el);
+      return { el, card, front, back, current: null, flipping: false, pending: null, timer: null };
+    }
+
+    setTime(hours, minutes) {
+      this._setFlipValue(this._buildFlipTime(hours, minutes));
+    }
+
+    setDate(dateStr) {
+      this.dateEl.textContent = this._buildFlipDate(dateStr);
+    }
+
+    /* 构建时间数字串 HHMM */
+    _buildFlipTime(hours, minutes) {
+      const hh = String(hours).padStart(2, '0');
+      const mm = String(minutes).padStart(2, '0');
+      return hh + mm;
+    }
+
+    /* 构建日期显示文本 */
+    _buildFlipDate(dateStr) {
+      const d = new Date(dateStr);
+      const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      return months[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0') + ', ' + d.getFullYear();
+    }
+
+    _setFlipValue(value) {
+      const padded = value.padStart(this.slots.length, '0');
+      for (let i = 0; i < this.slots.length; i++) {
+        const ch = padded[i];
+        this._flipSlot(this.slots[i], ch);
+      }
+    }
+
+    _flipSlot(slot, ch) {
+      const { card, front, back } = slot;
+
+      // 若有进行中的翻转，先瞬间完成
+      if (slot.flipping) {
+        this._finalize(slot);
+      }
+      // 首次渲染
+      if (slot.current === null) {
+        front.textContent = ch;
+        back.textContent = ch;
+        slot.current = ch;
+        return;
+      }
+      if (slot.current === ch) return;
+
+      back.textContent = ch;
+      slot.pending = ch;
+      slot.flipping = true;
+      void card.offsetWidth; // 强制 reflow
+      card.classList.add('is-flipped');
+
+      const finish = () => {
+        if (!slot.flipping) return;
+        card.removeEventListener('transitionend', finish);
+        clearTimeout(slot.timer);
+        this._finalize(slot);
+      };
+      card.addEventListener('transitionend', finish);
+      slot.timer = setTimeout(finish, 640);
+    }
+
+    _finalize(slot) {
+      const { card, front } = slot;
+      if (slot.pending != null) {
+        front.textContent = slot.pending;
+        slot.current = slot.pending;
+        slot.pending = null;
+      }
+      card.style.transition = 'none';
+      card.classList.remove('is-flipped');
+      void card.offsetWidth;
+      card.style.transition = '';
+      slot.flipping = false;
+    }
+  }
+
+  /* ====== 生成卡片 ====== */
+  const feed = document.getElementById('feed');
+  TWEETS.forEach(t => {
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.dataset.time = t.time;
+    card.dataset.date = t.date;
+    card.innerHTML =
+      '<div class="card-head">' +
+        '<div class="avatar"></div>' +
+        '<div class="meta">' +
+          '<span class="name">' + t.name + '</span>' +
+          '<span class="handle">' + t.handle + '</span>' +
+        '</div>' +
+        '<span class="card-time">' + t.time + '</span>' +
+      '</div>' +
+      '<p class="card-body">' + t.text + '</p>' +
+      '<div class="card-date">' + t.date + '</div>';
+    feed.appendChild(card);
+  });
+
+  /* ====== 初始化翻页机 ====== */
+  const flip = new FlipDigit(
+    document.getElementById('badgeTime'),
+    document.getElementById('badgeDate')
+  );
+
+  /* ====== 滚动监听 · 更新徽章 ====== */
+  const cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  function updateBadge() {
+    const triggerY = window.innerHeight * 0.55;
+    let active = null;
+    for (let i = 0; i < cards.length; i++) {
+      if (cards[i].getBoundingClientRect().top <= triggerY) {
+        active = cards[i];
+      } else {
+        break;
+      }
+    }
+    if (!active) active = cards[0];
+    const parts = active.dataset.time.split(':');
+    flip.setTime(parseInt(parts[0], 10), parseInt(parts[1], 10));
+    flip.setDate(active.dataset.date);
+  }
+  window.addEventListener('scroll', updateBadge, { passive: true });
+  window.addEventListener('resize', updateBadge);
+  updateBadge();
+</script>
+</body>
+</html>

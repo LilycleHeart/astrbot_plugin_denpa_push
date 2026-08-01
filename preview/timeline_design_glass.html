@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<!--
+  Timeline Design 03 — Glassmorphism Capsule Badge
+  =================================================
+  时间与日期封装在一个毛玻璃胶囊内：backdrop-filter 模糊 + 半透明 app-bg 背景；
+  时间为 18px 等宽品牌色，日期为 10px 等宽 fg-2 色。时间左侧有一颗 6px 品牌色
+  圆点（带辉光），并以 2.5s 周期做 opacity 0.6→1.0 的呼吸脉冲。胶囊圆角 12px、
+  1px 品牌色 15% 透明描边、柔和投影。左侧导轨竖线为 transparent→brand→transparent
+  渐变并带辉光。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline Design — Glassmorphism Capsule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Regular.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Medium.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Bold.min.css">
+<style>
+  :root {
+    --color-brand: #8ecdf8;
+    --color-brand-on: #003450;
+    --color-brand-hover: #a0d6fa;
+    --color-brand-surface: #004a73;
+    --color-brand-tint: #003d5e;
+    --color-brand-weak: #004a73;
+    --color-brand-line: #4da3d4;
+    --color-fg-1: #e2e2e6;
+    --color-fg-2: #c6c6ca;
+    --color-fg-3: #9d9da3;
+    --color-app-bg: #121316;
+    --color-bg-1: #1e2530;
+    --color-bg-2: #283040;
+    --color-bg-3: #333d4e;
+    --color-stroke-2: #43474e;
+    --font-family: "MiSans", "Inter", system-ui, sans-serif;
+    --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
+    --material-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-family);
+    color: var(--color-fg-1);
+    background-color: var(--color-app-bg);
+    background-image:
+      radial-gradient(ellipse 80% 55% at 18% -5%, rgba(0, 74, 115, 0.30), transparent 60%),
+      radial-gradient(ellipse 65% 50% at 85% 105%, rgba(77, 163, 212, 0.10), transparent 60%),
+      radial-gradient(ellipse 40% 40% at 50% 50%, rgba(30, 37, 48, 0.5), transparent 70%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: var(--material-noise);
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  /* ---------- 顶部说明 ---------- */
+  .intro { padding: 40px 0 8px 108px; max-width: 720px; }
+  .intro .eyebrow {
+    font-family: var(--font-family-mono);
+    font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--color-brand); margin-bottom: 10px;
+  }
+  .intro h1 { font-size: 26px; font-weight: 700; color: var(--color-fg-1); margin-bottom: 10px; letter-spacing: 0.5px; }
+  .intro p { font-size: 14px; line-height: 1.7; color: var(--color-fg-3); }
+
+  /* ---------- 时间线主结构 ---------- */
+  .timeline { display: flex; align-items: stretch; padding-top: 24px; padding-bottom: 120px; }
+
+  .rail {
+    width: 80px; flex-shrink: 0; position: relative;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  /* 竖线：transparent → brand → transparent 渐变 + 辉光 */
+  .rail-line {
+    position: absolute; left: 50%; top: 0; bottom: 0;
+    width: 2px; transform: translateX(-50%);
+    background: linear-gradient(180deg, transparent 0%, var(--color-brand) 10%, var(--color-brand) 90%, transparent 100%);
+    box-shadow: 0 0 8px rgba(142, 205, 248, 0.6), 0 0 18px rgba(142, 205, 248, 0.3);
+    z-index: 0;
+  }
+
+  /* 浮动徽章 —— 毛玻璃胶囊 */
+  .time-badge {
+    position: sticky;
+    top: calc(55vh - 40px);
+    margin-top: calc(55vh - 40px);
+    z-index: 3;
+  }
+
+  .glass-capsule {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 13px;
+    background: rgba(18, 19, 22, 0.55);
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+    border: 1px solid rgba(142, 205, 248, 0.15);
+    border-radius: 12px;
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.35),
+      0 0 16px rgba(142, 205, 248, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-brand);
+    box-shadow: 0 0 8px rgba(142, 205, 248, 0.85), 0 0 14px rgba(142, 205, 248, 0.45);
+    flex-shrink: 0;
+    animation: breathe 2.5s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.6; transform: scale(0.9); }
+    50%      { opacity: 1;   transform: scale(1.12); }
+  }
+
+  .glass-text { line-height: 1.1; }
+  .time-text {
+    font-family: var(--font-family-mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-brand);
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(142, 205, 248, 0.35);
+  }
+  .date-text {
+    font-family: var(--font-family-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-fg-2);
+    letter-spacing: 1px;
+    margin-top: 3px;
+  }
+
+  /* ---------- 右侧内容 ---------- */
+  .content { flex: 1; min-width: 0; padding-left: 28px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .date-group { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 26px 0 6px; }
+  .date-group:first-child { margin-top: 0; }
+  .date-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-brand); box-shadow: 0 0 8px rgba(142, 205, 248, 0.7); }
+  .date-label { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; color: var(--color-fg-2); }
+  .date-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--color-stroke-2), transparent); }
+
+  .card {
+    background: linear-gradient(180deg, rgba(40, 48, 64, 0.72), rgba(30, 37, 48, 0.72));
+    border: 1px solid var(--color-stroke-2);
+    border-radius: 14px;
+    padding: 16px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--color-brand-line); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35); }
+  .card-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-family-mono); font-weight: 700; font-size: 14px;
+    color: #121316; flex-shrink: 0;
+  }
+  .meta { min-width: 0; }
+  .name { font-size: 14px; font-weight: 600; color: var(--color-fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { font-family: var(--font-family-mono); font-size: 12px; color: var(--color-fg-3); }
+  .card-body { font-size: 14px; line-height: 1.65; color: var(--color-fg-2); }
+
+  .scroll-hint {
+    position: fixed; right: 24px; bottom: 24px;
+    font-family: var(--font-family-mono); font-size: 11px; letter-spacing: 1px;
+    color: var(--color-fg-3);
+    background: rgba(30, 37, 48, 0.7);
+    border: 1px solid var(--color-stroke-2);
+    border-radius: 999px; padding: 6px 14px;
+    backdrop-filter: blur(8px); z-index: 10;
+  }
+
+  @media (max-width: 640px) {
+    .intro { padding-left: 16px; }
+    .content { padding-left: 16px; }
+    .time-text { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="intro">
+      <div class="eyebrow">Design 03 / Glassmorphism</div>
+      <h1>Glassmorphism Capsule Badge</h1>
+      <p>时间与日期封装在毛玻璃胶囊内，backdrop-filter 模糊呈现半透明质感；左侧 6px 品牌色圆点以 2.5s 周期呼吸脉冲。导轨竖线为透明—品牌色—透明渐变并带辉光。</p>
+    </div>
+
+    <div class="timeline">
+      <div class="rail">
+        <div class="rail-line"></div>
+        <div class="time-badge" id="timeBadge">
+          <div class="glass-capsule">
+            <span class="dot"></span>
+            <div class="glass-text">
+              <div class="time-text" id="timeText">14:32</div>
+              <div class="date-text" id="dateText">08/01</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-hint">scroll to update · 55vh</div>
+
+<script>
+  const pad = n => String(n).padStart(2, '0');
+  const fmtDate = (m, d) => pad(m) + '/' + pad(d);
+
+  // 18 条 mock 推文，跨 4 个日期分组
+  const data = [
+    { g:'08月01日', m:8, d:1, t:'14:32', name:'Alex Chen', handle:'@alex_dev', color:'#8ecdf8', body:'Just shipped a timeline component with a sticky rail and a scroll-linked time badge. Smooth as butter.' },
+    { g:'08月01日', m:8, d:1, t:'13:15', name:'Maya Liu', handle:'@mayacodes', color:'#f8b38e', body:'Hot take: backdrop-filter blur is still the coolest CSS feature. Fight me.' },
+    { g:'08月01日', m:8, d:1, t:'11:48', name:'Dev Bot', handle:'@devbot', color:'#b38ef8', body:'Spent 3 hours debugging a z-index issue. Turns out it was a stacking context. Classic.' },
+    { g:'08月01日', m:8, d:1, t:'09:30', name:'Sarah Kim', handle:'@sarahk', color:'#8ef8c5', body:'The mono font rendering at small sizes is chef\'s kiss. JetBrains Mono never disappoints.' },
+    { g:'08月01日', m:8, d:1, t:'08:05', name:'Night Owl', handle:'@nightowl', color:'#f8e08e', body:'Reminder: always throttle scroll listeners with requestAnimationFrame. Your users\' batteries will thank you.' },
+
+    { g:'07月31日', m:7, d:31, t:'22:40', name:'Alex Chen', handle:'@alex_dev', color:'#8ecdf8', body:'Dark mode done right isn\'t just #000. It\'s layered surfaces, subtle gradients, and carefully tuned contrast.' },
+    { g:'07月31日', m:7, d:31, t:'20:18', name:'Maya Liu', handle:'@mayacodes', color:'#f8b38e', body:'Built a glassmorphism badge that floats at 55vh. The breathing dot animation is my new obsession.' },
+    { g:'07月31日', m:7, d:31, t:'18:55', name:'Tech News', handle:'@technews', color:'#f88e9e', body:'TIL: position sticky needs a tall containing block to work its magic. The margin-top trick saves the day.' },
+    { g:'07月31日', m:7, d:31, t:'16:12', name:'Dev Bot', handle:'@devbot', color:'#b38ef8', body:'Retro LCD capsules with scan lines beat modern flat design. Change my mind.' },
+    { g:'07月31日', m:7, d:31, t:'14:00', name:'Sarah Kim', handle:'@sarahk', color:'#8ef8c5', body:'Performance tip: use IntersectionObserver instead of scroll events when you can. But for pixel-precise centering, scroll + rAF it is.' },
+    { g:'07月31日', m:7, d:31, t:'10:25', name:'Night Owl', handle:'@nightowl', color:'#f8e08e', body:'The brand color #8ecdf8 hits different on a #121316 background. That contrast ratio though.' },
+
+    { g:'07月30日', m:7, d:30, t:'23:50', name:'Maya Liu', handle:'@mayacodes', color:'#f8b38e', body:'Anyone else love the aesthetic of 7-segment displays? There\'s something deeply satisfying about them.' },
+    { g:'07月30日', m:7, d:30, t:'19:33', name:'Alex Chen', handle:'@alex_dev', color:'#8ecdf8', body:'Pro tip: CSS custom properties make theming trivial. Swap one variable, redesign the whole app.' },
+    { g:'07月30日', m:7, d:30, t:'15:20', name:'Tech News', handle:'@technews', color:'#f88e9e', body:'Just discovered you can animate box-shadow for a glow pulse without killing performance. transform is still better though.' },
+    { g:'07月30日', m:7, d:30, t:'12:08', name:'Dev Bot', handle:'@devbot', color:'#b38ef8', body:'The noise texture overlay adds so much depth. fractalNoise filter is underrated.' },
+    { g:'07月30日', m:7, d:30, t:'09:15', name:'Sarah Kim', handle:'@sarahk', color:'#8ef8c5', body:'Mini rant: not every UI needs rounded corners. But also... rounded corners are nice.' },
+
+    { g:'07月29日', m:7, d:29, t:'21:10', name:'Night Owl', handle:'@nightowl', color:'#f8e08e', body:'Shipped 18 mock tweets across 4 date groups just to test a scroll animation. Worth it.' },
+    { g:'07月29日', m:7, d:29, t:'17:42', name:'Alex Chen', handle:'@alex_dev', color:'#8ecdf8', body:'Good design is invisible. Great design makes you smile when you scroll. This timeline does both.' }
+  ];
+
+  const groups = {};
+  data.forEach(t => { (groups[t.g] = groups[t.g] || []).push(t); });
+  const grid = document.getElementById('grid');
+  Object.keys(groups).forEach(g => {
+    const head = document.createElement('div');
+    head.className = 'date-group';
+    head.innerHTML = '<span class="date-dot"></span><span class="date-label">' + g + '</span><span class="date-rule"></span>';
+    grid.appendChild(head);
+    groups[g].forEach(t => {
+      const initials = t.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.dataset.time = t.t;
+      card.dataset.m = t.m;
+      card.dataset.d = t.d;
+      card.innerHTML =
+        '<div class="card-head">' +
+          '<div class="avatar" style="background:' + t.color + '">' + initials + '</div>' +
+          '<div class="meta">' +
+            '<div class="name">' + t.name + '</div>' +
+            '<div class="sub">' + t.handle + ' · ' + t.t + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<p class="card-body">' + t.body + '</p>';
+      grid.appendChild(card);
+    });
+  });
+
+  // 滚动更新：找最接近视口 55vh 的卡片
+  const timeTextEl = document.getElementById('timeText');
+  const dateTextEl = document.getElementById('dateText');
+  let rafId = null;
+  function update() {
+    rafId = null;
+    const target = window.innerHeight * 0.55;
+    const cards = document.querySelectorAll('.card');
+    let best = null, bestDist = Infinity;
+    cards.forEach(c => {
+      const r = c.getBoundingClientRect();
+      const cy = r.top + r.height / 2;
+      const dist = Math.abs(cy - target);
+      if (dist < bestDist) { bestDist = dist; best = c; }
+    });
+    if (best) {
+      timeTextEl.textContent = best.dataset.time;
+      dateTextEl.textContent = fmtDate(+best.dataset.m, +best.dataset.d);
+    }
+  }
+  function schedule() { if (!rafId) rafId = requestAnimationFrame(update); }
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  update();
+</script>
+</body>
+</html>
