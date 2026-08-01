@@ -2269,4 +2269,13 @@ function liveApplySettings() {
   }
 }
 
+// ─── ECG Logo: hover 加速高光点 ───
+(function initEcgLogoHover() {
+  const logo = document.querySelector(".sidebar-logo");
+  const motion = document.querySelector(".ecg-logo-head animateMotion");
+  if (!logo || !motion) return;
+  logo.addEventListener("mouseenter", () => motion.setAttribute("dur", "0.4s"));
+  logo.addEventListener("mouseleave", () => motion.setAttribute("dur", "0.8s"));
+})();
+
 init();

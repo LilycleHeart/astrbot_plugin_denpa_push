@@ -230,32 +230,29 @@ body {
 }
 .sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
 
-/* ═══ ECG Logo — 纯心电图跳动 ═══ */
+/* ═══ ECG Logo — 波形线 + 头部高光 ═══ */
 .ecg-logo-svg { overflow: visible; }
 
-/* 跳动扫描弧 — 单道亮弧沿波形路径快速移动 */
-.ecg-logo-wave-sweep {
+/* 波形线 — 铺满整条 PQRST 路径 */
+.ecg-logo-wave {
   fill: none;
   stroke: var(--color-brand);
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 26 74;
-  filter: drop-shadow(0 0 1.2px var(--color-brand)) drop-shadow(0 0 2.5px var(--color-brand));
-  animation: ecg-sweep 0.8s linear infinite;
-}
-@keyframes ecg-sweep {
-  from { stroke-dashoffset: 100; }
-  to   { stroke-dashoffset: 0; }
+  filter: drop-shadow(0 0 1px var(--color-brand)) drop-shadow(0 0 2px var(--color-brand));
 }
 
-/* Hover: 加速跳动 (0.8s → 0.4s) */
-.sidebar-logo:hover .ecg-logo-wave-sweep {
-  animation-duration: 0.4s;
+/* 头部高光 — 沿波形路径移动的亮点 */
+.ecg-logo-head {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand)) drop-shadow(0 0 5px var(--color-brand));
 }
+
+/* Hover 加速由 JS 控制 animateMotion dur 属性 */
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-logo-wave-sweep { animation: none; stroke-opacity: 0.7; stroke-dasharray: none; }
+  .ecg-logo-head { display: none; }
 }
 
 .sidebar-title {
