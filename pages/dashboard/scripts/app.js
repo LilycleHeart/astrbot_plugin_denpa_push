@@ -38,6 +38,7 @@ const state = {
     shadow_enabled: true,
     shadow_intensity: 60,
     bg_scrim: 40,
+    parallax_mode: "click",
   },
 };
 
@@ -362,6 +363,7 @@ function syncSettingsInputs() {
   setChk("ui-acrylic-on", ui.acrylic_enabled);
   setChk("ui-glow-on", ui.glow_enabled);
   setChk("ui-shadow-on", ui.shadow_enabled);
+  setChk("ui-parallax-hover", ui.parallax_mode === "hover");
 
   // Slider labels
   const label = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
@@ -405,6 +407,7 @@ function collectUiConfig() {
     acrylic_enabled: getChk("ui-acrylic-on"),
     glow_enabled: getChk("ui-glow-on"),
     shadow_enabled: getChk("ui-shadow-on"),
+    parallax_mode: getChk("ui-parallax-hover") ? "hover" : "click",
     background_image: state.uiConfig.background_image,
     background_accent: state.uiConfig.background_accent,
   };
@@ -857,6 +860,37 @@ let _tlCurrentTime = "";
 let _tlCurrentDate = "";
 let _tlHoveringCard = null;
 
+// 视差效果状态
+let _parallaxRaf = 0;
+let _parallaxMouseX = 0, _parallaxMouseY = 0;
+let _parallaxHolding = false;
+let _parallaxHoldTimer = null;
+let _parallaxActiveWrap = null;
+
+function _applyParallax(wrap, clientX, clientY) {
+  if (!wrap) return;
+  const rect = wrap.getBoundingClientRect();
+  const dx = (clientX - (rect.left + rect.width / 2)) / rect.width;
+  const dy = (clientY - (rect.top + rect.height / 2)) / rect.height;
+  const maxMove = 10, maxTilt = 8;
+  const tx = dx * maxMove, ty = dy * maxMove;
+  const rx = -dy * maxTilt, ry = dx * maxTilt;
+  wrap.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(20px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+}
+
+function _resetParallax(wrap, animated) {
+  if (!wrap) return;
+  clearTimeout(wrap._parallaxTimer);
+  if (animated) {
+    wrap.style.transition = "transform 0.28s cubic-bezier(0.2, 0, 0, 1)";
+    wrap.style.transform = "";
+    setTimeout(() => { wrap.style.transition = ""; }, 300);
+  } else {
+    wrap.style.transform = "";
+    wrap.style.transition = "";
+  }
+}
+
 function _extractTimeDate(item) {
   let timeStr = "00:00", dateStr = "01月01日";
   const dt = item.time ? new Date(item.time) : null;
@@ -886,11 +920,14 @@ function _initTimelineBadge() {
 }
 
 // 鼠标悬停卡片时，胶囊滑到对应位置并显示该卡片时间
-// 点击卡片时播放一次视差偏移动画
+// 视差效果根据设置：hover 常驻 或 click/long-press 触发
 function _bindCardHover() {
   const container = document.getElementById("tracking-history");
   if (!container) return;
 
+  const mode = () => state.uiConfig.parallax_mode || "click";
+
+  // ── 鼠标悬停 → 胶囊跟随（始终生效） ──
   container.addEventListener("mouseover", (e) => {
     const card = e.target.closest(".tl-entry");
     if (card && card !== _tlHoveringCard) {
@@ -901,36 +938,82 @@ function _bindCardHover() {
 
   container.addEventListener("mouseleave", () => {
     _tlHoveringCard = null;
-    // 回到视口中心卡片
     _updateTimelineBadge();
+    // hover 模式：离开容器时复位所有卡片
+    if (mode() === "hover") {
+      container.querySelectorAll(".tl-card-wrap").forEach(w => _resetParallax(w, true));
+      _parallaxActiveWrap = null;
+    }
   });
 
-  // 视差：点击卡片时播放一次偏移动画，自动复位
-  container.addEventListener("click", (e) => {
+  // ── mousemove：hover 模式常驻跟随 / click 模式长按跟随 ──
+  container.addEventListener("mousemove", (e) => {
+    const m = mode();
+    if (m === "hover") {
+      const card = e.target.closest(".tl-entry");
+      if (!card) return;
+      const wrap = card.querySelector(".tl-card-wrap");
+      if (!wrap) return;
+      // 切换卡片时无动画复位上一张
+      if (_parallaxActiveWrap && _parallaxActiveWrap !== wrap) {
+        _resetParallax(_parallaxActiveWrap, false);
+      }
+      _parallaxActiveWrap = wrap;
+      _parallaxMouseX = e.clientX;
+      _parallaxMouseY = e.clientY;
+      if (_parallaxRaf) return;
+      _parallaxRaf = requestAnimationFrame(() => {
+        _parallaxRaf = 0;
+        _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
+      });
+    } else if (m === "click" && _parallaxHolding && _parallaxActiveWrap) {
+      _parallaxMouseX = e.clientX;
+      _parallaxMouseY = e.clientY;
+      if (_parallaxRaf) return;
+      _parallaxRaf = requestAnimationFrame(() => {
+        _parallaxRaf = 0;
+        _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
+      });
+    }
+  });
+
+  // ── click 模式：mousedown 立即应用视差 + 长按检测 ──
+  container.addEventListener("mousedown", (e) => {
+    if (mode() !== "click" || e.button !== 0) return;
     const card = e.target.closest(".tl-entry");
     if (!card) return;
     const wrap = card.querySelector(".tl-card-wrap");
     if (!wrap) return;
 
-    // 用点击位置作为偏移方向
-    const rect = wrap.getBoundingClientRect();
-    const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
-    const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
-    const maxMove = 10, maxTilt = 8;
-    const tx = dx * maxMove, ty = dy * maxMove;
-    const rx = -dy * maxTilt, ry = dx * maxTilt;
+    // 立即应用视差
+    wrap.style.transition = "transform 0.18s cubic-bezier(0.2, 0, 0, 1)";
+    _applyParallax(wrap, e.clientX, e.clientY);
+    _parallaxActiveWrap = wrap;
+    _parallaxHolding = false;
 
-    // 加 transition 让偏移有动画感
-    wrap.style.transition = "transform 0.28s cubic-bezier(0.2, 0, 0, 1)";
-    wrap.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(20px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+    // 300ms 后进入长按模式
+    clearTimeout(_parallaxHoldTimer);
+    _parallaxHoldTimer = setTimeout(() => {
+      _parallaxHolding = true;
+      wrap.style.transition = ""; // 长按模式去掉 transition 以便流畅跟随
+    }, 300);
+  });
 
-    // 400ms 后复位
-    clearTimeout(wrap._parallaxTimer);
-    wrap._parallaxTimer = setTimeout(() => {
-      wrap.style.transform = "";
-      // 复位后再清除 transition
-      setTimeout(() => { wrap.style.transition = ""; }, 300);
-    }, 420);
+  // ── mouseup：长按平滑复位 / 短按保持后复位 ──
+  document.addEventListener("mouseup", () => {
+    if (mode() !== "click") return;
+    clearTimeout(_parallaxHoldTimer);
+    if (_parallaxHolding) {
+      _parallaxHolding = false;
+      _resetParallax(_parallaxActiveWrap, true);
+      _parallaxActiveWrap = null;
+    } else if (_parallaxActiveWrap) {
+      const wrap = _parallaxActiveWrap;
+      _parallaxActiveWrap = null;
+      // 短按：保持当前偏移 420ms 后平滑复位
+      clearTimeout(wrap._parallaxTimer);
+      wrap._parallaxTimer = setTimeout(() => _resetParallax(wrap, true), 420);
+    }
   });
 }
 
@@ -1776,10 +1859,31 @@ async function init() {
     tab.addEventListener("click", () => switchTab(tab.dataset.tab));
   });
 
-  // Sidebar toggle
+  // Sidebar toggle（手动收缩 / 展开）
+  let _sidebarManualCollapse = false;
+  const sidebarEl = document.getElementById("sidebar");
   document.getElementById("sidebar-toggle").addEventListener("click", () => {
-    document.getElementById("sidebar").classList.toggle("collapsed");
+    sidebarEl.classList.toggle("collapsed");
+    _sidebarManualCollapse = sidebarEl.classList.contains("collapsed");
   });
+
+  // 响应式：窗口缩小时自动收缩侧边栏，放大时自动展开（除非用户手动收起）
+  const SIDEBAR_BREAKPOINT = 900;
+  let _sidebarRaf = 0;
+  function _autoSidebar() {
+    if (_sidebarRaf) return;
+    _sidebarRaf = requestAnimationFrame(() => {
+      _sidebarRaf = 0;
+      const narrow = window.innerWidth < SIDEBAR_BREAKPOINT;
+      if (narrow && !sidebarEl.classList.contains("collapsed")) {
+        sidebarEl.classList.add("collapsed");
+      } else if (!narrow && !_sidebarManualCollapse && sidebarEl.classList.contains("collapsed")) {
+        sidebarEl.classList.remove("collapsed");
+      }
+    });
+  }
+  window.addEventListener("resize", _autoSidebar, { passive: true });
+  _autoSidebar(); // 初始检查
 
   // Theme toggle
   const themeBtn = document.getElementById("btn-theme");
@@ -1927,7 +2031,7 @@ function bindSettingsEvents() {
   });
 
   // Selects / checkboxes → live apply
-  ["ui-color-mode", "ui-bg-mode", "ui-material-type", "ui-font", "ui-acrylic-on", "ui-glow-on", "ui-shadow-on"].forEach(id => {
+  ["ui-color-mode", "ui-bg-mode", "ui-material-type", "ui-font", "ui-acrylic-on", "ui-glow-on", "ui-shadow-on", "ui-parallax-hover"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", liveApplySettings);
   });
@@ -1969,6 +2073,7 @@ function bindSettingsEvents() {
       material_type: "acrylic", font_mode: "misans",
       glow_enabled: true, glow_intensity: 15, shadow_enabled: true,
       shadow_intensity: 60, bg_scrim: 40,
+      parallax_mode: "click",
     };
     applyUiConfig();
     toast("已恢复默认");
@@ -2033,9 +2138,18 @@ function bindSettingsEvents() {
 }
 
 function liveApplySettings() {
+  const prevMode = state.uiConfig.parallax_mode;
   const cfg = collectUiConfig();
   state.uiConfig = { ...state.uiConfig, ...cfg };
   applyUiConfig();
+  // 视差模式切换时清除残留 transform
+  if (prevMode !== cfg.parallax_mode) {
+    const container = document.getElementById("tracking-history");
+    if (container) container.querySelectorAll(".tl-card-wrap").forEach(w => _resetParallax(w, false));
+    _parallaxActiveWrap = null;
+    _parallaxHolding = false;
+    clearTimeout(_parallaxHoldTimer);
+  }
 }
 
 init();
