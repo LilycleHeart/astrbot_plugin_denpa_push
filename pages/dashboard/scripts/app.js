@@ -1399,44 +1399,60 @@ function renderHistory(data) {
 }
 
 function _fullRenderHistory(tlCt, items, emptyMsg) {
-  tlCt.classList.add("tl-switching");
-  setTimeout(() => {
-    tlCt.innerHTML = "";
-    if (items.length === 0) {
-      tlCt.innerHTML = emptyMsg;
-      tlCt.classList.remove("tl-switching");
-      tlCt.classList.remove("masonry-ready");
-      tlCt.style.height = "";
-      return;
-    }
-    const frag = document.createDocumentFragment();
-    const sliced = items.slice(0, 50);
-    let lastDate = "";
-    let dateCount = 0;
-    let lastCountEl = null;
-    sliced.forEach(item => {
-      const { dateStr } = _extractTimeDate(item);
-      if (dateStr !== lastDate) {
-        if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
-        lastDate = dateStr;
-        dateCount = 0;
-        const grp = document.createElement("div");
-        grp.className = "tl-date-sep";
-        grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
-        frag.appendChild(grp);
-        lastCountEl = grp.querySelector(".tl-date-sep-count");
-      }
-      dateCount++;
-      frag.appendChild(buildHistoryCard(item));
-    });
-    if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
-    tlCt.appendChild(frag);
+  const hasExistingContent = tlCt.children.length > 0;
+
+  if (hasExistingContent) {
+    // Tab switch: fade out old → swap → fade in new
+    tlCt.classList.add("tl-switching");
+    setTimeout(() => {
+      _buildAndLayoutHistory(tlCt, items, emptyMsg);
+    }, 150);
+  } else {
+    // First load or empty → no fade, build + layout synchronously
+    _buildAndLayoutHistory(tlCt, items, emptyMsg);
+  }
+}
+
+function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
+  tlCt.innerHTML = "";
+  if (items.length === 0) {
+    tlCt.innerHTML = emptyMsg;
     tlCt.classList.remove("tl-switching");
-    _initTimelineBadge();
-    _bindMasonryResize();
-    _scheduleMasonry();
-    _watchMasonryImages(tlCt);
-  }, 150);
+    tlCt.classList.remove("masonry-ready");
+    tlCt.style.height = "";
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  const sliced = items.slice(0, 50);
+  let lastDate = "";
+  let dateCount = 0;
+  let lastCountEl = null;
+  sliced.forEach(item => {
+    const { dateStr } = _extractTimeDate(item);
+    if (dateStr !== lastDate) {
+      if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
+      lastDate = dateStr;
+      dateCount = 0;
+      const grp = document.createElement("div");
+      grp.className = "tl-date-sep";
+      grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
+      frag.appendChild(grp);
+      lastCountEl = grp.querySelector(".tl-date-sep-count");
+    }
+    dateCount++;
+    frag.appendChild(buildHistoryCard(item));
+  });
+  if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
+  tlCt.appendChild(frag);
+
+  // Apply masonry BEFORE making container visible (prevents grid→masonry flash)
+  tlCt.classList.remove("tl-switching");
+  _initTimelineBadge();
+  _bindMasonryResize();
+  // Synchronous layout: measure + position while container is at opacity 1
+  // but entry animations are paused so offsetHeight is accurate
+  _applyMasonry();
+  _watchMasonryImages(tlCt);
 }
 
 function _insertNewCards(tlCt, newItems, allFilteredItems) {
