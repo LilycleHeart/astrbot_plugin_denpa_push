@@ -2275,8 +2275,8 @@ function liveApplySettings() {
   if (!logo) return;
   const animated = logo.querySelectorAll(".ecg-trail");
   const pulsed = logo.querySelectorAll(".ecg-pulse, .ecg-dot");
-  const normalDur = "1.5s";
-  const fastDur = "0.7s";
+  const normalDur = "3s";
+  const fastDur = "1.2s";
   logo.addEventListener("mouseenter", () => {
     animated.forEach(el => el.style.animationDuration = fastDur);
     pulsed.forEach(el => el.style.animationDuration = fastDur);

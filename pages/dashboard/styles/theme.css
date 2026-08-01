@@ -243,17 +243,17 @@ body {
   stroke-linejoin: round;
 }
 
-/* 辉光拖尾 — 持续缓动，不留空 */
+/* 辉光拖尾 — 30-unit 尾迹，跟随光点，与光点同速 */
 .ecg-trail {
   fill: none;
   stroke: var(--color-brand);
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 85 15;
+  stroke-dasharray: 30 70;
   opacity: 0.65;
   filter: drop-shadow(0 0 1.5px var(--color-brand));
-  animation: ecg-trail-scan 1.5s linear infinite;
+  animation: ecg-trail-scan 3s linear infinite;
 }
 
 /* 脉冲高光 — 短段高亮，脉冲式扫过 */
@@ -266,7 +266,7 @@ body {
   stroke-dasharray: 8 92;
   opacity: 1;
   filter: drop-shadow(0 0 2px var(--color-brand-hover)) drop-shadow(0 0 5px var(--color-brand));
-  animation: ecg-pulse-scan 1.5s linear infinite;
+  animation: ecg-pulse-scan 3s linear infinite;
 }
 
 /* 前端亮点 — 纯白高光，跟随脉冲 */
@@ -279,13 +279,17 @@ body {
   stroke-dasharray: 0.5 99.5;
   opacity: 1;
   filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
-  animation: ecg-pulse-scan 1.5s linear infinite;
+  animation: ecg-pulse-scan 3s linear infinite;
 }
 
-/* 拖尾 — 持续缓动，间隙不断前移，保持活性 */
+/* 拖尾 — 偏移 30 单位在光点后方，与光点同速扫过 */
 @keyframes ecg-trail-scan {
-  0%   { stroke-dashoffset: 85; }
-  100% { stroke-dashoffset: 0; }
+  0%   { stroke-dashoffset: -30; opacity: 0; }
+  65%  { stroke-dashoffset: -30; opacity: 0; }
+  67%  { stroke-dashoffset: -26; opacity: 0.65; }
+  80%  { stroke-dashoffset: 70;  opacity: 0.65; }
+  82%  { stroke-dashoffset: 70;  opacity: 0; }
+  100% { stroke-dashoffset: 70;  opacity: 0; }
 }
 
 /* 脉冲 + 亮点 — 长时间停顿，快速扫过，扫完后隐藏 */
