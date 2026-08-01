@@ -345,19 +345,40 @@ body {
   background: transparent;
   font-family: inherit;
   font-size: var(--font-size-caption);
-  color: var(--color-fg-3);
+  color: var(--color-fg-2);
   display: flex;
   align-items: center;
   gap: var(--space-s);
-  height: 30px;
+  height: 32px;
   padding: 0 var(--space-s);
   border-radius: var(--radius-small);
   cursor: pointer;
+  position: relative;
   white-space: nowrap;
-  transition: all var(--motion-fast) var(--motion-ease);
+  transition: color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
 }
-.sub-tab:hover { color: var(--color-fg-2); background: color-mix(in srgb, var(--color-brand) 5%, transparent); }
-.sub-tab.active { color: var(--color-brand); background: var(--color-brand-weak); }
+.sub-tab:hover {
+  background: var(--color-brand-weak);
+  color: var(--color-brand);
+}
+.sub-tab.active {
+  color: var(--color-on-brand-surface);
+  background: var(--color-brand-surface);
+  box-shadow: var(--shadow-4), var(--glow-brand);
+}
+.sub-tab.active .dot { background: var(--color-on-brand-surface); }
+.sub-tab.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  border-radius: var(--radius-circular);
+  background: var(--color-on-brand-surface);
+}
 .sub-tab .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--color-brand); }
 
 /* 收缩态 */

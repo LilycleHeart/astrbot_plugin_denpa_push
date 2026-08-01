@@ -553,3 +553,13 @@
 }
 .toast.success { border-left: 3px solid var(--color-success-fg); }
 .toast.error { border-left: 3px solid var(--color-error-fg); }
+
+/* ===== 全组件统一动效（复刻 denpa_echo） ===== */
+.btn, .select, .input, .textarea, .tab, .sub-tab, .chip, .badge, .card, .stat-card,
+.tweet-card, .tl-tab, .toggle {
+  transition: background-color .18s ease, color .18s ease,
+              border-color .18s ease, box-shadow .22s ease,
+              transform .18s ease, opacity .18s ease;
+}
+/* 按下微缩，强化可点反馈 */
+.btn:active, .chip:active, .tab:active, .sub-tab:active, .tl-tab:active { transform: translateY(0) scale(0.97); }
