@@ -74,7 +74,7 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-large);
-  padding: var(--space-3xl) var(--space-2xl) 190px;
+  padding: var(--space-3xl) var(--space-2xl) 160px;
   background:
     radial-gradient(120% 90% at 82% -10%, color-mix(in srgb, var(--color-brand) 9%, transparent), transparent 60%),
     var(--surface-bg-low);

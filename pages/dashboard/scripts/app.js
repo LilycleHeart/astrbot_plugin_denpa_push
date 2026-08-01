@@ -587,8 +587,8 @@ class EcgWaveform {
     if (this.speedOverride !== null) {
       this.speed = this.speedOverride;
     } else {
-      // 自动：0推文=0.1，20推文=0.6，线性映射
-      this.speed = 0.1 + (Math.min(this.pushCount, 20) / 20) * 0.5;
+      // 自动：0推文=0.2，20推文=1.2，线性映射（匹配预览速度）
+      this.speed = (0.1 + (Math.min(this.pushCount, 20) / 20) * 0.5) * 2;
     }
   }
 
@@ -946,15 +946,6 @@ function _updateTimelineBadge() {
 }
 
 // ─── Render: Status ───
-function _getEcgStateDesc(n) {
-  if (n === 0) return "待机";
-  if (n <= 3) return "平静";
-  if (n <= 8) return "活跃";
-  if (n <= 12) return "频繁";
-  if (n <= 16) return "激烈";
-  return "狂热";
-}
-
 function renderStatus(data) {
   if (!data) return;
   const badge = document.getElementById("monitor-badge");
@@ -974,17 +965,6 @@ function renderStatus(data) {
     // 仅在推送数变化时重置波形，避免每次刷新都跳变
     if (ecg.pushCount !== pushCount) {
       ecg.setPushCount(pushCount);
-      const pcEl = document.getElementById("ecg-push-count");
-      if (pcEl) pcEl.textContent = pushCount;
-      const sdEl = document.getElementById("ecg-state-desc");
-      if (sdEl) sdEl.textContent = _getEcgStateDesc(pushCount);
-      // 自动模式下同步速度滑条位置和显示
-      if (ecg.speedOverride === null) {
-        const ss = document.getElementById("ecg-speed");
-        const sv = document.getElementById("ecg-speed-val");
-        if (ss) ss.value = ecg.speed.toFixed(2);
-        if (sv) sv.textContent = ecg.speed.toFixed(2);
-      }
     }
   }
 
@@ -1133,12 +1113,43 @@ function argbToRgbStr(v) {
   return rgbStr(argbToHex(v));
 }
 
-function buildHistoryCard(item) {
-  const pal = item.palette || {};
-  const seed = item.seed_color || argbToHex(pal.primary) || "#1d9bf0";
-  const isManual = item.source === "manual";
+function _deriveCardPalette(seed, isDark) {
+  // 使用 Material Color Utilities 生成对应主题的 MD3 配色
+  try {
+    const argb = argbFromHex(seed);
+    const theme = themeFromSourceColor(argb);
+    const s = isDark ? theme.schemes.dark : theme.schemes.light;
+    const tp = theme.palettes.primary;
+    const nv = theme.palettes.neutralVariant;
+    const neutral = theme.palettes.neutral;
+    return {
+      surface_container: isDark ? hexFromArgb(neutral.tone(12)) : hexFromArgb(neutral.tone(94)),
+      primary: hexFromArgb(s.primary),
+      on_primary: hexFromArgb(s.onPrimary),
+      surface: hexFromArgb(s.surface),
+      surface_variant: hexFromArgb(s.surfaceVariant),
+      on_surface: hexFromArgb(s.onSurface),
+      on_surface_variant: hexFromArgb(s.onSurfaceVariant),
+    };
+  } catch (e) {
+    return null;
+  }
+}
 
-  // Build CSS custom properties from palette (1:1 with template)
+function buildHistoryCard(item) {
+  const rawPal = item.palette || {};
+  const seed = item.seed_color || argbToHex(rawPal.primary) || "#1d9bf0";
+  const isManual = item.source === "manual";
+  const isDark = currentIsDark();
+
+  // 暗色主题下重新生成 MD3 配色，亮色用后端预计算或前端兜底
+  let pal = rawPal;
+  if (isDark) {
+    const darkPal = _deriveCardPalette(seed, true);
+    if (darkPal) pal = darkPal;
+  }
+
+  // Build CSS custom properties from palette
   const cssVars = [
     `--md-surface-container:${argbToHex(pal.surface_container || "#f0eaf8")}`,
     `--md-surface-container-rgb:${argbToRgbStr(pal.surface_container || "#f0eaf8")}`,
@@ -1175,8 +1186,6 @@ function buildHistoryCard(item) {
   el.dataset.time = timeStr;
   el.dataset.date = dateStr;
   el.innerHTML = `
-    <div class="tl-node" style="background:${seed}"></div>
-    <div class="tl-time-label">${escapeHtml(timeRaw)}</div>
     <div class="tl-card-wrap">
       <div class="tweet-card ${isManual ? "is-manual" : ""}" style="${cssVars}">
         <div class="card-inner">
@@ -1415,26 +1424,6 @@ async function init() {
 
   ecg = new EcgWaveform(document.getElementById("ecg-canvas"));
 
-  // ECG control sliders
-  const speedSlider = document.getElementById("ecg-speed");
-  const speedVal = document.getElementById("ecg-speed-val");
-  if (speedSlider) {
-    speedSlider.addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (speedVal) speedVal.textContent = v.toFixed(2);
-      ecg.setSpeed(v);
-    });
-  }
-  const complexitySlider = document.getElementById("ecg-complexity");
-  const complexityVal = document.getElementById("ecg-complexity-val");
-  if (complexitySlider) {
-    complexitySlider.addEventListener("input", (e) => {
-      const v = parseInt(e.target.value);
-      if (complexityVal) complexityVal.textContent = v;
-      ecg.setComplexity(v);
-    });
-  }
-
   // Tab clicks
   document.querySelectorAll(".tab[data-tab]").forEach(tab => {
     tab.addEventListener("click", () => switchTab(tab.dataset.tab));
@@ -1454,6 +1443,8 @@ async function init() {
         html.dataset.theme = html.dataset.theme === "dark" ? "light" : "dark";
         syncThemeIcon();
         applyUiConfig();
+        // 重建推文卡片以应用暗/亮色 MD3 配色
+        renderHistory({ history: state.timeline.history });
       };
       const x = e.clientX || window.innerWidth / 2;
       const y = e.clientY || window.innerHeight / 2;
