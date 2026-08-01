@@ -266,10 +266,28 @@ class DenpaPushPlugin(Star):
         from astrbot.api.web import request, json_response
 
         total_tracked = sum(len(users) for users in self.subscriptions.values())
+        # 计算今日推送数（本地时区 00:00 起）
+        today_pushes = 0
+        try:
+            from datetime import datetime as _dt
+            now_local = _dt.now()
+            today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            for item in self._push_history:
+                t = item.get("time", "")
+                if t:
+                    try:
+                        dt = _dt.fromisoformat(t.replace("Z", "+00:00"))
+                        if dt.astimezone().replace(tzinfo=None) >= today_start:
+                            today_pushes += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return json_response({
             "monitor_running": self._running,
             "total_tracked": total_tracked,
             "total_pushes": self._total_pushes,
+            "today_pushes": today_pushes,
             "poll_interval": int(self.config.get("poll_interval", 5)),
             "session_count": len(self.monitored_sessions),
             "monitored_sessions": list(self.monitored_sessions),
@@ -1889,22 +1907,42 @@ class DenpaPushPlugin(Star):
         return str(pid) if pid else ""
 
     def _track_token_usage(self, llm_resp):
-        """从 LLM 响应对象中提取 token 用量并累计。"""
+        """从 LLM 响应对象中提取 token 用量并累计。
+
+        AstrBot 的 LLMResponse.usage 是 TokenUsage dataclass:
+          input_other: int   — 非缓存输入 token
+          input_cached: int  — 缓存输入 token
+          output: int        — 输出 token
+          input  (@property) = input_other + input_cached
+          total  (@property) = input_other + input_cached + output
+        注意 input / total 是 @property, vars() 拿不到, 必须用属性访问。
+        """
         if not llm_resp:
             return
-        usage = getattr(llm_resp, "usage", None) or getattr(llm_resp, "token_usage", None)
+        usage = (
+            getattr(llm_resp, "usage", None)
+            or getattr(llm_resp, "token_usage", None)
+            or getattr(llm_resp, "usage_stats", None)
+        )
         if not usage:
             return
         try:
-            prompt_t = int(usage.get("prompt_tokens", usage.get("input_tokens", 0)))
-            completion_t = int(usage.get("completion_tokens", usage.get("output_tokens", 0)))
-            total_t = int(usage.get("total_tokens", prompt_t + completion_t))
+            if isinstance(usage, dict):
+                # 字典格式 (旧版兼容)
+                prompt_t = int(usage.get("prompt_tokens") or usage.get("input_tokens") or usage.get("input") or 0)
+                completion_t = int(usage.get("completion_tokens") or usage.get("output_tokens") or usage.get("output") or 0)
+                total_t = int(usage.get("total_tokens") or usage.get("total") or (prompt_t + completion_t))
+            else:
+                # AstrBot TokenUsage 对象: 用属性访问 (input/total 是 @property)
+                prompt_t = int(getattr(usage, "input", 0) or getattr(usage, "input_other", 0))
+                completion_t = int(getattr(usage, "output", 0))
+                total_t = int(getattr(usage, "total", 0) or (prompt_t + completion_t))
             self._token_stats["prompt"] += prompt_t
             self._token_stats["completion"] += completion_t
             self._token_stats["total"] += total_t
             self._token_stats["calls"] += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[DenpaPush] token usage parse failed: {e}, usage={usage!r}")
 
     async def _translate_text(self, data: dict) -> str:
         import re as _re
