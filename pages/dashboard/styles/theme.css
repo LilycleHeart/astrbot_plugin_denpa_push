@@ -233,17 +233,7 @@ body {
 /* ═══ ECG Logo — 纯心电图跳动 ═══ */
 .ecg-logo-svg { overflow: visible; }
 
-/* 静态波形底层 — 暗色轮廓始终可见 */
-.ecg-logo-wave-bg {
-  fill: none;
-  stroke: var(--color-brand);
-  stroke-width: 1.1;
-  stroke-opacity: 0.18;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* 跳动扫描弧 — 亮色短弧沿波形路径移动, 模拟心电跳动 */
+/* 跳动扫描弧 — 单道亮弧沿波形路径快速移动 */
 .ecg-logo-wave-sweep {
   fill: none;
   stroke: var(--color-brand);
@@ -252,16 +242,16 @@ body {
   stroke-linejoin: round;
   stroke-dasharray: 26 74;
   filter: drop-shadow(0 0 1.2px var(--color-brand)) drop-shadow(0 0 2.5px var(--color-brand));
-  animation: ecg-sweep 1.6s linear infinite;
+  animation: ecg-sweep 0.8s linear infinite;
 }
 @keyframes ecg-sweep {
   from { stroke-dashoffset: 100; }
   to   { stroke-dashoffset: 0; }
 }
 
-/* Hover: 加速跳动 (1.6s → 0.8s) */
+/* Hover: 加速跳动 (0.8s → 0.4s) */
 .sidebar-logo:hover .ecg-logo-wave-sweep {
-  animation-duration: 0.8s;
+  animation-duration: 0.4s;
 }
 
 @media (prefers-reduced-motion: reduce) {
