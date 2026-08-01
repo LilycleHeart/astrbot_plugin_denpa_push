@@ -795,7 +795,7 @@ class EcgWaveform {
     this.offset += this.speed * (dt / 16.667); // normalize to 60fps baseline
 
     const mid = h * 0.55;
-    const amp = h * 0.2592 * this.ampScale;
+    const amp = h * 0.225 * this.ampScale;
     const brand = this._getBrand();
 
     // ── Wave-space sampling (jitter fix) ──
@@ -2233,5 +2233,99 @@ function liveApplySettings() {
     clearTimeout(_parallaxHoldTimer);
   }
 }
+
+// ─── Mini ECG Logo Animation ───
+(function initLogoEcg() {
+  const canvas = document.getElementById("logo-ecg");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = 44, ch = 22;
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const mid = ch * 0.5;
+  const speed = 0.9;          // px per frame (~60fps)
+  const fadeWidth = 18;       // trailing fade region width
+  const beatWidth = 36;       // one beat cycle width
+  // ECG beat shape (normalized 0..1 within beatWidth), y in -1..1
+  function beatY(t) {
+    // t: 0..1 within one beat
+    if (t < 0.15) return 0;
+    if (t < 0.22) return Math.sin((t - 0.15) / 0.07 * Math.PI) * 0.15;          // P wave
+    if (t < 0.30) return 0;
+    if (t < 0.33) return -((t - 0.30) / 0.03) * 0.25;                            // Q dip
+    if (t < 0.37) return -0.25 + ((t - 0.33) / 0.04) * 1.5;                      // R spike up
+    if (t < 0.41) return 1.25 - ((t - 0.37) / 0.04) * 1.65;                      // S down
+    if (t < 0.46) return -0.4 + ((t - 0.41) / 0.05) * 0.4;                       // return to baseline
+    if (t < 0.65) return 0;
+    if (t < 0.80) return Math.sin((t - 0.65) / 0.15 * Math.PI) * 0.3;            // T wave
+    return 0;
+  }
+
+  let offset = 0;
+  const brand = () => getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
+
+  function draw() {
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Draw trail: sample points from (offset - fadeWidth) to offset
+    const xStart = 0;
+    const xEnd = cw;
+    const amp = ch * 0.38;
+
+    ctx.beginPath();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 1.5;
+
+    const samples = [];
+    for (let x = xStart; x <= xEnd; x++) {
+      const totalX = x + offset;
+      const bt = (totalX % beatWidth) / beatWidth;
+      const y = mid - beatY(bt) * amp;
+      samples.push({ x, y });
+    }
+
+    // Draw the full line with gradient opacity (fading at right edge = new data)
+    for (let i = 0; i < samples.length - 1; i++) {
+      const s = samples[i], e = samples[i + 1];
+      // Right edge (latest) fades in, left edge fully visible
+      const distFromRight = xEnd - s.x;
+      let alpha = 1;
+      if (distFromRight < fadeWidth) {
+        alpha = 1 - (fadeWidth - distFromRight) / fadeWidth;
+        alpha = Math.max(0, alpha * alpha); // ease-in
+      }
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = brand();
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+    }
+
+    // Glowing pulse point at the rightmost active position
+    const lastIdx = samples.length - 1 - 1; // one before the fully-faded edge
+    const pulse = samples[lastIdx];
+    if (pulse) {
+      const pulseAlpha = 1 - (fadeWidth * 0.3) / fadeWidth;
+      ctx.globalAlpha = Math.max(0, pulseAlpha);
+      ctx.shadowColor = brand();
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = brand();
+      ctx.beginPath();
+      ctx.arc(pulse.x, pulse.y, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.globalAlpha = 1;
+    offset += speed;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
 
 init();

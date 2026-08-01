@@ -223,19 +223,8 @@ body {
   color: var(--color-brand);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent));
 }
-.sidebar-logo svg { width: 22px; height: 22px; display: block; }
-/* ECG logo 动画 */
-.sidebar-logo .ecg-logo polyline {
-  stroke: var(--color-brand);
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 60;
-  stroke-dashoffset: 60;
-  animation: ecgDraw 2.2s linear infinite;
-}
-@keyframes ecgDraw { to { stroke-dashoffset: 0; } }
+.sidebar-logo svg, .sidebar-logo canvas { width: 22px; height: 22px; display: block; }
+.sidebar-logo canvas { width: 44px; height: 22px; }
 
 .sidebar-title {
   font-family: var(--font-family-display);
