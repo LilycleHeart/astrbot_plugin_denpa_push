@@ -448,16 +448,17 @@ body {
 }
 
 /* ============================================================
- * 材质开关 class (app.js 切换)
+ * 材质开关 class (app.js 在 #app 上切换)
+ * 无 !important: 靠 components.css 在本文件之后加载, .tab-content .card
+ * (特异度 0,2,0) 自然层叠胜出, 保持 tab-content 内 card 透明 (复刻 denpa_echo)
  * ============================================================ */
-#acrylic-off .card,
 .acrylic-off .card,
 .acrylic-off .sidebar,
 .acrylic-off .hero,
 .acrylic-off .stat-card,
 .acrylic-off .tab-content.active {
-  -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
 }
 .acrylic-off .sidebar { background: var(--color-bg-1); }
 .acrylic-off .hero { background: var(--color-bg-1); }
@@ -471,7 +472,7 @@ body {
 .glow-off .stat-card,
 .glow-off .tab-content.active,
 .glow-off .tab.active {
-  box-shadow: var(--shadow-4) !important;
+  box-shadow: var(--shadow-4);
 }
 
 .shadow-off .card,
@@ -480,7 +481,17 @@ body {
 .shadow-off .stat-card,
 .shadow-off .tab-content.active,
 .shadow-off .tab.active {
-  box-shadow: var(--glow-brand) !important;
+  box-shadow: var(--glow-brand);
+}
+
+/* 两个都关时：完全去除 box-shadow (特异度 0,3,0 自然压过上面 0,2,0) */
+.glow-off.shadow-off .card,
+.glow-off.shadow-off .sidebar,
+.glow-off.shadow-off .hero,
+.glow-off.shadow-off .stat-card,
+.glow-off.shadow-off .tab-content.active,
+.glow-off.shadow-off .tab.active {
+  box-shadow: none;
 }
 
 /* 背景图模式（暗色）：可调暗色遮罩，压住高频花纹保证文字对比度 */

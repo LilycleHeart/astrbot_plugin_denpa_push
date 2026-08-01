@@ -45,21 +45,23 @@
   color: var(--color-fg-3);
 }
 
-/* tab-content 内的 card 退化为透明内容容器 (tab-content.active 本身是玻璃表面) */
-/* 使用 !important 确保材质开关 (glow-off/shadow-off/acrylic-off) 不会给 tab-content 内的
-   card 重新加上 box-shadow/background/backdrop-filter，避免出现"双层卡片"效果 */
+/* 内容面板即唯一玻璃/实底表面(与侧边栏同配方); 内部 .card 只负责内容编排,
+   自身退化为完全透明的内容容器, 避免出现"卡片套卡片"的嵌套重影
+   (1:1 复刻 denpa_echo: .tab-content .card 特异度 0,2,0, 无 !important,
+   靠 components.css 在 theme.css 之后加载的自然层叠胜出) */
 .tab-content .card {
-  background: transparent !important;
-  -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  box-shadow: none;
   border: none;
   border-radius: 0;
   padding: 0;
   animation: none;
 }
 .tab-content .card:hover {
-  box-shadow: none !important;
+  box-shadow: none;
+  background-image: none;
   transform: none;
 }
 
@@ -85,21 +87,25 @@
   box-shadow: var(--shadow-4), var(--glow-brand-strong);
   transform: translateY(-1px);
 }
+/* stat-card 在内容面板内退化为带内边距的内容块(无玻璃/圆角/动效),
+   保留 padding 保证标签数值可读, 但不单独成卡 (复刻 denpa_echo, 无 !important) */
 .tab-content .stat-card {
-  background: transparent !important;
-  -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  box-shadow: none;
   border: none;
   border-radius: 0;
   animation: none;
 }
 .tab-content .stat-card:hover {
-  box-shadow: none !important;
+  box-shadow: none;
+  background-image: none;
   transform: none;
 }
 
-/* tab-content 内的表单控件：去除 backdrop-filter，避免与 tab-content 玻璃叠加成双层 */
+/* 玻璃面板内的控件本身不再做成 mini 玻璃卡, 改用实底平铺,
+   避免"玻璃上叠玻璃"读出第二层卡片 (复刻 denpa_echo, 无 !important) */
 .tab-content .input,
 .tab-content .select,
 .tab-content .textarea {
