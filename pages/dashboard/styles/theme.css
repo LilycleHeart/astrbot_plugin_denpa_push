@@ -230,36 +230,72 @@ body {
 }
 .sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
 
-/* ═══ ECG Logo — 波形线 + 头部高光 ═══ */
+/* ═══ ECG Logo — 动态扫描脉冲 ═══ */
 .ecg-logo-svg { overflow: visible; }
 
-/* 波形线 — 铺满整条 PQRST 路径 */
-.ecg-logo-wave {
+/* 背景波形 — 静态暗影，勾勒完整 PQRST 轮廓 */
+.ecg-bg-wave {
+  fill: none;
+  stroke: var(--color-brand);
+  stroke-width: 1.1;
+  opacity: 0.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 辉光拖尾 — 较长段，中等亮度，跟随脉冲 */
+.ecg-trail {
   fill: none;
   stroke: var(--color-brand);
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 1px var(--color-brand)) drop-shadow(0 0 2px var(--color-brand));
+  stroke-dasharray: 20 80;
+  opacity: 0.35;
+  filter: drop-shadow(0 0 1px var(--color-brand));
+  animation: ecg-scan 1.8s linear infinite;
 }
 
-/* 头部高光 — 沿波形路径移动的亮点, 移动后停顿再开始下一轮 */
-.ecg-logo-head {
-  fill: #ffffff;
-  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand)) drop-shadow(0 0 5px var(--color-brand));
-  animation: ecg-head-vis 1.3s linear infinite;
-}
-@keyframes ecg-head-vis {
-  0%       { opacity: 0; }
-  3%       { opacity: 1; }
-  38%      { opacity: 1; }
-  40%, 100% { opacity: 0; }
+/* 脉冲高光 — 短段，高亮度，核心扫描亮点 */
+.ecg-pulse {
+  fill: none;
+  stroke: var(--color-brand);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 94;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 2px var(--color-brand)) drop-shadow(0 0 4px var(--color-brand));
+  animation: ecg-scan 1.8s linear infinite;
 }
 
-/* Hover 加速由 JS 控制 animateMotion dur 属性 */
+/* 前端亮点 — 极小圆点，纯白高光，位于脉冲最前沿 */
+.ecg-dot {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.5 99.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
+  animation: ecg-scan 1.8s linear infinite;
+}
+
+@keyframes ecg-scan {
+  0%   { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 100; }
+}
+
+/* Hover 加速由 JS 控制 animation-duration */
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-logo-head { display: none; }
+  .ecg-trail,
+  .ecg-pulse,
+  .ecg-dot {
+    animation: none;
+  }
+  .ecg-bg-wave { opacity: 0.3; }
 }
 
 .sidebar-title {

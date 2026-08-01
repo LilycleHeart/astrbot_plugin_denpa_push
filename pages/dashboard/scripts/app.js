@@ -2269,21 +2269,18 @@ function liveApplySettings() {
   }
 }
 
-// ─── ECG Logo: hover 加速高光点 ───
+// ─── ECG Logo: hover 加速扫描脉冲 ───
 (function initEcgLogoHover() {
   const logo = document.querySelector(".sidebar-logo");
-  const motion = document.querySelector(".ecg-logo-head animateMotion");
-  const head = document.querySelector(".ecg-logo-head");
-  if (!logo || !motion || !head) return;
+  if (!logo) return;
+  const animated = logo.querySelectorAll(".ecg-trail, .ecg-pulse, .ecg-dot");
+  const normalDur = "1.8s";
+  const fastDur = "0.8s";
   logo.addEventListener("mouseenter", () => {
-    motion.setAttribute("dur", "0.7s");
-    motion.setAttribute("keyTimes", "0;0.55;1");
-    head.style.animationDuration = "0.7s";
+    animated.forEach(el => el.style.animationDuration = fastDur);
   });
   logo.addEventListener("mouseleave", () => {
-    motion.setAttribute("dur", "1.3s");
-    motion.setAttribute("keyTimes", "0;0.38;1");
-    head.style.animationDuration = "1.3s";
+    animated.forEach(el => el.style.animationDuration = normalDur);
   });
 })();
 

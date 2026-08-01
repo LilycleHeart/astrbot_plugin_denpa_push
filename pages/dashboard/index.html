@@ -21,16 +21,14 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-logo" aria-hidden="true">
-            <svg class="ecg-logo-svg" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+            <svg class="ecg-logo-svg" viewBox="0 0 40 28" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <path id="ecg-logo-path" pathLength="100" d="M 2,14 L 4,14 L 6.5,5.5 L 10,22.5 L 12.5,14 L 15,14 L 15.5,17 L 20,8 L 24,14 L 26,14"/>
+                <path id="ecg-path" pathLength="100" d="M 2,16 L 5,16 L 5.8,13.5 L 6.6,17 L 7.2,16 L 8,16 L 9,7.5 L 11,24.5 L 12,16 L 13,16 L 14.8,11.5 L 16.5,16 L 18.5,16 L 19.3,13.5 L 20.1,17 L 20.7,16 L 21.5,16 L 22.5,7.5 L 24.5,24.5 L 25.5,16 L 26.5,16 L 28.3,11.5 L 30,16 L 32,16 L 38,16"/>
               </defs>
-              <use class="ecg-logo-wave" href="#ecg-logo-path"/>
-              <circle class="ecg-logo-head" r="1.2">
-                <animateMotion dur="1.3s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.38;1">
-                  <mpath href="#ecg-logo-path"/>
-                </animateMotion>
-              </circle>
+              <use class="ecg-bg-wave" href="#ecg-path"/>
+              <use class="ecg-trail" href="#ecg-path"/>
+              <use class="ecg-pulse" href="#ecg-path"/>
+              <use class="ecg-dot" href="#ecg-path"/>
             </svg>
           </span>
           <span class="sidebar-title">DenpaPush</span>
