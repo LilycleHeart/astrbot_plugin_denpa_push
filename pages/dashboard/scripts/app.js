@@ -588,8 +588,8 @@ class EcgWaveform {
     if (this.speedOverride !== null) {
       this.speed = this.speedOverride;
     } else {
-      // 自动：0推文=0.2，50推文=1.2，线性映射（匹配预览速度）
-      this.speed = 0.2 + (Math.min(this.pushCount, 50) / 50) * 1.0;
+      // 自动：0推文=0.2，20推文=1.2，线性映射
+      this.speed = 0.2 + (Math.min(this.pushCount, 20) / 20) * 1.0;
     }
   }
 
