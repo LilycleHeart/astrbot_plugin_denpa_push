@@ -1323,9 +1323,21 @@ function buildHistoryCard(item) {
   return el;
 }
 
+function _historyItemKey(item) {
+  // Build a stable unique key from available fields
+  const sn = item.screen_name || "?";
+  const t = item.time || item.created_at_str || "";
+  const src = item.source || "auto";
+  const txt = (item.text || item.original_text || "").slice(0, 32);
+  return `${sn}|${t}|${src}|${txt}`;
+}
+
 function renderHistory(data) {
   const allItems = data?.history || [];
+  const prevMode = state.timeline._lastMode || null;
+  const prevKeys = state.timeline._renderedKeys || null;
   state.timeline.history = allItems;
+  const currentMode = state.timeline.mode;
 
   // Rebuild tabs (accounts may have changed)
   renderTimelineTabs();
@@ -1334,56 +1346,162 @@ function renderHistory(data) {
 
   // Timeline (tracking-history): apply tab filter
   const tlCt = document.getElementById("tracking-history");
-  if (tlCt) {
-    let items = allItems;
-    let emptyMsg = emptyHtml;
+  if (!tlCt) return;
 
-    if (state.timeline.mode === "manual") {
-      items = allItems.filter(it => it.source === "manual");
-      emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无手动推送记录</p>';
-    } else if (state.timeline.mode !== "overview") {
-      // Account-specific filter (mode = screen_name)
-      items = allItems.filter(it => (it.screen_name || "") === state.timeline.mode);
-      emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">该账号暂无推送记录</p>';
-    }
+  let items = allItems;
+  let emptyMsg = emptyHtml;
 
-    // Crossfade transition
-    tlCt.classList.add("tl-switching");
-    setTimeout(() => {
-      tlCt.innerHTML = "";
-      if (items.length === 0) {
-        tlCt.innerHTML = emptyMsg;
-      } else {
-        const frag = document.createDocumentFragment();
-        const sliced = items.slice(0, 50);
-        let lastDate = "";
-        let dateCount = 0;
-        let lastCountEl = null;
-        sliced.forEach(item => {
-          const { dateStr } = _extractTimeDate(item);
-          if (dateStr !== lastDate) {
-            if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
-            lastDate = dateStr;
-            dateCount = 0;
-            const grp = document.createElement("div");
-            grp.className = "tl-date-sep";
-            grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
-            frag.appendChild(grp);
-            lastCountEl = grp.querySelector(".tl-date-sep-count");
-          }
-          dateCount++;
-          frag.appendChild(buildHistoryCard(item));
-        });
-        if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
-        tlCt.appendChild(frag);
-      }
-      tlCt.classList.remove("tl-switching");
-      _initTimelineBadge();
-      _bindMasonryResize();
-      _scheduleMasonry();
-      _watchMasonryImages(tlCt);
-    }, 150);
+  if (currentMode === "manual") {
+    items = allItems.filter(it => it.source === "manual");
+    emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无手动推送记录</p>';
+  } else if (currentMode !== "overview") {
+    items = allItems.filter(it => (it.screen_name || "") === currentMode);
+    emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">该账号暂无推送记录</p>';
   }
+
+  // Determine if we can do an incremental update (same tab, same theme,
+  // data just refreshed with potentially new items)
+  const newKeys = new Set(items.map(_historyItemKey));
+  const canIncremental = prevMode === currentMode && prevKeys !== null;
+
+  if (canIncremental && items.length > 0) {
+    // ── Incremental update: find new items not in prevKeys ──
+    const newItems = items.filter(it => !prevKeys.has(_historyItemKey(it)));
+    if (newItems.length === 0) {
+      // Nothing new — update state, skip DOM entirely (no flicker)
+      state.timeline._renderedKeys = newKeys;
+      state.timeline._lastMode = currentMode;
+      _initTimelineBadge();
+      return;
+    }
+    // Check if some previous items are gone (different dataset)
+    const oldOnly = [...prevKeys].filter(k => !newKeys.has(k));
+    if (oldOnly.length > 0) {
+      // Dataset changed significantly — full re-render needed
+      _fullRenderHistory(tlCt, items, emptyMsg);
+    } else {
+      // ── Insert only new cards at the top, animate them in ──
+      _insertNewCards(tlCt, newItems, items);
+    }
+    state.timeline._renderedKeys = newKeys;
+    state.timeline._lastMode = currentMode;
+    _initTimelineBadge();
+    _bindMasonryResize();
+    _scheduleMasonry();
+    _watchMasonryImages(tlCt);
+    return;
+  }
+
+  // ── Full re-render (tab switch, theme change, first load) ──
+  _fullRenderHistory(tlCt, items, emptyMsg);
+  state.timeline._renderedKeys = items.length > 0 ? newKeys : null;
+  state.timeline._lastMode = currentMode;
+}
+
+function _fullRenderHistory(tlCt, items, emptyMsg) {
+  tlCt.classList.add("tl-switching");
+  setTimeout(() => {
+    tlCt.innerHTML = "";
+    if (items.length === 0) {
+      tlCt.innerHTML = emptyMsg;
+      tlCt.classList.remove("tl-switching");
+      tlCt.classList.remove("masonry-ready");
+      tlCt.style.height = "";
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    const sliced = items.slice(0, 50);
+    let lastDate = "";
+    let dateCount = 0;
+    let lastCountEl = null;
+    sliced.forEach(item => {
+      const { dateStr } = _extractTimeDate(item);
+      if (dateStr !== lastDate) {
+        if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
+        lastDate = dateStr;
+        dateCount = 0;
+        const grp = document.createElement("div");
+        grp.className = "tl-date-sep";
+        grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
+        frag.appendChild(grp);
+        lastCountEl = grp.querySelector(".tl-date-sep-count");
+      }
+      dateCount++;
+      frag.appendChild(buildHistoryCard(item));
+    });
+    if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
+    tlCt.appendChild(frag);
+    tlCt.classList.remove("tl-switching");
+    _initTimelineBadge();
+    _bindMasonryResize();
+    _scheduleMasonry();
+    _watchMasonryImages(tlCt);
+  }, 150);
+}
+
+function _insertNewCards(tlCt, newItems, allFilteredItems) {
+  // Build new card elements + date separators if needed
+  // Insert at the TOP of the container (before existing children)
+  const frag = document.createDocumentFragment();
+  const existingDates = new Set(
+    Array.from(tlCt.querySelectorAll(".tl-date-sep-text")).map(el => el.textContent)
+  );
+
+  // Group new items by date, in order
+  let lastDate = "";
+  let pendingDateSep = null;
+  let pendingCount = 0;
+  const elementsToInsert = [];
+
+  newItems.forEach(item => {
+    const { dateStr } = _extractTimeDate(item);
+    if (dateStr !== lastDate) {
+      if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
+      lastDate = dateStr;
+      pendingCount = 0;
+
+      if (!existingDates.has(dateStr)) {
+        const grp = document.createElement("div");
+        grp.className = "tl-date-sep tl-sep-new";
+        grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
+        pendingDateSep = grp;
+        elementsToInsert.push(grp);
+      } else {
+        pendingDateSep = null;
+      }
+    }
+    pendingCount++;
+    const card = buildHistoryCard(item);
+    card.classList.add("tl-entry-new");
+    elementsToInsert.push(card);
+  });
+  if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
+
+  // Update date counts for existing date separators
+  _updateDateCounts(tlCt, allFilteredItems);
+
+  // Insert all new elements at the top
+  const firstChild = tlCt.firstChild;
+  elementsToInsert.forEach(el => frag.appendChild(el));
+  if (firstChild) {
+    tlCt.insertBefore(frag, firstChild);
+  } else {
+    tlCt.appendChild(frag);
+  }
+}
+
+function _updateDateCounts(tlCt, allItems) {
+  const counts = {};
+  allItems.forEach(item => {
+    const { dateStr } = _extractTimeDate(item);
+    counts[dateStr] = (counts[dateStr] || 0) + 1;
+  });
+  tlCt.querySelectorAll(".tl-date-sep").forEach(sep => {
+    const text = sep.querySelector(".tl-date-sep-text")?.textContent;
+    if (text && counts[text] != null) {
+      sep.querySelector(".tl-date-sep-count").textContent = `${counts[text]} 条`;
+    }
+  });
 }
 
 function renderTimelineTabs() {

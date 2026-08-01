@@ -435,6 +435,20 @@
   from { opacity: 0; transform: translateY(14px) scale(0.985); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* 增量新增卡片：从顶部滑入 + 放大淡入 */
+.tl-entry-new {
+  animation: tl-new-card-in 0.4s var(--motion-ease) both;
+}
+@keyframes tl-new-card-in {
+  from { opacity: 0; transform: translateY(-20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 新增日期分隔器 */
+.tl-sep-new {
+  animation: tl-sep-in var(--motion-base) var(--motion-ease) both;
+}
 .tl-card-wrap {
   min-width: 0;
   transition: transform var(--motion-base) var(--motion-ease);
