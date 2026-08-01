@@ -1555,8 +1555,12 @@ function renderHistory(data) {
 
   // Determine if we can do an incremental update (same tab, same theme,
   // data just refreshed with potentially new items)
+  // Theme switches set _forceRender to bypass incremental update (cards need
+  // rebuild to apply new dark/light MD3 palette via currentIsDark())
   const newKeys = new Set(items.map(_historyItemKey));
-  const canIncremental = prevMode === currentMode && prevKeys !== null;
+  const forceRender = state.timeline._forceRender || false;
+  state.timeline._forceRender = false;
+  const canIncremental = prevMode === currentMode && prevKeys !== null && !forceRender;
 
   if (canIncremental && items.length > 0) {
     // ── Incremental update: find new items not in prevKeys ──
@@ -1894,7 +1898,8 @@ async function init() {
         html.dataset.theme = html.dataset.theme === "dark" ? "light" : "dark";
         syncThemeIcon();
         applyUiConfig();
-        // 重建推文卡片以应用暗/亮色 MD3 配色
+        // 强制重建推文卡片以应用暗/亮色 MD3 配色（绕过增量更新优化）
+        state.timeline._forceRender = true;
         renderHistory({ history: state.timeline.history });
       };
       const x = e.clientX || window.innerWidth / 2;

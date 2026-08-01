@@ -96,6 +96,25 @@
   box-shadow: none;
   transform: none;
 }
+
+/* tab-content 内的表单控件：去除 backdrop-filter，避免与 tab-content 玻璃叠加成双层 */
+.tab-content .input,
+.tab-content .select,
+.tab-content .textarea {
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  background: var(--color-bg-2);
+}
+.tab-content .input:hover,
+.tab-content .select:hover,
+.tab-content .textarea:hover {
+  background-color: color-mix(in srgb, var(--color-brand) 8%, var(--color-bg-2));
+}
+.tab-content .input:focus,
+.tab-content .select:focus,
+.tab-content .textarea:focus {
+  background-color: color-mix(in srgb, var(--color-brand) 12%, var(--color-bg-2));
+}
 .stat-label {
   font-family: var(--font-family-mono);
   font-size: 11px;
@@ -122,44 +141,36 @@
 }
 
 /* —— Grid —— */
-.grid { display: grid; gap: var(--space-m); }
-.grid-2 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-.grid-3 { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.grid { display: grid; gap: var(--space-m); width: 100%; }
+.grid > * { min-width: 0; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 1100px) {
+@media (min-width: 1100px) {
+  .grid-2 { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1500px) {
+  .grid-2 { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 880px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 640px) {
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+@media (max-width: 560px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
 
 /* —— Form Controls —— */
 .form-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  min-height: 56px;
-  justify-content: center;
+  margin-bottom: var(--space-l);
 }
 .form-label {
-  font-size: var(--font-size-caption);
+  display: block;
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
-  color: var(--color-fg-2);
+  color: var(--color-fg-1);
+  margin-bottom: var(--space-2xs);
 }
 
-/* 界面设置：复选框行（左对齐流式排列） */
-.settings-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-s) var(--space-l);
-}
-.settings-check-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: auto;
-  flex: 0 0 auto;
-}
 .text-mono {
   font-family: var(--font-family-mono);
   font-size: 11px;
@@ -169,25 +180,43 @@
 .select,
 .textarea {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-medium);
-  border: 1px solid var(--control-stroke);
-  background: var(--control-bg);
-  color: var(--color-fg-1);
   font-family: inherit;
   font-size: var(--font-size-body);
-  outline: none;
+  color: var(--color-fg-1);
+  background: var(--surface-bg);
+  -webkit-backdrop-filter: var(--surface-blur);
+  backdrop-filter: var(--surface-blur);
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-medium);
+  padding: 0 var(--space-m);
+  height: 36px;
   transition: border-color var(--motion-fast) var(--motion-ease),
-    background var(--motion-fast) var(--motion-ease);
+    background-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
 }
+@supports not (backdrop-filter: blur(1px)) {
+  .input, .textarea, .select { background-color: var(--color-bg-2); }
+}
+.input::placeholder,
+.textarea::placeholder { color: var(--color-fg-2); }
 .input:hover, .select:hover, .textarea:hover {
   border-color: var(--control-stroke-hover);
-  background: var(--control-bg-hover);
+  background-color: var(--control-bg-hover);
 }
 .input:focus, .select:focus, .textarea:focus {
+  outline: none;
   border-color: var(--color-brand);
-  background: var(--control-bg-focus);
-  box-shadow: var(--focus-ring);
+  background-color: var(--control-bg-focus);
+  box-shadow: 0 0 0 3px var(--color-brand), var(--glow-brand);
+}
+/* 数字输入隐藏原生上下箭头 */
+.input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.input[type="number"]::-webkit-inner-spin-button,
+.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* 原生 color 输入：保留色块 */
+input[type="color"].input {
+  padding: 4px;
+  cursor: pointer;
 }
 .select {
   appearance: none;
@@ -202,6 +231,8 @@
   color: var(--popup-fg);
 }
 .textarea {
+  height: auto;
+  padding: var(--space-s) var(--space-m);
   resize: vertical;
   min-height: 80px;
 }
@@ -212,28 +243,33 @@
   appearance: none;
   width: 100%;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-circular);
   background: var(--color-stroke-2);
   outline: none;
   cursor: pointer;
 }
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: var(--color-brand);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent);
-  cursor: pointer;
+  border: 2px solid var(--color-bg-1);
+  box-shadow: var(--shadow-2);
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
+.slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
 .slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: var(--color-brand);
-  border: none;
+  border: 2px solid var(--color-bg-1);
+  box-shadow: var(--shadow-2);
   cursor: pointer;
 }
+.slider:focus-visible { box-shadow: var(--focus-ring); }
 
 /* —— Buttons —— */
 .btn {
