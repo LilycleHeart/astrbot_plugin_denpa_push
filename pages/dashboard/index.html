@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles/tokens.css?v=20260802e" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260802h" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260802i" />
     <link rel="stylesheet" href="./styles/components.css?v=20260802e" />
   </head>
   <body>
@@ -21,7 +21,32 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-logo" aria-hidden="true">
-            <canvas id="logo-ecg" width="22" height="22"></canvas>
+            <svg class="ecg-logo-svg" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="ecg-logo-bg" cx="50%" cy="50%" r="55%">
+                  <stop offset="0%" class="ecg-grad-bg-1"/>
+                  <stop offset="70%" class="ecg-grad-bg-2"/>
+                  <stop offset="100%" class="ecg-grad-bg-3"/>
+                </radialGradient>
+                <linearGradient id="ecg-logo-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" class="ecg-grad-start"/>
+                  <stop offset="35%" class="ecg-grad-mid"/>
+                  <stop offset="100%" class="ecg-grad-end"/>
+                </linearGradient>
+                <path id="ecg-logo-path" d="M 2,14 L 5,14 Q 6.5,11.5 8,14 L 9,14 L 9.3,15.5 L 10.5,4.5 L 12,18.5 L 13.5,14 L 16,14 Q 18,11.5 20,14 L 26,14"/>
+              </defs>
+              <circle class="ecg-logo-bg-circle" cx="14" cy="14" r="13"/>
+              <circle class="ecg-logo-ring ecg-logo-ring-1" cx="14" cy="14" r="11"/>
+              <circle class="ecg-logo-ring ecg-logo-ring-2" cx="14" cy="14" r="11"/>
+              <g class="ecg-logo-wave-group">
+                <use class="ecg-logo-wave" href="#ecg-logo-path"/>
+              </g>
+              <circle class="ecg-logo-dot" r="1.3">
+                <animateMotion dur="1.8s" repeatCount="indefinite" rotate="auto">
+                  <mpath href="#ecg-logo-path"/>
+                </animateMotion>
+              </circle>
+            </svg>
           </span>
           <span class="sidebar-title">DenpaPush</span>
         </div>
@@ -435,6 +460,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260802q"></script>
+    <script type="module" src="./scripts/app.js?v=20260802r"></script>
   </body>
 </html>

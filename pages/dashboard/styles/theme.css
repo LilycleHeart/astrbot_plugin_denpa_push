@@ -214,16 +214,99 @@ body {
   margin-bottom: var(--space-xs);
 }
 .sidebar-logo {
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--color-brand);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent));
+  transition: filter var(--motion-fast, 140ms) var(--motion-ease, cubic-bezier(0.33, 0, 0.67, 1));
+  cursor: pointer;
 }
-.sidebar-logo svg, .sidebar-logo canvas { width: 22px; height: 22px; display: block; }
+.sidebar-logo:hover {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-brand) 60%, transparent));
+}
+.sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
+
+/* ═══ ECG Pulse Core Logo — SVG 动态心电图 ═══ */
+.ecg-logo-svg { overflow: visible; }
+
+/* 渐变停靠点 — 跟随 --color-brand 动态变化 */
+.ecg-grad-bg-1 { stop-color: var(--color-brand); stop-opacity: 0.08; }
+.ecg-grad-bg-2 { stop-color: var(--color-brand); stop-opacity: 0.02; }
+.ecg-grad-bg-3 { stop-color: var(--color-brand); stop-opacity: 0; }
+.ecg-grad-start { stop-color: var(--color-brand); stop-opacity: 0.25; }
+.ecg-grad-mid   { stop-color: var(--color-brand); stop-opacity: 0.85; }
+.ecg-grad-end   { stop-color: var(--color-brand); stop-opacity: 1; }
+
+.ecg-logo-bg-circle { fill: url(#ecg-logo-bg); }
+
+/* 双脉冲环 — 交替扩散, 模拟心跳节律 */
+.ecg-logo-ring {
+  fill: none;
+  stroke: var(--color-brand);
+  stroke-width: 0.4;
+  transform-origin: center;
+  transform-box: fill-box;
+  opacity: 0;
+}
+.ecg-logo-ring-1 { animation: ecg-pulse-ring 1.8s ease-out infinite; }
+.ecg-logo-ring-2 { animation: ecg-pulse-ring 1.8s ease-out infinite; animation-delay: 0.9s; }
+
+@keyframes ecg-pulse-ring {
+  0%   { transform: scale(0.65); opacity: 0; }
+  15%  { opacity: 0.5; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+
+/* 波形组 — 辉光脉动, 在 R 波尖峰时刻最亮 */
+.ecg-logo-wave-group {
+  animation: ecg-glow 1.8s ease-in-out infinite;
+}
+@keyframes ecg-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 0.8px var(--color-brand)) drop-shadow(0 0 1.5px var(--color-brand));
+    opacity: 0.8;
+  }
+  28% {
+    filter: drop-shadow(0 0 2.5px var(--color-brand)) drop-shadow(0 0 6px var(--color-brand));
+    opacity: 1;
+  }
+  45% {
+    filter: drop-shadow(0 0 1.2px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand));
+    opacity: 0.9;
+  }
+}
+
+.ecg-logo-wave {
+  fill: none;
+  stroke: url(#ecg-logo-stroke);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 扫描头 — 白色亮点沿波形路径移动 */
+.ecg-logo-dot {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 2px var(--color-brand)) drop-shadow(0 0 5px var(--color-brand));
+}
+
+/* Hover: 加速心跳 (1.8s → 0.9s) */
+.sidebar-logo:hover .ecg-logo-ring-1,
+.sidebar-logo:hover .ecg-logo-ring-2 {
+  animation-duration: 0.9s;
+}
+.sidebar-logo:hover .ecg-logo-wave-group {
+  animation-duration: 0.9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecg-logo-ring-1, .ecg-logo-ring-2, .ecg-logo-wave-group { animation: none; }
+  .ecg-logo-ring { opacity: 0.3; }
+}
 
 .sidebar-title {
   font-family: var(--font-family-display);
