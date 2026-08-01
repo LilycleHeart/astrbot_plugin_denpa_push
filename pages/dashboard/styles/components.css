@@ -46,18 +46,20 @@
 }
 
 /* tab-content 内的 card 退化为透明内容容器 (tab-content.active 本身是玻璃表面) */
+/* 使用 !important 确保材质开关 (glow-off/shadow-off/acrylic-off) 不会给 tab-content 内的
+   card 重新加上 box-shadow/background/backdrop-filter，避免出现"双层卡片"效果 */
 .tab-content .card {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-          backdrop-filter: none;
-  box-shadow: none;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+  box-shadow: none !important;
   border: none;
   border-radius: 0;
   padding: 0;
   animation: none;
 }
 .tab-content .card:hover {
-  box-shadow: none;
+  box-shadow: none !important;
   transform: none;
 }
 
@@ -84,16 +86,16 @@
   transform: translateY(-1px);
 }
 .tab-content .stat-card {
-  background: transparent;
-  -webkit-backdrop-filter: none;
-          backdrop-filter: none;
-  box-shadow: none;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+  box-shadow: none !important;
   border: none;
   border-radius: 0;
   animation: none;
 }
 .tab-content .stat-card:hover {
-  box-shadow: none;
+  box-shadow: none !important;
   transform: none;
 }
 
