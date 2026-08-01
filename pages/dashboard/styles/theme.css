@@ -320,13 +320,25 @@ body {
 
 /* 子 tab（追踪账号） */
 .sub-tabs {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 2px;
   padding-left: 32px;
-  margin-top: 2px;
+  margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-height var(--motion-gentle, 0.3s) var(--motion-ease, ease),
+              opacity var(--motion-base, 0.2s) var(--motion-ease, ease),
+              margin-top var(--motion-gentle, 0.3s) var(--motion-ease, ease);
 }
-.sub-tabs.show { display: flex; }
+.sub-tabs.show {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 2px;
+  pointer-events: auto;
+}
 .sub-tab {
   appearance: none;
   border: none;
@@ -346,8 +358,7 @@ body {
 }
 .sub-tab:hover { color: var(--color-fg-2); background: color-mix(in srgb, var(--color-brand) 5%, transparent); }
 .sub-tab.active { color: var(--color-brand); background: var(--color-brand-weak); }
-.sub-tab .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--color-fg-4); }
-.sub-tab.active .dot { background: var(--color-brand); }
+.sub-tab .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--color-brand); }
 
 /* 收缩态 */
 .sidebar.collapsed .tab-label,

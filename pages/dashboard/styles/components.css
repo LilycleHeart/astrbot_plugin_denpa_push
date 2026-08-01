@@ -260,32 +260,32 @@
 }
 .btn-sm { padding: 5px 12px; font-size: var(--font-size-caption); }
 
-/* —— Badge —— */
+/* —— Badge (1:1 复刻 denpa_echo) —— */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
+  height: 22px;
+  padding: 0 var(--space-s);
   border-radius: var(--radius-circular);
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono, "JetBrains Mono", monospace);
+  font-size: var(--font-size-caption, 11px);
+  line-height: 1;
+  font-weight: var(--font-weight-medium);
+  border: 1px solid transparent;
+  white-space: nowrap;
 }
 .badge-neutral {
-  background: var(--color-brand-weak);
+  background: var(--color-bg-3);
+  color: var(--color-fg-2);
+  border-color: var(--color-stroke-2);
+}
+.badge-brand {
+  background: var(--color-brand-tint);
   color: var(--color-brand);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 25%, transparent);
+  border-color: var(--color-brand-line);
 }
-.badge-active {
-  background: var(--color-brand);
-  color: var(--color-brand-on);
-  border: 1px solid var(--color-brand);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-brand) 40%, transparent);
-}
-.badge-success {
-  background: color-mix(in srgb, var(--color-success-fg) 10%, transparent);
-  color: var(--color-success-fg);
-  border: 1px solid color-mix(in srgb, var(--color-success-fg) 25%, transparent);
-}
+.badge-success { background: var(--color-success-bg); color: var(--color-success-fg); }
+.badge-error, .badge-danger { background: var(--color-error-bg); color: var(--color-error-fg); }
 .badge-error {
   background: color-mix(in srgb, var(--color-error-fg) 10%, transparent);
   color: var(--color-error-fg);

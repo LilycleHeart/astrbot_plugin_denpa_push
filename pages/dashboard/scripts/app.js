@@ -571,8 +571,8 @@ function renderStatus(data) {
   if (!data) return;
   const badge = document.getElementById("monitor-badge");
   const running = data.monitor_running;
-  badge.className = `badge ${running ? "badge-active" : "badge-neutral"}`;
-  badge.textContent = running ? "● 监控中" : "○ 离线";
+  badge.className = `badge ${running ? "badge-brand" : "badge-neutral"}`;
+  badge.textContent = running ? "API 正常" : "○ 离线";
 
   document.getElementById("stat-loop").textContent = running ? "运行中" : "已停止";
   document.getElementById("stat-pushes").textContent = data.total_pushes || 0;
@@ -1066,22 +1066,28 @@ async function init() {
     const name = input.value.trim().replace(/^@/, "");
     if (!name) return;
     const addSessionSelect = document.getElementById("add-session-select");
-    const session = addSessionSelect ? addSessionSelect.value : "";
+    const addSessionInput = document.getElementById("add-session-input");
+    // Priority: manual input > dropdown selection
+    const session = (addSessionInput && addSessionInput.value.trim()) || (addSessionSelect ? addSessionSelect.value : "");
     if (!session) {
-      toast("请先选择目标会话", "warning");
+      toast("请选择或输入目标会话", "warning");
       return;
     }
     try {
       await bridge.apiPost("dashboard/subscribe", { username: name, session });
       toast(`已开始追踪 @${name}`, "success");
       input.value = "";
-      addSessionSelect.value = "";
+      if (addSessionSelect) addSessionSelect.value = "";
+      if (addSessionInput) addSessionInput.value = "";
       refresh();
     } catch (e) {
       toast(e?.message || "添加失败", "error");
     }
   });
   document.getElementById("add-username").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("btn-add-sub").click();
+  });
+  document.getElementById("add-session-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("btn-add-sub").click();
   });
 
