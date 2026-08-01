@@ -927,7 +927,7 @@ function _applyMasonry() {
   const container = document.getElementById("tracking-history");
   if (!container) return;
   const items = Array.from(container.children);
-  if (items.length === 0) { container.classList.remove("masonry-ready"); return; }
+  if (items.length === 0) { container.classList.remove("masonry-ready"); container.style.height=""; return; }
 
   const minCol = 340;
   const gap = 16;
@@ -945,6 +945,9 @@ function _applyMasonry() {
   const colH = new Array(numCols).fill(0);
 
   container.classList.add("masonry-ready");
+
+  // Temporarily pause entry animations so offsetHeight reflects final layout
+  items.forEach(it => it.style.animation = "none");
 
   items.forEach(item => {
     if (item.classList.contains("tl-date-sep")) {
@@ -965,18 +968,20 @@ function _applyMasonry() {
   });
 
   container.style.height = Math.max(...colH) + "px";
+
+  // Restore entry animations via reflow
+  void container.offsetWidth;
+  items.forEach(it => { it.style.animation = ""; });
 }
 
 function _scheduleMasonry() {
-  requestAnimationFrame(() => {
-    _applyMasonry();
-    // Re-run once more after a frame in case fonts/images shift layout
-    requestAnimationFrame(_applyMasonry);
-  });
+  _applyMasonry();
+  // Re-run once after a paint in case fonts/images shift layout
+  requestAnimationFrame(_applyMasonry);
 }
 
 function _bindMasonryResize() {
-  if (_masonryResizeTimer !== null) return; // already bound
+  if (_masonryResizeTimer !== null) return;
   let t;
   window.addEventListener("resize", () => {
     clearTimeout(t);
