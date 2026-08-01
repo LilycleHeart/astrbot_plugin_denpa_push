@@ -39,7 +39,6 @@
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
             <span class="tab-label">管理订阅</span>
           </button>
-          <div class="sub-tabs" id="sub-tabs-subs"></div>
           <button class="tab" data-tab="logs" title="推送日志">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
             <span class="tab-label">推送日志</span>
@@ -123,8 +122,16 @@
                   <h2 class="card-title">推送时间线</h2>
                   <p class="card-subtitle">已订阅账号的推送内容，按时间排列</p>
                 </div>
+                <div class="flex gap-s" style="align-items:center;flex-wrap:wrap">
+                  <div class="seg" id="timeline-seg" role="tablist">
+                    <button class="seg-btn active" data-tlmode="overview" role="tab">总览</button>
+                    <button class="seg-btn" data-tlmode="account" role="tab">账号</button>
+                  </div>
+                  <button class="btn btn-subtle btn-sm" id="btn-rebuild-history" title="后台重新拉取头像与媒体，补全历史卡片">重建历史卡片</button>
+                </div>
               </div>
-              <div id="tracking-history"></div>
+              <div class="account-chips" id="timeline-account-chips" style="display:none"></div>
+              <div id="tracking-history" class="timeline-list"></div>
             </div>
           </section>
 

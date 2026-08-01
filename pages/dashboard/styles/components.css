@@ -302,6 +302,8 @@
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
 }
+.t-av-letter { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.t-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .t-meta { flex: 1; min-width: 0; }
 .t-name { font-size: 14px; font-weight: 600; }
 .t-handle { font-size: 12px; opacity: .6; }
@@ -311,7 +313,11 @@
 .t-trans { padding: 10px 14px; border-radius: var(--radius-small); font-size: 13px; line-height: 1.5; border-left: 3px solid; }
 .t-trans .label { font-size: 11px; font-weight: 600; margin-bottom: 4px; opacity: .7; }
 .t-media { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-radius: var(--radius-medium); overflow: hidden; margin-top: 12px; }
-.t-media div { height: 100px; background: color-mix(in srgb, var(--color-fg-1) 5%, transparent); }
+.t-media div { height: 100px; background: color-mix(in srgb, var(--color-fg-1) 5%, transparent); background-size: cover; background-position: center; }
+.t-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.t-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-circular); background: color-mix(in srgb, var(--color-fg-1) 8%, transparent); color: var(--color-fg-2); }
+.t-quote { font-size: 12px; opacity: .75; margin-top: 10px; padding: 8px 12px; border-left: 3px solid var(--color-stroke-1); border-radius: var(--radius-small); }
+.t-quote-name { font-weight: 600; }
 .t-palette { display: flex; gap: 3px; margin-top: 12px; align-items: center; }
 .t-palette span { width: 12px; height: 12px; border-radius: 3px; }
 .t-palette .pal-label { font-size: 10px; color: var(--color-fg-3); margin-left: 6px; font-family: var(--font-family-mono); }
@@ -364,7 +370,92 @@
 .sub-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .sub-meta { flex: 1; min-width: 0; }
 .sub-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub-handle { font-size: 12px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub-handle {
+  font-size: 12px; opacity: .6;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; word-break: break-all; line-height: 1.35;
+}
+
+/* —— 目前追踪：分段控件 + 账号筛选 chips —— */
+.seg {
+  display: inline-flex;
+  background: color-mix(in srgb, var(--color-fg-1) 6%, transparent);
+  border-radius: var(--radius-circular);
+  padding: 2px;
+  gap: 2px;
+}
+.seg-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-fg-3);
+  padding: 4px 14px;
+  border-radius: var(--radius-circular);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+.seg-btn:hover { color: var(--color-fg-2); }
+.seg-btn.active {
+  color: var(--color-brand);
+  background: var(--color-brand-weak);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-brand) 20%, transparent);
+}
+
+.account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: var(--space-s) 0;
+  margin-bottom: var(--space-s);
+}
+.account-chip {
+  appearance: none;
+  border: 1px solid var(--color-stroke-1);
+  background: color-mix(in srgb, var(--color-fg-1) 4%, transparent);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-fg-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 4px;
+  border-radius: var(--radius-circular);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+.account-chip:hover { border-color: var(--color-brand); color: var(--color-fg-1); }
+.account-chip.active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-weak);
+  color: var(--color-brand);
+}
+.chip-av {
+  position: relative;
+  width: 22px; height: 22px; border-radius: 50%;
+  overflow: hidden; flex-shrink: 0;
+}
+.chip-av > span {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #fff;
+}
+.chip-av > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* —— Timeline 卡片切换过渡 —— */
+.timeline-list { transition: opacity var(--motion-fast) var(--motion-ease); }
+.timeline-list.tl-switching { opacity: 0; }
+.timeline-list .tl-item {
+  animation: tl-item-in var(--motion-base) var(--motion-ease) both;
+}
+@keyframes tl-item-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* —— 日志列表 —— */
 .log-list { display: flex; flex-direction: column; gap: 2px; }

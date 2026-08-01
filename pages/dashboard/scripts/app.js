@@ -18,6 +18,7 @@ const state = {
   status: null,
   subscriptions: {},
   logs: [],
+  timeline: { mode: "overview", account: "", history: [] },
   uiConfig: {
     color_mode: "dynamic",
     brand_color: "#1d9bf0",
@@ -428,9 +429,10 @@ class EcgWaveform {
     this.canvas = canvas;
     this.ctx2d = canvas.getContext("2d");
     this.offset = 0;
-    this.speed = 1.2;
-    this.cycleLen = 220;
+    this.speed = 1.1;
+    this.cycleLen = 260;
     this.active = false;
+    this.trail = []; // recent points for phosphor decay
     this._resize();
     this._bindResize();
     this._loop();
@@ -453,18 +455,25 @@ class EcgWaveform {
     window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => this._resize(), 150); });
   }
 
-  setActive(v) { this.active = v; this.speed = v ? 1.6 : 0.8; }
+  setActive(v) { this.active = v; this.speed = v ? 1.5 : 0.7; }
 
+  // Smooth PQRST-like waveform using gaussian bumps
   _ecgY(x) {
     const p = ((x % this.cycleLen) + this.cycleLen) % this.cycleLen;
     const t = p / this.cycleLen;
     let y = 0;
-    if (t > 0.1 && t < 0.2) y = Math.sin((t - 0.1) / 0.1 * Math.PI) * 0.08;
-    else if (t > 0.28 && t < 0.32) y = -0.12;
-    else if (t > 0.32 && t < 0.36) y = 0.55 * Math.sin((t - 0.32) / 0.04 * Math.PI);
-    else if (t > 0.36 && t < 0.40) y = -0.18;
-    else if (t > 0.5 && t < 0.65) y = Math.sin((t - 0.5) / 0.15 * Math.PI) * 0.15;
-    y += (Math.random() - 0.5) * 0.006;
+    // P wave
+    y += 0.12 * Math.exp(-Math.pow((t - 0.12) / 0.022, 2));
+    // Q dip
+    y -= 0.08 * Math.exp(-Math.pow((t - 0.27) / 0.008, 2));
+    // R spike
+    y += 0.85 * Math.exp(-Math.pow((t - 0.29) / 0.006, 2));
+    // S dip
+    y -= 0.28 * Math.exp(-Math.pow((t - 0.31) / 0.010, 2));
+    // T wave
+    y += 0.20 * Math.exp(-Math.pow((t - 0.42) / 0.035, 2));
+    // baseline noise
+    y += (Math.random() - 0.5) * 0.004;
     return y;
   }
 
@@ -478,52 +487,82 @@ class EcgWaveform {
     if (!w || !h) { this._resize(); return; }
     ctx.clearRect(0, 0, w, h);
     this.offset += this.speed;
-    const mid = h * 0.55;
-    const amp = h * 0.7;
-
-    // Grid
-    ctx.strokeStyle = "rgba(128,128,128,.06)";
-    ctx.lineWidth = 1;
-    for (let gx = 0; gx < w; gx += 36) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
-    for (let gy = 0; gy < h; gy += 36) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
-
-    // Brand color from CSS var
+    const mid = h * 0.5;
+    const amp = h * 0.36;
     const brand = getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
 
-    // Waveform
+    // Oscilloscope grid
+    ctx.strokeStyle = "rgba(128,128,128,.05)";
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx < w; gx += 28) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (let gy = 0; gy < h; gy += 28) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    // Build current waveform points
+    const pts = [];
+    const step = 1.5;
+    for (let x = 0; x <= w; x += step) {
+      pts.push({ x, y: mid - this._ecgY(x + this.offset) * amp });
+    }
+
+    // Phosphor trail: draw fading copies behind the live line
+    const tailLen = 6;
+    for (let i = tailLen; i >= 1; i--) {
+      const alpha = (1 - i / tailLen) * 0.18;
+      ctx.beginPath();
+      ctx.strokeStyle = brand + Math.round(alpha * 255).toString(16).padStart(2, "0");
+      ctx.lineWidth = 2 + i * 0.4;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (let j = 0; j < pts.length; j++) {
+        const dx = pts[j].x - i * this.speed * 2;
+        if (dx < 0) continue;
+        j === 0 ? ctx.moveTo(dx, pts[j].y) : ctx.lineTo(dx, pts[j].y);
+      }
+      ctx.stroke();
+    }
+
+    // Main waveform with gradient
     const grad = ctx.createLinearGradient(0, 0, w, 0);
-    grad.addColorStop(0, brand + "0d");
-    grad.addColorStop(0.6, brand + "80");
+    grad.addColorStop(0, brand + "00");
+    grad.addColorStop(0.7, brand + "aa");
     grad.addColorStop(1, brand);
     ctx.beginPath();
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.lineJoin = "round";
-    for (let x = 0; x <= w; x += 2) {
-      const y = mid - this._ecgY(x + this.offset) * amp;
-      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
+    ctx.lineCap = "round";
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
     ctx.stroke();
 
-    // Fill
+    // Subtle fill under curve
     ctx.lineTo(w, mid);
     ctx.lineTo(0, mid);
     ctx.closePath();
-    const fg = ctx.createLinearGradient(0, mid - amp * 0.5, 0, mid);
-    fg.addColorStop(0, brand + "14");
+    const fg = ctx.createLinearGradient(0, mid - amp, 0, mid);
+    fg.addColorStop(0, brand + "10");
     fg.addColorStop(1, brand + "00");
     ctx.fillStyle = fg;
     ctx.fill();
 
-    // Head glow
-    const headY = mid - this._ecgY(w + this.offset) * amp;
-    ctx.beginPath();
-    ctx.arc(w - 1, headY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = brand;
-    ctx.shadowColor = brand;
-    ctx.shadowBlur = 8;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    // Leading scan head with glow
+    const head = pts[pts.length - 1];
+    if (head) {
+      ctx.save();
+      ctx.shadowColor = brand;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      // scan line
+      ctx.beginPath();
+      ctx.strokeStyle = brand + "30";
+      ctx.lineWidth = 1;
+      ctx.moveTo(head.x, 0);
+      ctx.lineTo(head.x, h);
+      ctx.stroke();
+    }
   }
 }
 
@@ -554,11 +593,9 @@ function renderStatus(data) {
 function renderSubs(data) {
   if (!data) return;
   const container = document.getElementById("subs-session-list");
-  const subTabs = document.getElementById("sub-tabs-subs");
   const sessionSelect = document.getElementById("session-select");
   if (!container) return;
   container.innerHTML = "";
-  if (subTabs) subTabs.innerHTML = "";
 
   const sessions = Object.keys(data);
 
@@ -573,18 +610,6 @@ function renderSubs(data) {
       sessionSelect.appendChild(opt);
     });
     if (sessions.includes(curVal) || curVal === "__all__") sessionSelect.value = curVal;
-  }
-
-  // Sub-tabs in sidebar (flat account list)
-  if (subTabs) {
-    for (const [session, users] of Object.entries(data)) {
-      for (const name of Object.keys(users)) {
-        const btn = document.createElement("button");
-        btn.className = "sub-tab";
-        btn.innerHTML = `<span class="dot" style="background:var(--color-success-fg)"></span>@${escapeHtml(name)}`;
-        subTabs.appendChild(btn);
-      }
-    }
   }
 
   if (sessions.length === 0) {
@@ -676,54 +701,127 @@ function renderSubs(data) {
 }
 
 // ─── Render: Push History ───
-function renderHistory(data) {
-  const items = data?.history || [];
-  const containers = [
-    document.getElementById("recent-pushes"),
-    document.getElementById("tracking-history"),
-  ].filter(Boolean);
-  if (!containers.length) return;
+function buildHistoryCard(item) {
+  const seed = item.seed_color || "var(--color-brand)";
+  const pal = item.palette || {};
+  const primary = pal.primary || seed;
+  const timeRaw = item.created_at_str
+    || (item.time ? new Date(item.time).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
+  const avUrl = item.avatar_url || "";
+  const letter = (item.screen_name || "?").charAt(0).toUpperCase();
+  const thumbs = item.thumbnail_urls || [];
+  const imgN = item.image_count || 0, gifN = item.gif_count || 0, vidN = item.video_count || 0;
+  const badges = [];
+  if (imgN) badges.push(`📷 ${imgN}`);
+  if (gifN) badges.push(`🎞 ${gifN}`);
+  if (vidN) badges.push(`🎬 ${vidN}`);
+  const qSn = item.quoted_screen_name || "";
+  const qTxt = item.quoted_text || "";
 
-  const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
-  if (items.length === 0) {
-    containers.forEach(c => { c.innerHTML = emptyHtml; });
-    return;
+  const el = document.createElement("div");
+  el.className = "tweet-card tl-item";
+  el.style.background = `color-mix(in srgb, ${seed} 5%, transparent)`;
+  el.style.borderColor = `color-mix(in srgb, ${seed} 18%, transparent)`;
+  el.innerHTML = `
+    <div class="t-header">
+      <div class="t-av" style="background:${seed};position:relative;overflow:hidden">
+        <span class="t-av-letter">${escapeHtml(letter)}</span>
+        ${avUrl ? `<img class="t-av-img" src="${escapeHtml(avUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'" />` : ""}
+      </div>
+      <div class="t-meta">
+        <div class="t-name" style="color:${primary}">${escapeHtml(item.user_name || item.screen_name)}</div>
+        <div class="t-handle">@${escapeHtml(item.screen_name)}</div>
+      </div>
+      <span class="t-time">${escapeHtml(timeRaw)}</span>
+      <span class="t-tag" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">✓ 已推送</span>
+    </div>
+    <div class="t-body">${escapeHtml(item.text || "")}</div>
+    ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
+    ${thumbs.length ? `<div class="t-media">${thumbs.map(u => `<div style="background-image:url('${escapeHtml(u)}');background-size:cover;background-position:center" referrerpolicy="no-referrer"></div>`).join("")}</div>` : ""}
+    ${badges.length ? `<div class="t-badges">${badges.map(b => `<span class="t-badge">${escapeHtml(b)}</span>`).join("")}</div>` : ""}
+    ${qSn ? `<div class="t-quote"><span class="t-quote-name">@${escapeHtml(qSn)}</span> ${escapeHtml(qTxt)}</div>` : ""}
+    <div class="t-palette">
+      ${Object.entries(pal).filter(([k, v]) => !k.endsWith("_rgb") && typeof v === "string" && v.startsWith("#")).slice(0, 4).map(([, c]) => `<span style="background:${c}"></span>`).join("")}
+      <span class="pal-label">seed: ${seed}</span>
+    </div>
+  `;
+  return el;
+}
+
+function renderHistory(data) {
+  const allItems = data?.history || [];
+  const rebuilding = data?.rebuilding;
+
+  // Update rebuild button state if present
+  const rebuildBtn = document.getElementById("btn-rebuild-history");
+  if (rebuildBtn) {
+    rebuildBtn.disabled = !!rebuilding;
+    rebuildBtn.textContent = rebuilding ? "重建中…" : "重建历史卡片";
   }
 
-  const fragment = document.createDocumentFragment();
-  items.slice(0, 10).forEach(item => {
-    const seed = item.seed_color || "var(--color-brand)";
-    const pal = item.palette || {};
-    const primary = pal.primary || seed;
-    const time = item.time ? new Date(item.time).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "";
+  const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
 
-    const el = document.createElement("div");
-    el.className = "tweet-card";
-    el.style.background = `color-mix(in srgb, ${seed} 5%, transparent)`;
-    el.style.borderColor = `color-mix(in srgb, ${seed} 18%, transparent)`;
-    el.innerHTML = `
-      <div class="t-header">
-        <div class="t-av" style="background:${seed}">${(item.screen_name || "?").charAt(0).toUpperCase()}</div>
-        <div class="t-meta">
-          <div class="t-name" style="color:${primary}">${escapeHtml(item.user_name || item.screen_name)}</div>
-          <div class="t-handle">@${escapeHtml(item.screen_name)}</div>
-        </div>
-        <span class="t-time">${time}</span>
-        <span class="t-tag" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">✓ 已推送</span>
-      </div>
-      <div class="t-body">${escapeHtml(item.text || "")}</div>
-      ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
-      <div class="t-palette">
-        ${Object.entries(pal).filter(([k, v]) => !k.endsWith("_rgb") && typeof v === "string" && v.startsWith("#")).slice(0, 4).map(([, c]) => `<span style="background:${c}"></span>`).join("")}
-        <span class="pal-label">seed: ${seed}</span>
-      </div>
-    `;
-    fragment.appendChild(el);
-  });
+  // Overview (recent-pushes): always show first 10, no filter
+  const recentCt = document.getElementById("recent-pushes");
+  if (recentCt) {
+    recentCt.innerHTML = "";
+    if (allItems.length === 0) {
+      recentCt.innerHTML = emptyHtml;
+    } else {
+      const frag = document.createDocumentFragment();
+      allItems.slice(0, 10).forEach(item => frag.appendChild(buildHistoryCard(item)));
+      recentCt.appendChild(frag);
+    }
+  }
 
-  containers.forEach(c => {
-    c.innerHTML = "";
-    c.appendChild(fragment.cloneNode(true));
+  // Timeline (tracking-history): apply account filter
+  const tlCt = document.getElementById("tracking-history");
+  if (tlCt) {
+    let items = allItems;
+    if (state.timeline.mode === "account" && state.timeline.account) {
+      items = allItems.filter(it => (it.screen_name || "") === state.timeline.account);
+    }
+    // Crossfade transition
+    tlCt.classList.add("tl-switching");
+    setTimeout(() => {
+      tlCt.innerHTML = "";
+      if (items.length === 0) {
+        tlCt.innerHTML = state.timeline.mode === "account"
+          ? '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">该账号暂无推送记录</p>'
+          : emptyHtml;
+      } else {
+        const frag = document.createDocumentFragment();
+        items.slice(0, 30).forEach(item => frag.appendChild(buildHistoryCard(item)));
+        tlCt.appendChild(frag);
+      }
+      tlCt.classList.remove("tl-switching");
+    }, 150);
+  }
+}
+
+function renderTimelineAccountChips() {
+  const wrap = document.getElementById("timeline-account-chips");
+  if (!wrap) return;
+  // Collect unique screen_names from subscriptions
+  const names = new Set();
+  for (const users of Object.values(state.subscriptions || {})) {
+    for (const n of Object.keys(users)) names.add(n);
+  }
+  // Also include accounts present in history
+  for (const it of state.timeline.history) {
+    if (it.screen_name) names.add(it.screen_name);
+  }
+  if (names.size === 0) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `<button class="account-chip ${!state.timeline.account ? "active" : ""}" data-name="">全部</button>`;
+  [...names].sort().forEach(n => {
+    const info = Object.values(state.subscriptions || {}).find(u => u[n])?.[n] || {};
+    const av = info.avatar_url || "";
+    const letter = (n.charAt(0) || "?").toUpperCase();
+    const chip = document.createElement("button");
+    chip.className = "account-chip" + (state.timeline.account === n ? " active" : "");
+    chip.dataset.name = n;
+    chip.innerHTML = `<span class="chip-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}`;
+    wrap.appendChild(chip);
   });
 }
 
@@ -783,9 +881,9 @@ async function refresh() {
       bridge.apiGet("dashboard/history"),
     ]);
     if (status) { state.status = status; renderStatus(status); }
-    if (subs) { state.subscriptions = subs; renderSubs(subs); }
+    if (subs) { state.subscriptions = subs; renderSubs(subs); renderTimelineAccountChips(); }
     if (logs) { state.logs = logs; renderLogs(logs); }
-    if (history) { renderHistory(history); }
+    if (history) { state.timeline.history = history.history || []; renderHistory(history); }
   } catch (e) {
     console.warn("[DenpaPush] refresh error:", e);
   }
@@ -799,9 +897,6 @@ function switchTab(name) {
   document.querySelectorAll(".tab-content").forEach(p => p.classList.remove("active"));
   const panel = document.getElementById(`tab-${name}`);
   if (panel) panel.classList.add("active");
-  // Sub-tabs visibility
-  const sub = document.getElementById("sub-tabs-subs");
-  if (sub) sub.classList.toggle("show", name === "subs");
 }
 
 // ─── Init ───
@@ -852,6 +947,70 @@ async function init() {
 
   // Refresh button
   document.getElementById("btn-refresh-all").addEventListener("click", refresh);
+
+  // Rebuild history cards (background)
+  document.getElementById("btn-rebuild-history")?.addEventListener("click", async () => {
+    const btn = document.getElementById("btn-rebuild-history");
+    try {
+      btn.disabled = true;
+      btn.textContent = "重建中…";
+      const res = await bridge.apiPost("dashboard/rebuild_history", {});
+      toast(res?.message || "已开始后台重建历史卡片", res?.started ? "success" : "info");
+      // Poll history while rebuilding
+      if (res?.started) {
+        const poll = async () => {
+          try {
+            const h = await bridge.apiGet("dashboard/history");
+            if (h) renderHistory(h);
+            if (h?.rebuilding) {
+              setTimeout(poll, 4000);
+            } else {
+              btn.disabled = false;
+              btn.textContent = "重建历史卡片";
+            }
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "重建历史卡片";
+          }
+        };
+        setTimeout(poll, 4000);
+      } else {
+        btn.disabled = false;
+        btn.textContent = "重建历史卡片";
+      }
+    } catch (e) {
+      toast(e?.message || "重建失败", "error");
+      btn.disabled = false;
+      btn.textContent = "重建历史卡片";
+    }
+  });
+
+  // Timeline segmented control (总览 / 账号)
+  document.querySelectorAll("#timeline-seg .seg-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      if (b.classList.contains("active")) return;
+      document.querySelectorAll("#timeline-seg .seg-btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      state.timeline.mode = b.dataset.tlmode;
+      const chips = document.getElementById("timeline-account-chips");
+      if (chips) chips.style.display = state.timeline.mode === "account" ? "flex" : "none";
+      // Re-render timeline with transition using cached history
+      renderHistory({ history: state.timeline.history });
+    });
+  });
+
+  // Account chip clicks (event delegation)
+  const chipsWrap = document.getElementById("timeline-account-chips");
+  if (chipsWrap) {
+    chipsWrap.addEventListener("click", (e) => {
+      const chip = e.target.closest(".account-chip");
+      if (!chip) return;
+      state.timeline.account = chip.dataset.name || "";
+      chipsWrap.querySelectorAll(".account-chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      renderHistory({ history: state.timeline.history });
+    });
+  }
 
   // Add subscription
   document.getElementById("btn-add-sub").addEventListener("click", async () => {

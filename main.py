@@ -3,7 +3,7 @@ import json
 import os
 import re
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
@@ -115,6 +115,7 @@ class DenpaPushPlugin(Star):
         self.monitored_sessions = set()
         self.monitor_task = None
         self._running = False
+        self._rebuild_running = False
         self._data_path = self._get_data_path()
         self._seed_cache = {}  # {image_url: rgb_tuple}
         self._push_logs = deque(maxlen=100)  # dashboard 信号日志
@@ -191,6 +192,7 @@ class DenpaPushPlugin(Star):
             ("dashboard/config", self._api_dashboard_config, ["GET", "POST"], "插件配置读写"),
             ("dashboard/toggle_monitor", self._api_dashboard_toggle_monitor, ["POST"], "会话监控开关"),
             ("dashboard/history", self._api_dashboard_history, ["GET"], "推送历史详情"),
+            ("dashboard/rebuild_history", self._api_dashboard_rebuild_history, ["POST"], "重建历史卡片"),
             ("bg/upload", self._api_bg_upload, ["POST"], "上传背景图"),
             ("bg/remove", self._api_bg_remove, ["POST"], "移除背景图"),
         ]
@@ -384,7 +386,122 @@ class DenpaPushPlugin(Star):
         """推送历史详情（含推文内容、翻译、色板）。"""
         from astrbot.api.web import json_response
 
-        return json_response({"history": list(self._push_history)})
+        return json_response({
+            "history": list(self._push_history),
+            "rebuilding": self._rebuild_running,
+        })
+
+    async def _api_dashboard_rebuild_history(self):
+        """触发后台重建历史 timeline 卡片：补齐 avatar/媒体/配色等缺失字段。"""
+        from astrbot.api.web import json_response
+
+        if self._rebuild_running:
+            return json_response({
+                "started": False,
+                "message": "重建任务进行中，请稍后刷新",
+            })
+        asyncio.create_task(self._rebuild_history_async())
+        return json_response({
+            "started": True,
+            "message": "已开始后台重建历史卡片",
+        })
+
+    async def _rebuild_history_async(self):
+        """后台重新构建历史 timeline 卡片。
+
+        扫描 _push_history 中缺失 avatar_url/thumbnail_urls 的条目，
+        按 tweet_url 解析 tweet_id 并重新拉取推文，补齐头像、媒体缩略图、
+        媒体计数、引用推文、发布时间与配色。
+        """
+        if self._rebuild_running:
+            return
+        self._rebuild_running = True
+        self._log_push("开始后台重建历史卡片", "info")
+        try:
+            await self.twitter.ensure_ready()
+            rebuilt = 0
+            skipped = 0
+            for entry in list(self._push_history):
+                # 已具备头像与媒体缩略图的条目跳过
+                if entry.get("avatar_url") and entry.get("thumbnail_urls"):
+                    skipped += 1
+                    continue
+                # 解析 tweet_id：优先字段，其次从 tweet_url 提取
+                tweet_id = str(entry.get("tweet_id") or "")
+                if not tweet_id and entry.get("tweet_url"):
+                    parts = entry["tweet_url"].split("/status/")
+                    if len(parts) == 2 and parts[1]:
+                        tweet_id = parts[1].split("?")[0].strip()
+                if not tweet_id:
+                    continue
+                try:
+                    tweet = await self.twitter.get_tweet_by_id(tweet_id)
+                    data = TwitterClient.extract_tweet_data(tweet)
+                    raw_av = (data.get("user") or {}).get("avatar_url", "") or ""
+                    if raw_av:
+                        entry["avatar_url"] = raw_av.replace("_normal.", "_400x400.")
+                    images, gifs, videos = TwitterClient.extract_tweet_media(data)
+                    thumbs = []
+                    for m in (images + gifs + videos)[:4]:
+                        mu = m.get("media_url", "")
+                        if mu:
+                            thumbs.append(_twitter_media_url(mu, "medium"))
+                    entry["thumbnail_urls"] = thumbs
+                    entry["image_count"] = len(images)
+                    entry["gif_count"] = len(gifs)
+                    entry["video_count"] = len(videos)
+                    entry["has_media"] = bool(thumbs)
+                    entry["tweet_id"] = str(data.get("id", tweet_id))
+                    q = data.get("quoted_tweet") or {}
+                    if q:
+                        entry["quoted_screen_name"] = (
+                            q.get("user", {}).get("screen_name", "") if q.get("user") else ""
+                        )
+                        entry["quoted_text"] = (q.get("text", "") or "")[:200]
+                    dt = data.get("created_at_datetime")
+                    if dt and hasattr(dt, "astimezone"):
+                        try:
+                            entry["created_at_str"] = dt.astimezone(
+                                timezone(timedelta(hours=8))
+                            ).strftime("%m月%d日 %H:%M")
+                        except Exception:
+                            pass
+                    # 补齐原文/译文
+                    if not entry.get("text"):
+                        entry["text"] = (data.get("text", "") or "")[:300]
+                    # 缺失配色则重新取色
+                    if not entry.get("seed_color"):
+                        color_source = self.config.get("color_source", "avatar")
+                        seed_url = entry.get("avatar_url", "")
+                        if color_source == "first_image" and images:
+                            first_url = images[0].get("media_url", "")
+                            if first_url:
+                                seed_url = _twitter_media_url(first_url, "orig")
+                        if seed_url:
+                            seed_rgb = await self._extract_seed_color(seed_url)
+                            pal, _is_dark = self._generate_palette(seed_rgb)
+                            entry["seed_color"] = (
+                                "#%02x%02x%02x" % seed_rgb if seed_rgb else ""
+                            )
+                            entry["palette"] = pal
+                    rebuilt += 1
+                    self._save_push_history()
+                    await asyncio.sleep(2)  # 规避 Twitter API 速率限制
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.warning(
+                        f"[Rebuild] Failed for tweet {tweet_id}: {e}"
+                    )
+                    continue
+            self._log_push(
+                f"历史卡片重建完成，补全 {rebuilt} 条，跳过 {skipped} 条", "info"
+            )
+        except Exception as e:
+            logger.error(f"[Rebuild] History rebuild failed: {e}")
+            self._log_push(f"历史卡片重建失败: {str(e)[:60]}", "error")
+        finally:
+            self._rebuild_running = False
 
     async def _api_dashboard_toggle_monitor(self):
         """按会话开启/关闭监控推送。"""
@@ -1490,7 +1607,19 @@ class DenpaPushPlugin(Star):
             "screen_name": data["user"]["screen_name"],
             "user_name": data["user"]["name"],
             "user_id": data["user"]["id"],
+            "avatar_url": avatar_url,
             "tweet_url": f"https://x.com/{data['user']['screen_name']}/status/{data['id']}",
+            "tweet_id": data.get("id", ""),
+            "original_text": data.get("text", ""),
+            "seed_color": card_data["seed_color"],
+            "palette": card_data["palette"],
+            "is_dark": card_data["is_dark"],
+            "created_at_str": card_data["created_at_str"],
+            "image_count": card_data["image_count"],
+            "gif_count": card_data["gif_count"],
+            "video_count": card_data["video_count"],
+            "quoted_screen_name": card_data["quoted_screen_name"],
+            "quoted_text": card_data["quoted_text"],
         }
 
     async def _dump_render_debug(self, html: str, card_data: dict, png_path: str):
@@ -1693,16 +1822,36 @@ class DenpaPushPlugin(Star):
                     f"@{info['screen_name']} → {session_umo[:20]}…",
                     "push",
                 )
+                # Build URL-form thumbnails for history (avoid data URIs in persisted JSON)
+                hist_media = (
+                    (info.get("images") or [])
+                    + (info.get("gifs") or [])
+                    + (info.get("videos") or [])
+                )
+                hist_thumbs = []
+                for m in hist_media[:4]:
+                    mu = m.get("media_url", "")
+                    if mu:
+                        hist_thumbs.append(_twitter_media_url(mu, "medium"))
                 self._push_history.appendleft({
                     "time": datetime.now(timezone.utc).isoformat(),
+                    "tweet_id": info.get("tweet_id", ""),
                     "screen_name": info.get("screen_name", ""),
                     "user_name": info.get("user_name", ""),
-                    "text": (info.get("text") or "")[:200],
-                    "translated_text": (info.get("translated_text") or "")[:200],
+                    "avatar_url": info.get("avatar_url", ""),
+                    "text": (info.get("original_text") or "")[:300],
+                    "translated_text": (info.get("translated_text") or "")[:300],
                     "tweet_url": info.get("tweet_url", ""),
                     "seed_color": info.get("seed_color", ""),
                     "palette": info.get("palette", []),
-                    "has_media": bool(info.get("gifs") or info.get("videos") or img_files),
+                    "thumbnail_urls": hist_thumbs,
+                    "image_count": info.get("image_count", 0),
+                    "gif_count": info.get("gif_count", 0),
+                    "video_count": info.get("video_count", 0),
+                    "has_media": bool(hist_thumbs),
+                    "created_at_str": info.get("created_at_str", ""),
+                    "quoted_screen_name": info.get("quoted_screen_name", ""),
+                    "quoted_text": (info.get("quoted_text") or "")[:200],
                 })
                 self._save_push_history()
             except Exception as e:
