@@ -854,6 +854,7 @@ function _ecgColorMix(color, alpha) {
 let _tlScrollBound = false;
 let _tlCurrentTime = "";
 let _tlCurrentDate = "";
+let _tlScrubberBound = false;
 
 function _extractTimeDate(item) {
   let timeStr = "00:00", dateStr = "01月01日";
@@ -876,6 +877,24 @@ function _initTimelineBadge() {
     _tlScrollBound = true;
     window.addEventListener("scroll", _updateTimelineBadge, { passive: true });
   }
+  // Bind pill click to toggle scrubber
+  if (!_tlScrubberBound) {
+    _tlScrubberBound = true;
+    const pill = document.getElementById("tl-float-pill");
+    if (pill) {
+      pill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        _toggleScrubber();
+      });
+    }
+    // Click outside to collapse
+    document.addEventListener("click", (e) => {
+      const nav = document.getElementById("tl-float-nav");
+      if (nav && nav.classList.contains("expanded") && !nav.contains(e.target)) {
+        nav.classList.remove("expanded");
+      }
+    });
+  }
   _updateTimelineBadge();
 }
 
@@ -885,11 +904,13 @@ function _updateTimelineBadge() {
   const timelineTab = document.getElementById("tab-timeline");
   if (!timelineTab || !timelineTab.classList.contains("active")) {
     floatNav.classList.remove("visible");
+    floatNav.classList.remove("expanded");
     return;
   }
   const cards = document.querySelectorAll("#tracking-history .tl-entry");
   if (cards.length === 0) {
     floatNav.classList.remove("visible");
+    floatNav.classList.remove("expanded");
     return;
   }
   floatNav.classList.add("visible");
@@ -908,6 +929,8 @@ function _updateTimelineBadge() {
   _updateFloatText("tl-float-date", date, _tlCurrentDate);
   _tlCurrentTime = time;
   _tlCurrentDate = date;
+  // Update scrubber thumb + active marker
+  _updateScrubberThumb();
 }
 
 function _updateFloatText(id, newText, oldText) {
@@ -919,6 +942,116 @@ function _updateFloatText(id, newText, oldText) {
     el.textContent = newText;
     el.classList.remove("changing");
   }, 140);
+}
+
+// ─── 时间轴跳转条 (Scrubber) ───
+
+function _toggleScrubber() {
+  const nav = document.getElementById("tl-float-nav");
+  if (!nav) return;
+  if (nav.classList.contains("expanded")) {
+    nav.classList.remove("expanded");
+  } else {
+    _buildScrubber();
+    nav.classList.add("expanded");
+    // Update thumb after expansion animation
+    requestAnimationFrame(() => _updateScrubberThumb());
+  }
+}
+
+function _buildScrubber() {
+  const track = document.getElementById("tl-scrubber-track");
+  if (!track) return;
+  track.innerHTML = "";
+
+  const container = document.getElementById("tracking-history");
+  if (!container) return;
+
+  const seps = Array.from(container.querySelectorAll(".tl-date-sep"));
+  if (seps.length === 0) return;
+
+  // Container height from masonry layout
+  const containerH = parseFloat(container.style.height) || container.offsetHeight || 1;
+  // Padding inside track (6px each side, matching CSS)
+  const padL = 14, padR = 14;
+  const usableW = track.clientWidth - padL - padR;
+  if (usableW <= 0) return;
+
+  seps.forEach((sep, i) => {
+    const top = parseFloat(sep.style.top) || 0;
+    const pct = containerH > 0 ? top / containerH : 0;
+    const xPos = padL + pct * usableW;
+
+    const dateText = sep.querySelector(".tl-date-sep-text")?.textContent || "";
+    const countText = sep.querySelector(".tl-date-sep-count")?.textContent || "";
+    // Compact label: "08月01日" → "08/01"
+    const compactLabel = dateText.replace("月", "/").replace("日", "");
+
+    const mark = document.createElement("button");
+    mark.type = "button";
+    mark.className = "tl-scrub-mark";
+    mark.style.left = xPos + "px";
+    mark.dataset.top = top;
+    mark.innerHTML =
+      `<span class="tl-scrub-mark-label">${compactLabel}</span>` +
+      `<span class="tl-scrub-mark-dot"></span>` +
+      `<span class="tl-scrub-mark-count">${countText.replace(" 条", "")}</span>`;
+    mark.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _jumpToTimelinePos(top);
+    });
+    track.appendChild(mark);
+  });
+
+  // Thumb
+  const thumb = document.createElement("div");
+  thumb.className = "tl-scrub-thumb";
+  thumb.id = "tl-scrub-thumb";
+  track.appendChild(thumb);
+}
+
+function _updateScrubberThumb() {
+  const track = document.getElementById("tl-scrubber-track");
+  const thumb = document.getElementById("tl-scrub-thumb");
+  if (!track || !thumb) return;
+
+  const container = document.getElementById("tracking-history");
+  if (!container) return;
+
+  const containerH = parseFloat(container.style.height) || container.offsetHeight || 1;
+  const rect = container.getBoundingClientRect();
+  const containerTop = rect.top + window.scrollY;
+  // Viewport center mapped into container space
+  const viewportCenterInC = window.scrollY + window.innerHeight * 0.5 - containerTop;
+  let pct = containerH > 0 ? viewportCenterInC / containerH : 0;
+  pct = Math.max(0, Math.min(1, pct));
+
+  const padL = 14, padR = 14;
+  const usableW = track.clientWidth - padL - padR;
+  thumb.style.left = (padL + pct * usableW) + "px";
+
+  // Highlight nearest marker
+  const marks = track.querySelectorAll(".tl-scrub-mark");
+  if (marks.length === 0) return;
+  const targetTop = pct * containerH;
+  let closestMark = null;
+  let minDist = Infinity;
+  marks.forEach(m => {
+    const mTop = parseFloat(m.dataset.top) || 0;
+    const dist = Math.abs(mTop - targetTop);
+    if (dist < minDist) { minDist = dist; closestMark = m; }
+  });
+  marks.forEach(m => m.classList.toggle("active", m === closestMark));
+}
+
+function _jumpToTimelinePos(topInContainer) {
+  const container = document.getElementById("tracking-history");
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  const containerTop = rect.top + window.scrollY;
+  // Scroll so the date separator sits near the top of the viewport (with some offset for the header)
+  const targetY = containerTop + topInContainer - 80;
+  window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
 }
 
 // ─── Masonry: waterfall layout for timeline cards ───
@@ -990,7 +1123,11 @@ function _bindMasonryResize() {
   let t;
   window.addEventListener("resize", () => {
     clearTimeout(t);
-    t = setTimeout(_applyMasonry, 150);
+    t = setTimeout(() => {
+      _applyMasonry();
+      _buildScrubber();
+      _updateScrubberThumb();
+    }, 150);
   });
   _masonryResizeTimer = 1;
 }
@@ -999,8 +1136,15 @@ function _watchMasonryImages(container) {
   const imgs = container.querySelectorAll("img");
   imgs.forEach(img => {
     if (!img.complete) {
-      img.addEventListener("load", () => _scheduleMasonry(), { once: true });
-      img.addEventListener("error", () => _scheduleMasonry(), { once: true });
+      img.addEventListener("load", () => {
+        _scheduleMasonry();
+        // Refresh scrubber positions after image-induced reflow
+        requestAnimationFrame(() => { _buildScrubber(); _updateScrubberThumb(); });
+      }, { once: true });
+      img.addEventListener("error", () => {
+        _scheduleMasonry();
+        requestAnimationFrame(() => { _buildScrubber(); _updateScrubberThumb(); });
+      }, { once: true });
     }
   });
 }
@@ -1394,6 +1538,8 @@ function renderHistory(data) {
     _bindMasonryResize();
     _scheduleMasonry();
     _watchMasonryImages(tlCt);
+    // Rebuild scrubber after incremental layout settles
+    requestAnimationFrame(() => { _buildScrubber(); _updateScrubberThumb(); });
     return;
   }
 
@@ -1464,6 +1610,9 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
     // Re-measure once more (fonts may have shifted heights)
     _applyMasonry();
     tlCt.classList.remove("tl-switching");
+    // Rebuild scrubber now that masonry positions are final
+    _buildScrubber();
+    _updateScrubberThumb();
   });
 }
 
@@ -1638,8 +1787,15 @@ function switchTab(name) {
       const tlCt = document.getElementById("tracking-history");
       if (tlCt && tlCt.children.length > 0) {
         _applyMasonry();
+        // Rebuild scrubber with fresh masonry positions
+        _buildScrubber();
+        _updateScrubberThumb();
       }
     });
+  } else {
+    // Collapse scrubber when leaving timeline tab
+    const nav = document.getElementById("tl-float-nav");
+    if (nav) nav.classList.remove("expanded");
   }
 }
 

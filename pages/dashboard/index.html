@@ -163,11 +163,17 @@
               </div>
               <div class="tl-stream" id="tracking-history"></div>
             </div>
-            <!-- 浮动时间导航 -->
+            <!-- 浮动时间导航（点击展开时间轴跳转） -->
             <div class="tl-float-nav" id="tl-float-nav" aria-hidden="true">
-              <span class="tl-float-time" id="tl-float-time">--:--</span>
-              <span class="tl-float-pulse"></span>
-              <span class="tl-float-date" id="tl-float-date">--月--日</span>
+              <div class="tl-scrubber" id="tl-scrubber">
+                <div class="tl-scrubber-track" id="tl-scrubber-track"></div>
+              </div>
+              <button class="tl-float-pill" id="tl-float-pill" type="button" aria-label="展开时间导航">
+                <span class="tl-float-time" id="tl-float-time">--:--</span>
+                <span class="tl-float-pulse"></span>
+                <span class="tl-float-date" id="tl-float-date">--月--日</span>
+                <svg class="tl-float-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
+              </button>
             </div>
           </section>
 
