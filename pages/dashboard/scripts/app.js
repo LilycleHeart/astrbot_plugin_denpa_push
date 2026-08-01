@@ -742,10 +742,25 @@ class EcgWaveform {
     const amp = h * 0.32 * this.ampScale;
     const brand = this._getBrand();
 
-    // Integer-aligned sampling for crisp rendering (no sub-pixel jitter)
+    // Adaptive subsampling: fine steps near steep slopes to capture sharp peaks
     const pts = [];
     const step = 2;
-    for (let x = 0; x <= w; x += step) pts.push({ x, y: mid - this._waveY(x) * amp });
+    for (let x = 0; x <= w; x += step) {
+      const y = mid - this._waveY(x) * amp;
+      if (pts.length > 0) {
+        const prev = pts[pts.length - 1];
+        const dy = Math.abs(y - prev.y);
+        if (dy > step * 1.2) {
+          // Steep region — insert intermediate samples to catch narrow peaks
+          const fracs = dy > step * 4 ? [0.2, 0.4, 0.6, 0.8] : [0.5];
+          for (const f of fracs) {
+            const xs = prev.x + step * f;
+            pts.push({ x: xs, y: mid - this._waveY(xs) * amp });
+          }
+        }
+      }
+      pts.push({ x, y });
+    }
 
     // Fill under curve
     ctx.beginPath();
