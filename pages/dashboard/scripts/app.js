@@ -866,6 +866,9 @@ let _parallaxMouseX = 0, _parallaxMouseY = 0;
 let _parallaxHolding = false;
 let _parallaxHoldTimer = null;
 let _parallaxActiveWrap = null;
+// click 模式辅助：起点坐标 + 是否已移动（用于区分点击 / 拖选）
+let _parallaxStartX = 0, _parallaxStartY = 0;
+let _parallaxMoved = false;
 
 function _applyParallax(wrap, clientX, clientY) {
   if (!wrap) return;
@@ -946,7 +949,7 @@ function _bindCardHover() {
     }
   });
 
-  // ── mousemove：hover 模式常驻跟随 / click 模式长按跟随 ──
+  // ── mousemove：hover 模式常驻跟随 / click 模式长按跟随 + 位移检测 ──
   container.addEventListener("mousemove", (e) => {
     const m = mode();
     if (m === "hover") {
@@ -966,18 +969,36 @@ function _bindCardHover() {
         _parallaxRaf = 0;
         _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
       });
-    } else if (m === "click" && _parallaxHolding && _parallaxActiveWrap) {
-      _parallaxMouseX = e.clientX;
-      _parallaxMouseY = e.clientY;
-      if (_parallaxRaf) return;
-      _parallaxRaf = requestAnimationFrame(() => {
-        _parallaxRaf = 0;
-        _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
-      });
+    } else if (m === "click") {
+      // 检测拖拽位移：超过 5px 标记为移动，放任浏览器原生选区
+      if (_parallaxActiveWrap && !_parallaxMoved) {
+        const dx = e.clientX - _parallaxStartX;
+        const dy = e.clientY - _parallaxStartY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) {
+          _parallaxMoved = true;
+          // 已移动 → 取消长按定时器，放弃视差，让浏览器接管选区
+          clearTimeout(_parallaxHoldTimer);
+          if (_parallaxHolding) {
+            _parallaxHolding = false;
+            _parallaxActiveWrap.classList.remove("parallax-active");
+            _resetParallax(_parallaxActiveWrap, true);
+          }
+        }
+      }
+      // 长按跟随视差
+      if (_parallaxHolding && _parallaxActiveWrap) {
+        _parallaxMouseX = e.clientX;
+        _parallaxMouseY = e.clientY;
+        if (_parallaxRaf) return;
+        _parallaxRaf = requestAnimationFrame(() => {
+          _parallaxRaf = 0;
+          _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
+        });
+      }
     }
   });
 
-  // ── click 模式：mousedown 立即应用视差 + 长按检测 ──
+  // ── click 模式：mousedown 记录起点 + 长按检测（不立即视差，放任前 300ms 选区） ──
   container.addEventListener("mousedown", (e) => {
     if (mode() !== "click" || e.button !== 0) return;
     const card = e.target.closest(".tl-entry");
@@ -985,35 +1006,48 @@ function _bindCardHover() {
     const wrap = card.querySelector(".tl-card-wrap");
     if (!wrap) return;
 
-    // 立即应用视差
-    wrap.style.transition = "transform 0.18s cubic-bezier(0.2, 0, 0, 1)";
-    _applyParallax(wrap, e.clientX, e.clientY);
+    // 记录起点，不立即应用视差（让浏览器原生选区有机会工作）
+    _parallaxStartX = e.clientX;
+    _parallaxStartY = e.clientY;
     _parallaxActiveWrap = wrap;
     _parallaxHolding = false;
+    _parallaxMoved = false;
 
-    // 300ms 后进入长按模式
+    // 300ms 后仍未移动 → 进入长按跟随模式
     clearTimeout(_parallaxHoldTimer);
     _parallaxHoldTimer = setTimeout(() => {
-      _parallaxHolding = true;
-      wrap.style.transition = ""; // 长按模式去掉 transition 以便流畅跟随
+      if (!_parallaxMoved) {
+        _parallaxHolding = true;
+        wrap.style.transition = ""; // 去掉 transition 以便流畅跟随
+        wrap.classList.add("parallax-active"); // 禁用 user-select 防止误选
+        _applyParallax(wrap, _parallaxStartX, _parallaxStartY);
+      }
     }, 300);
   });
 
-  // ── mouseup：长按平滑复位 / 短按保持后复位 ──
+  // ── click：无位移的纯点击 → 一次性视差动画（拖选不会触发 click） ──
+  container.addEventListener("click", (e) => {
+    if (mode() !== "click" || _parallaxMoved) return;
+    const card = e.target.closest(".tl-entry");
+    if (!card) return;
+    const wrap = card.querySelector(".tl-card-wrap");
+    if (!wrap) return;
+    wrap.style.transition = "transform 0.18s cubic-bezier(0.2, 0, 0, 1)";
+    _applyParallax(wrap, e.clientX, e.clientY);
+    clearTimeout(wrap._parallaxTimer);
+    wrap._parallaxTimer = setTimeout(() => _resetParallax(wrap, true), 420);
+  });
+
+  // ── mouseup：长按平滑复位 / 清理状态 ──
   document.addEventListener("mouseup", () => {
     if (mode() !== "click") return;
     clearTimeout(_parallaxHoldTimer);
     if (_parallaxHolding) {
       _parallaxHolding = false;
+      _parallaxActiveWrap?.classList.remove("parallax-active");
       _resetParallax(_parallaxActiveWrap, true);
-      _parallaxActiveWrap = null;
-    } else if (_parallaxActiveWrap) {
-      const wrap = _parallaxActiveWrap;
-      _parallaxActiveWrap = null;
-      // 短按：保持当前偏移 420ms 后平滑复位
-      clearTimeout(wrap._parallaxTimer);
-      wrap._parallaxTimer = setTimeout(() => _resetParallax(wrap, true), 420);
     }
+    _parallaxActiveWrap = null;
   });
 }
 
