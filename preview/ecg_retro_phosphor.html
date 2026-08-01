@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>电波图预览 A — 复古绿色荧光示波器</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0e0a;
+  color: #c8ffd0;
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 24px;
+}
+h1 { font-family: 'Space Grotesk', sans-serif; font-size: 20px; margin-bottom: 4px; color: #00ff66; text-shadow: 0 0 8px rgba(0,255,102,0.5); }
+.desc { color: #4a8a55; font-size: 13px; margin-bottom: 24px; }
+
+/* 示波器外框 */
+.scope-frame {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #050805;
+  border: 1px solid rgba(0, 255, 102, 0.15);
+  box-shadow: inset 0 0 60px rgba(0, 255, 102, 0.05),
+              0 0 30px rgba(0, 255, 102, 0.08);
+}
+/* CRT 弧面效果 */
+.scope-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 120% 100% at 50% 50%, transparent 60%, rgba(0,0,0,0.4) 100%);
+  z-index: 3;
+}
+/* 扫描线纹理 */
+.scope-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 102, 0.015) 2px,
+    rgba(0, 255, 102, 0.015) 4px
+  );
+  z-index: 2;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 标签 */
+.scope-label {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 4;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: rgba(0, 255, 102, 0.5);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.scope-bpm {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 4;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(0, 255, 102, 0.7);
+}
+.scope-bpm span { font-size: 18px; font-weight: 700; color: #00ff66; text-shadow: 0 0 6px rgba(0,255,102,0.6); }
+</style>
+</head>
+<body>
+
+<h1>方案 A — 复古绿色荧光示波器</h1>
+<p class="desc">经典 CRT 示波器风格，绿色磷光波形配合厚重的余晖拖尾，带扫描线纹理和 CRT 弧面效果。波形有明显的荧光衰减感。</p>
+
+<div class="scope-frame">
+  <span class="scope-label">ECG · LEAD II</span>
+  <span class="scope-bpm"><span id="bpm">72</span> BPM</span>
+  <canvas id="ecg"></canvas>
+</div>
+
+<script>
+class RetroPhosphorECG {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.offset = 0;
+    this.speed = 1.2;
+    this.cycleLen = 280;
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this._resize();
+    window.addEventListener("resize", () => this._resize());
+    this._loop();
+  }
+  _resize() {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    if (!w || !h) return;
+    this.canvas.width = w * this.dpr;
+    this.canvas.height = h * this.dpr;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.w = w; this.h = h;
+  }
+  _ecgY(x) {
+    const p = ((x % this.cycleLen) + this.cycleLen) % this.cycleLen;
+    const t = p / this.cycleLen;
+    let y = 0;
+    y += 0.12 * Math.exp(-Math.pow((t - 0.12) / 0.022, 2));   // P
+    y -= 0.08 * Math.exp(-Math.pow((t - 0.27) / 0.008, 2));   // Q
+    y += 0.90 * Math.exp(-Math.pow((t - 0.29) / 0.006, 2));   // R
+    y -= 0.30 * Math.exp(-Math.pow((t - 0.31) / 0.010, 2));   // S
+    y += 0.22 * Math.exp(-Math.pow((t - 0.42) / 0.035, 2));   // T
+    y += (Math.random() - 0.5) * 0.006;
+    return y;
+  }
+  _loop() {
+    this._draw();
+    requestAnimationFrame(() => this._loop());
+  }
+  _draw() {
+    const { ctx, w, h } = this;
+    if (!w || !h) { this._resize(); return; }
+
+    // 半透明清除 — 产生磷光余晖
+    ctx.fillStyle = "rgba(5, 8, 5, 0.12)";
+    ctx.fillRect(0, 0, w, h);
+
+    this.offset += this.speed;
+    const mid = h * 0.52;
+    const amp = h * 0.38;
+
+    // 示波器网格
+    ctx.strokeStyle = "rgba(0, 255, 102, 0.04)";
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx < w; gx += 30) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (let gy = 0; gy < h; gy += 30) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    // 构建波形点
+    const pts = [];
+    const step = 1.2;
+    for (let x = 0; x <= w; x += step) {
+      pts.push({ x, y: mid - this._ecgY(x + this.offset) * amp });
+    }
+
+    // 多层磷光拖尾 — 从外到内
+    const layers = [
+      { width: 8, alpha: 0.04, blur: 0 },
+      { width: 5, alpha: 0.08, blur: 0 },
+      { width: 3, alpha: 0.15, blur: 0 },
+    ];
+    layers.forEach(layer => {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(0, 255, 102, ${layer.alpha})`;
+      ctx.lineWidth = layer.width;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    });
+
+    // 主波形 — 明亮绿色 + shadow glow
+    ctx.save();
+    ctx.shadowColor = "#00ff66";
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+    ctx.restore();
+
+    // 扫描头 — 明亮光点
+    const head = pts[pts.length - 1];
+    if (head) {
+      ctx.save();
+      ctx.shadowColor = "#00ff66";
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = "#aaffcc";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // 外圈光晕
+      ctx.shadowBlur = 30;
+      ctx.fillStyle = "rgba(0, 255, 102, 0.3)";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+const ecg = new RetroPhosphorECG(document.getElementById("ecg"));
+
+// BPM 随机波动
+setInterval(() => {
+  const bpm = 68 + Math.floor(Math.random() * 8);
+  document.getElementById("bpm").textContent = bpm;
+}, 2000);
+</script>
+</body>
+</html>

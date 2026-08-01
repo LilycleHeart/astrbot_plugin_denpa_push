@@ -423,150 +423,538 @@ function syncThemeIcon() {
   if (labelEl) labelEl.textContent = dark ? "亮色主题" : "暗色主题";
 }
 
-// ─── ECG Waveform Engine ───
+// ─── ECG Waveform Engine (v3: multi-archetype + rhythm engine) ───
+// Shape functions
+function _ecgGauss(t,c,w){return Math.exp(-Math.pow((t-c)/w,2));}
+function _ecgGaussAsym(t,c,wL,wR){const w=t<c?wL:wR;return Math.exp(-Math.pow((t-c)/w,2));}
+function _ecgSech2(t,c,w){const v=(t-c)/w;const ch=Math.cosh(v);return 1/(ch*ch);}
+function _ecgTri(t,c,w){const d=Math.abs(t-c)/w;return d<1?1-d:0;}
+// Seeded random
+function _ecgSR(seed){let s=(seed*9301+49297)%233280;return s/233280;}
+function _ecgSRn(seed,n){return _ecgSR(seed*31+n*17+7);}
+function _ecgSRr(seed,n,min,max){return min+_ecgSRn(seed,n)*(max-min);}
+// Deterministic noise (no frame jitter)
+function _ecgNoiseAt(totalX){const i=Math.floor(totalX);const f=totalX-i;const a=_ecgSR(i*7919);const b=_ecgSR((i+1)*7919);return a+(b-a)*f;}
+// Component constructors
+function _cg(pos,amp,w){return{pos,amp,shape:"g",w};}
+function _ca(pos,amp,wL,wR){return{pos,amp,shape:"ga",wL,wR};}
+function _cs(pos,amp,w){return{pos,amp,shape:"s",w};}
+function _ct(pos,amp,w){return{pos,amp,shape:"t",w};}
+
+// Beat generators
+function _genSinus(seed,intensity){
+  const s=seed+1;const cl=240*(1+_ecgSRr(s,0,-0.08,0.08)+intensity*0.02*(_ecgSRn(s,50)-0.5));
+  const bl=Math.sin(seed*0.7)*0.015+Math.sin(seed*0.3)*0.008;const C=[];
+  if(_ecgSRn(s,1)>0.08){const pA=_ecgSRr(s,2,0.06,0.16),pP=_ecgSRr(s,3,0.08,0.18),pW=_ecgSRr(s,4,0.015,0.030);
+    if(_ecgSRn(s,5)>0.85){C.push(_cg(pP-0.015,pA*0.6,pW*0.7));C.push(_cg(pP+0.015,pA*0.7,pW*0.7));}else C.push(_cg(pP,pA,pW));}
+  C.push(_cs(_ecgSRr(s,7,0.22,0.28),_ecgSRr(s,6,-0.15,-0.02),_ecgSRr(s,8,0.004,0.010)));
+  const rA=_ecgSRr(s,9,0.55,1.05),rP=_ecgSRr(s,10,0.27,0.35),rW=_ecgSRr(s,11,0.004,0.009);
+  if(_ecgSRn(s,12)>0.88){C.push(_cs(rP-0.008,rA*0.6,rW));C.push(_cs(rP+0.008,rA*0.7,rW));}
+  else if(_ecgSRn(s,13)>0.5)C.push(_ca(rP,rA,rW*0.7,rW*1.3));else C.push(_cs(rP,rA,rW));
+  C.push(_cg(_ecgSRr(s,15,0.32,0.40),_ecgSRr(s,14,-0.35,-0.05),_ecgSRr(s,16,0.005,0.014)));
+  if(_ecgSRn(s,17)>0.88)C.push(_cg(_ecgSRr(s,18,0.38,0.42),_ecgSRr(s,19,0.05,0.12),0.008));
+  const st=_ecgSRr(s,20,-0.03,0.02);if(Math.abs(st)>0.005)C.push(_cg(_ecgSRr(s,21,0.40,0.46),st,0.04));
+  const tI=_ecgSRn(s,22)<(0.05+intensity*0.03);let tA=_ecgSRr(s,23,0.10,0.30);if(tI)tA=-tA;
+  const tP=_ecgSRr(s,24,0.42,0.58),tW=_ecgSRr(s,25,0.022,0.048);
+  if(_ecgSRn(s,26)>0.85){C.push(_ca(tP,tA*0.7,tW*0.6,tW*1.2));C.push(_cg(tP+tW*1.5,-tA*0.3,tW));}
+  else if(_ecgSRn(s,27)>0.80)C.push(_cs(tP,tA,tW*0.6));else C.push(_ca(tP,tA,tW*0.7,tW*1.3));
+  if(_ecgSRn(s,28)>0.80)C.push(_cg(_ecgSRr(s,29,0.60,0.72),_ecgSRr(s,30,0.03,0.08),0.025));
+  if(_ecgSRn(s,31)<0.03+intensity*0.02)C.push(_ct(_ecgSRr(s,32,0.0,1.0),_ecgSRr(s,33,-0.3,0.5),0.003));
+  return{length:cl,baseline:bl,components:C,type:"sinus"};
+}
+function _genPVCWide(seed,intensity){
+  const s=seed+1;const cl=200*(1+_ecgSRr(s,0,-0.10,0.10));const bl=Math.sin(seed*0.5)*0.02;const C=[];
+  const pol=_ecgSRn(s,2)>0.5?1:-1;const rA=pol*_ecgSRr(s,1,0.40,1.20);const rP=_ecgSRr(s,3,0.20,0.40);const rW=_ecgSRr(s,4,0.012,0.028);
+  if(_ecgSRn(s,5)>0.5){C.push(_ca(rP,rA*0.7,rW*0.6,rW));C.push(_cg(rP+rW*0.8,rA*0.5,rW*0.8));}else C.push(_ca(rP,rA,rW*0.7,rW*1.4));
+  C.push(_cg(rP+rW*1.5,-rA*0.4,rW*0.9));C.push(_ca(_ecgSRr(s,7,0.50,0.65),-rA*_ecgSRr(s,6,0.15,0.45),0.020,0.050));
+  if(_ecgSRn(s,8)>0.5)C.push(_cg(0.45,-rA*0.1,0.03));return{length:cl,baseline:bl,components:C,type:"pvc_wide"};
+}
+function _genPVCNotched(seed,intensity){
+  const s=seed+1;const cl=195*(1+_ecgSRr(s,0,-0.10,0.10));const bl=Math.sin(seed*0.6)*0.018;const C=[];
+  const pol=_ecgSRn(s,1)>0.5?1:-1;const bP=_ecgSRr(s,2,0.25,0.38);const nN=2+Math.floor(_ecgSRn(s,3)*3);
+  for(let i=0;i<nN;i++){C.push(_cs(bP+i*_ecgSRr(s,4+i,0.006,0.018),pol*_ecgSRr(s,10+i,0.20,0.80)*(1-i*0.15),_ecgSRr(s,20+i,0.008,0.016)));}
+  C.push(_cg(_ecgSRr(s,30,0.52,0.68),-pol*_ecgSRr(s,31,0.15,0.40),0.030));return{length:cl,baseline:bl,components:C,type:"pvc_notched"};
+}
+function _genPVCTall(seed,intensity){
+  const s=seed+1;const cl=205*(1+_ecgSRr(s,0,-0.10,0.10));const C=[];
+  C.push(_cs(_ecgSRr(s,1,0.28,0.34),_ecgSRr(s,2,0.90,1.60),0.006));C.push(_cg(_ecgSRr(s,3,0.34,0.40),-_ecgSRr(s,4,0.30,0.70),0.010));
+  C.push(_cg(_ecgSRr(s,5,0.50,0.62),-_ecgSRr(s,6,0.20,0.45),0.035));return{length:cl,baseline:0,components:C,type:"pvc_tall"};
+}
+function _genPVDwarf(seed,intensity){
+  const s=seed+1;const cl=220*(1+_ecgSRr(s,0,-0.10,0.10));const bl=Math.sin(seed*0.4)*0.015;const pol=_ecgSRn(s,1)>0.5?1:-1;const C=[];
+  C.push(_ca(_ecgSRr(s,2,0.28,0.38),pol*_ecgSRr(s,3,0.15,0.40),0.015,0.035));C.push(_cg(_ecgSRr(s,4,0.55,0.70),-pol*_ecgSRr(s,5,0.08,0.20),0.040));
+  return{length:cl,baseline:bl,components:C,type:"pvc_dwarf"};
+}
+function _genPAC(seed,intensity){
+  const s=seed+1;const cl=180*(1+_ecgSRr(s,0,-0.06,0.06));const bl=Math.sin(seed*0.7)*0.012;const C=[];
+  const pI=_ecgSRn(s,1)>0.5;C.push(_cg(_ecgSRr(s,3,0.10,0.18),(pI?-1:1)*_ecgSRr(s,2,0.10,0.22),_ecgSRr(s,4,0.012,0.022)));
+  C.push(_cs(_ecgSRr(s,5,0.28,0.34),_ecgSRr(s,6,0.60,0.95),0.006));C.push(_cg(_ecgSRr(s,7,0.34,0.40),-_ecgSRr(s,8,0.15,0.30),0.010));
+  const tI=_ecgSRn(s,9)>0.6;C.push(_cg(_ecgSRr(s,10,0.45,0.58),(tI?-1:1)*_ecgSRr(s,11,0.12,0.25),0.030));
+  return{length:cl,baseline:bl,components:C,type:"pac"};
+}
+function _genFusion(seed,intensity){
+  const s=seed+1;const cl=225*(1+_ecgSRr(s,0,-0.08,0.08));const C=[];
+  C.push(_cg(_ecgSRr(s,1,0.10,0.16),_ecgSRr(s,2,0.04,0.10),0.020));
+  const rA=_ecgSRr(s,3,0.45,0.85),rW=_ecgSRr(s,4,0.008,0.014);
+  if(_ecgSRn(s,5)>0.5)C.push(_ca(_ecgSRr(s,6,0.28,0.34),rA,rW*0.7,rW*1.2));else C.push(_cs(_ecgSRr(s,6,0.28,0.34),rA,rW));
+  C.push(_cg(_ecgSRr(s,7,0.36,0.42),-_ecgSRr(s,8,0.10,0.30),0.012));C.push(_cg(_ecgSRr(s,9,0.48,0.60),_ecgSRr(s,10,-0.05,0.20),0.030));
+  return{length:cl,baseline:0,components:C,type:"fusion"};
+}
+function _genEscape(seed,intensity){
+  const s=seed+1;const cl=300*(1+_ecgSRr(s,0,-0.05,0.05));const C=[];
+  if(_ecgSRn(s,1)>0.5)C.push(_cg(_ecgSRr(s,2,0.15,0.25),-_ecgSRr(s,3,0.05,0.12),0.018));
+  C.push(_cs(_ecgSRr(s,4,0.35,0.42),_ecgSRr(s,5,0.50,0.80),0.006));C.push(_cg(_ecgSRr(s,6,0.42,0.48),-_ecgSRr(s,7,0.12,0.25),0.010));
+  C.push(_cg(_ecgSRr(s,8,0.55,0.68),_ecgSRr(s,9,0.10,0.22),0.030));return{length:cl,baseline:0,components:C,type:"escape"};
+}
+function _genPolymorphic(seed,intensity){
+  const s=seed+1;const cl=160*(1+_ecgSRr(s,0,-0.20,0.20));const bl=Math.sin(seed*1.3)*0.03+(_ecgSRn(s,1)-0.5)*0.04;const C=[];
+  const nC=3+Math.floor(_ecgSRn(s,2)*6);
+  for(let i=0;i<nC;i++){const p=_ecgSRr(s,10+i*3,0.02,0.98);const a=_ecgSRr(s,11+i*3,-0.80,0.90)*(0.5+intensity*0.1);const w=_ecgSRr(s,20+i,0.003,0.030);
+    const sc=_ecgSRn(s,12+i*3);if(sc<0.25)C.push(_cs(p,a,w));else if(sc<0.50)C.push(_cg(p,a,w));else if(sc<0.75)C.push(_ca(p,a,w*0.6,w*1.4));else C.push(_ct(p,a,w));}
+  return{length:cl,baseline:bl,components:C,type:"polymorphic"};
+}
+function _genFib(seed,intensity){
+  const s=seed+1;const ft=_ecgSRn(s,0)>0.5?"fine":"coarse";const amp=ft==="fine"?0.08:0.20;
+  return{length:300,baseline:0,type:"fib",fibType:ft,fibAmp:amp,fibSeed:s};
+}
+function _genFlutter(seed,intensity){
+  const s=seed+1;const C=[];const nS=4+Math.floor(_ecgSRn(s,0)*3);
+  for(let i=0;i<nS;i++){C.push(_ca(0.05+i*(0.90/nS),-_ecgSRr(s,10+i,0.08,0.15),0.004,0.020));}
+  const qP=_ecgSRr(s,20,0.40,0.55);C.push(_cs(qP,_ecgSRr(s,21,0.50,0.80),0.006));C.push(_cg(qP+0.04,-_ecgSRr(s,22,0.15,0.25),0.010));C.push(_cg(qP+0.12,_ecgSRr(s,23,0.10,0.20),0.025));
+  return{length:280,baseline:0,components:C,type:"flutter"};
+}
+
+// Rhythm engine
+class _RhythmEngine{
+  constructor(intensity){this.intensity=intensity;this.pattern=null;this.patternLen=0;this.patternIdx=0;this._pickPattern();}
+  _pickPattern(){const i=this.intensity;let p;
+    if(i===0)p=["flatline"];else if(i<=1)p=["normal","normal","normal","occasional_pac"];else if(i<=2)p=["normal","occasional_pvc","occasional_pac","bigeminy"];
+    else if(i<=3)p=["bigeminy","trigeminy","couplets","occasional_pvc","multifocal"];else if(i<=4)p=["couplets","salvo","multifocal","polymorphic_run","bigeminy"];
+    else p=["polymorphic_run","salvo","vfib_segment","flutter_rhythm","torsades"];
+    this.pattern=p[Math.floor(Math.random()*p.length)];this.patternLen=15+Math.floor(Math.random()*30);this.patternIdx=0;}
+  _rPVC(){const t=["pvc_wide","pvc_notched","pvc_tall","pvc_dwarf"];const w=[0.35,0.30,0.20,0.15];let r=Math.random();
+    for(let i=0;i<t.length;i++){r-=w[i];if(r<=0)return t[i];}return t[0];}
+  nextBeatType(){if(this.patternIdx>=this.patternLen)this._pickPattern();this.patternIdx++;const p=this.pattern;const r=Math.random();
+    switch(p){case"flatline":return"flatline";case"normal":if(r<0.05+this.intensity*0.01)return"pac";if(r<0.08+this.intensity*0.015)return"pvc_wide";return"sinus";
+      case"occasional_pac":if(r<0.15)return"pac";if(r<0.20)return"pvc_wide";return"sinus";
+      case"occasional_pvc":if(r<0.15)return"pvc_wide";if(r<0.20)return"pvc_notched";if(r<0.25)return"pac";return"sinus";
+      case"bigeminy":return this.patternIdx%2===0?"sinus":this._rPVC();
+      case"trigeminy":return this.patternIdx%3===0?this._rPVC():"sinus";
+      case"couplets":return(this.patternIdx%4===0||this.patternIdx%4===1)?this._rPVC():"sinus";
+      case"salvo":{const c=this.patternIdx%6;return(c>=1&&c<=4)?this._rPVC():"sinus";}
+      case"multifocal":if(r<0.4)return this._rPVC();if(r<0.50)return"fusion";if(r<0.55)return"pac";return"sinus";
+      case"polymorphic_run":if(r<0.6)return"polymorphic";if(r<0.70)return"pvc_wide";if(r<0.75)return"pvc_notched";return"sinus";
+      case"vfib_segment":return r<0.7?"fib":"polymorphic";case"flutter_rhythm":return r<0.7?"flutter":"sinus";case"torsades":return"polymorphic";default:return"sinus";}}
+}
+
 class EcgWaveform {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx2d = canvas.getContext("2d");
     this.offset = 0;
-    this.speed = 1.1;
-    this.cycleLen = 260;
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.intensity = 1;
     this.active = false;
-    this.trail = []; // recent points for phosphor decay
+    this.pushCount = 0;
+    this.speedOverride = null;  // null = auto from pushCount, number = manual
+    this.speed = 0.1;
+    this.ampScale = 0.85;
+    this.noiseLevel = 0.002;
+    this.complexityOverride = null;
+    this.beats = [];
+    this._beatIdx = 0;
+    this._lastBeatEnd = 0;
+    this.beatCounter = 0;
+    this.rhythm = new _RhythmEngine(this.intensity);
+    this._trail = [];
+    this._maxTrail = 6;
     this._resize();
     this._bindResize();
     this._loop();
   }
 
   _resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return;
-    this.canvas.width = w * dpr;
-    this.canvas.height = h * dpr;
-    this.ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.w = w;
-    this.h = h;
+    this.canvas.width = w * this.dpr;
+    this.canvas.height = h * this.dpr;
+    this.ctx2d.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.w = w; this.h = h;
+  }
+  _bindResize() { let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => this._resize(), 150); }); }
+
+  _applySpeed() {
+    if (this.speedOverride !== null) {
+      this.speed = this.speedOverride;
+    } else {
+      // 自动：0推文=0.1，20推文=0.6，线性映射
+      this.speed = 0.1 + (Math.min(this.pushCount, 20) / 20) * 0.5;
+    }
   }
 
-  _bindResize() {
-    let t;
-    window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => this._resize(), 150); });
+  setActive(v) { this.active = v; }
+
+  setPushCount(n) {
+    this.pushCount = n;
+    // 复杂度被手动覆盖时优先使用覆盖值
+    if (this.complexityOverride !== null) {
+      this.intensity = Math.min(5, Math.max(0, Math.floor(this.complexityOverride / 2)));
+    } else {
+      // 推文20时到达上限（intensity 5）
+      this.intensity = n === 0 ? 0 : Math.min(5, Math.ceil(n / 4));
+    }
+    const ampMap = [0.03, 0.80, 1.0, 1.1, 1.2, 1.3];
+    const noiseMap = [0.0008, 0.002, 0.004, 0.007, 0.011, 0.016];
+    this.ampScale = ampMap[this.intensity];
+    this.noiseLevel = noiseMap[this.intensity];
+    this.rhythm = new _RhythmEngine(this.intensity);
+    this.beats = [];
+    this._beatIdx = 0;
+    this._lastBeatEnd = 0;
+    this.beatCounter = 0;
+    this._trail = [];
   }
 
-  setActive(v) { this.active = v; this.speed = v ? 1.5 : 0.7; }
+  setSpeed(v) {
+    this.speedOverride = v;
+    this._applySpeed();
+  }
 
-  // Smooth PQRST-like waveform using gaussian bumps
-  _ecgY(x) {
-    const p = ((x % this.cycleLen) + this.cycleLen) % this.cycleLen;
-    const t = p / this.cycleLen;
-    let y = 0;
-    // P wave
-    y += 0.12 * Math.exp(-Math.pow((t - 0.12) / 0.022, 2));
-    // Q dip
-    y -= 0.08 * Math.exp(-Math.pow((t - 0.27) / 0.008, 2));
-    // R spike
-    y += 0.85 * Math.exp(-Math.pow((t - 0.29) / 0.006, 2));
-    // S dip
-    y -= 0.28 * Math.exp(-Math.pow((t - 0.31) / 0.010, 2));
-    // T wave
-    y += 0.20 * Math.exp(-Math.pow((t - 0.42) / 0.035, 2));
-    // baseline noise
-    y += (Math.random() - 0.5) * 0.004;
+  setComplexity(c) {
+    this.complexityOverride = c;
+    this.intensity = Math.min(5, Math.max(0, Math.floor(c / 2)));
+    const ampMap = [0.03, 0.80, 1.0, 1.1, 1.2, 1.3];
+    const noiseMap = [0.0008, 0.002, 0.004, 0.007, 0.011, 0.016];
+    this.ampScale = ampMap[this.intensity];
+    this.noiseLevel = noiseMap[this.intensity];
+    this._applySpeed();
+    this.rhythm = new _RhythmEngine(this.intensity);
+    this.beats = [];
+    this._beatIdx = 0;
+    this._lastBeatEnd = 0;
+    this.beatCounter = 0;
+    this._trail = [];
+  }
+
+  _ensureBeats(upToX) {
+    while (this._lastBeatEnd < upToX) {
+      const bt = this.rhythm.nextBeatType();
+      if (bt === "flatline") { this.beats.push({startX:this._lastBeatEnd,length:800,baseline:0,components:[],type:"flatline"}); this._lastBeatEnd += 800; continue; }
+      const beat = this._genBeat(bt, this.beatCounter++);
+      beat.startX = this._lastBeatEnd;
+      this.beats.push(beat);
+      this._lastBeatEnd += beat.length;
+      if (this.intensity >= 2 && Math.random() < 0.03 + this.intensity * 0.01) {
+        const pl = 100 + Math.random() * 200;
+        this.beats.push({startX:this._lastBeatEnd,length:pl,baseline:beat.baseline,components:[],type:"pause"});
+        this._lastBeatEnd += pl;
+      }
+    }
+    const minKeep = this.offset - this.w - 100;
+    while (this.beats.length > 1 && this.beats[0].startX + this.beats[0].length < minKeep) {
+      this.beats.shift();
+      this._beatIdx = Math.max(0, this._beatIdx - 1);
+    }
+  }
+
+  _genBeat(type, idx) {
+    const seed = idx * 137 + 42;
+    switch (type) {
+      case "sinus": return _genSinus(seed, this.intensity);
+      case "pac": return _genPAC(seed, this.intensity);
+      case "pvc_wide": return _genPVCWide(seed, this.intensity);
+      case "pvc_notched": return _genPVCNotched(seed, this.intensity);
+      case "pvc_tall": return _genPVCTall(seed, this.intensity);
+      case "pvc_dwarf": return _genPVDwarf(seed, this.intensity);
+      case "fusion": return _genFusion(seed, this.intensity);
+      case "escape": return _genEscape(seed, this.intensity);
+      case "polymorphic": return _genPolymorphic(seed, this.intensity);
+      case "fib": return _genFib(seed, this.intensity);
+      case "flutter": return _genFlutter(seed, this.intensity);
+      default: return _genSinus(seed, this.intensity);
+    }
+  }
+
+  _findBeat(x) {
+    this._ensureBeats(x + 50);
+    while (this._beatIdx < this.beats.length - 1 && this.beats[this._beatIdx + 1].startX <= x) this._beatIdx++;
+    while (this._beatIdx > 0 && this.beats[this._beatIdx].startX > x) this._beatIdx--;
+    return this.beats[this._beatIdx] || null;
+  }
+
+  _compY(comp, t) {
+    switch (comp.shape) {
+      case "g": return comp.amp * _ecgGauss(t, comp.pos, comp.w);
+      case "ga": return comp.amp * _ecgGaussAsym(t, comp.pos, comp.wL, comp.wR);
+      case "s": return comp.amp * _ecgSech2(t, comp.pos, comp.w);
+      case "t": return comp.amp * _ecgTri(t, comp.pos, comp.w);
+      default: return comp.amp * _ecgGauss(t, comp.pos, comp.w);
+    }
+  }
+
+  _waveY(x) {
+    const totalX = x + this.offset;
+    const beat = this._findBeat(totalX);
+    if (!beat) return 0;
+    if (beat.type === "fib") return this._fibY(totalX, beat);
+    if (beat.type === "flatline" || beat.type === "pause") return beat.baseline + (_ecgNoiseAt(totalX) - 0.5) * this.noiseLevel;
+    const localT = (totalX - beat.startX) / beat.length;
+    if (localT < 0 || localT > 1) return beat.baseline;
+    let y = beat.baseline;
+    for (let i = 0; i < beat.components.length; i++) y += this._compY(beat.components[i], localT);
+    y += (_ecgNoiseAt(totalX) - 0.5) * this.noiseLevel;
     return y;
   }
 
-  _loop() {
-    this._draw();
-    requestAnimationFrame(() => this._loop());
+  _fibY(totalX, beat) {
+    const amp = beat.fibAmp * this.ampScale;
+    const s = beat.fibSeed;
+    return beat.baseline + Math.sin(totalX*0.12+s)*amp*0.4 + Math.sin(totalX*0.25+s*2)*amp*0.3 + Math.sin(totalX*0.41+s*3)*amp*0.2 + (_ecgSR(totalX*7.3+s)-0.5)*amp*0.5 + (_ecgNoiseAt(totalX)-0.5)*this.noiseLevel*4;
   }
+
+  _loop() { this._draw(); requestAnimationFrame(() => this._loop()); }
 
   _draw() {
     const { ctx2d: ctx, w, h } = this;
     if (!w || !h) { this._resize(); return; }
     ctx.clearRect(0, 0, w, h);
     this.offset += this.speed;
-    const mid = h * 0.5;
-    const amp = h * 0.36;
+    const mid = h * 0.55;
+    const amp = h * 0.32 * this.ampScale;
     const brand = getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
 
-    // Oscilloscope grid
-    ctx.strokeStyle = "rgba(128,128,128,.05)";
-    ctx.lineWidth = 1;
-    for (let gx = 0; gx < w; gx += 28) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
-    for (let gy = 0; gy < h; gy += 28) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
-
-    // Build current waveform points
     const pts = [];
-    const step = 1.5;
-    for (let x = 0; x <= w; x += step) {
-      pts.push({ x, y: mid - this._ecgY(x + this.offset) * amp });
-    }
+    const step = 1.2;
+    for (let x = 0; x <= w; x += step) pts.push({ x, y: mid - this._waveY(x) * amp });
 
-    // Phosphor trail: draw fading copies behind the live line
-    const tailLen = 6;
-    for (let i = tailLen; i >= 1; i--) {
-      const alpha = (1 - i / tailLen) * 0.18;
-      ctx.beginPath();
-      ctx.strokeStyle = brand + Math.round(alpha * 255).toString(16).padStart(2, "0");
-      ctx.lineWidth = 2 + i * 0.4;
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      for (let j = 0; j < pts.length; j++) {
-        const dx = pts[j].x - i * this.speed * 2;
-        if (dx < 0) continue;
-        j === 0 ? ctx.moveTo(dx, pts[j].y) : ctx.lineTo(dx, pts[j].y);
-      }
+    this._trail.push(pts);
+    if (this._trail.length > this._maxTrail) this._trail.shift();
+
+    // Fill under curve
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+    const fg = ctx.createLinearGradient(0, mid - amp, 0, h);
+    fg.addColorStop(0, _ecgColorMix(brand, 0.08));
+    fg.addColorStop(0.5, _ecgColorMix(brand, 0.02));
+    fg.addColorStop(1, _ecgColorMix(brand, 0));
+    ctx.fillStyle = fg; ctx.fill();
+
+    // Phosphor trail
+    for (let i = 0; i < this._trail.length - 1; i++) {
+      const tp = this._trail[i];
+      const a = (i / this._trail.length) * 0.08;
+      if (a < 0.005) continue;
+      ctx.beginPath(); ctx.strokeStyle = _ecgColorMix(brand, a); ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round"; ctx.lineCap = "round";
+      tp.forEach((p, j) => j === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
       ctx.stroke();
     }
 
-    // Main waveform with gradient
-    const grad = ctx.createLinearGradient(0, 0, w, 0);
-    grad.addColorStop(0, brand + "00");
-    grad.addColorStop(0.7, brand + "aa");
-    grad.addColorStop(1, brand);
-    ctx.beginPath();
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = 2.2;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    // Glow layers
+    [{ width: 6, alpha: 0.04 }, { width: 3.5, alpha: 0.09 }].forEach(layer => {
+      ctx.beginPath(); ctx.strokeStyle = _ecgColorMix(brand, layer.alpha); ctx.lineWidth = layer.width;
+      ctx.lineJoin = "round"; ctx.lineCap = "round";
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    });
+
+    // Main line with gradient
+    const lg = ctx.createLinearGradient(0, 0, w, 0);
+    lg.addColorStop(0, _ecgColorMix(brand, 0));
+    lg.addColorStop(0.12, _ecgColorMix(brand, 0.3));
+    lg.addColorStop(0.85, _ecgColorMix(brand, 1));
+    lg.addColorStop(1, _ecgColorMix(brand, 0.6));
+    ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.strokeStyle = lg; ctx.lineWidth = 1.8;
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.stroke();
+    ctx.stroke(); ctx.restore();
 
-    // Subtle fill under curve
-    ctx.lineTo(w, mid);
-    ctx.lineTo(0, mid);
-    ctx.closePath();
-    const fg = ctx.createLinearGradient(0, mid - amp, 0, mid);
-    fg.addColorStop(0, brand + "10");
-    fg.addColorStop(1, brand + "00");
-    ctx.fillStyle = fg;
-    ctx.fill();
-
-    // Leading scan head with glow
+    // Scan head
     const head = pts[pts.length - 1];
     if (head) {
-      ctx.save();
-      ctx.shadowColor = brand;
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(head.x, head.y, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      // scan line
-      ctx.beginPath();
-      ctx.strokeStyle = brand + "30";
-      ctx.lineWidth = 1;
-      ctx.moveTo(head.x, 0);
-      ctx.lineTo(head.x, h);
-      ctx.stroke();
+      ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 12;
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(head.x, head.y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 20; ctx.fillStyle = _ecgColorMix(brand, 0.25);
+      ctx.beginPath(); ctx.arc(head.x, head.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
   }
 }
+function _ecgColorMix(color, alpha) {
+  if (!color) return `rgba(29, 155, 240, ${alpha})`;
+  color = color.trim();
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}
+
+// ─── FlipDigit: 翻页机数字 ───
+class FlipDigit {
+  constructor(container) {
+    this.container = container;
+    this.current = container.dataset.initial || "0";
+    this.target = this.current;
+    this.flipping = false;
+    this.queue = [];
+    this._render();
+  }
+  _render() {
+    this.container.innerHTML =
+      `<div class="fd-top"><span>${this.current}</span></div>` +
+      `<div class="fd-bottom"><span>${this.current}</span></div>`;
+  }
+  _sequence(from, to) {
+    if (from === to) return [];
+    const seq = [];
+    let d = parseInt(from);
+    const t = parseInt(to);
+    while (d !== t) { d = (d + 1) % 10; seq.push(String(d)); }
+    return seq;
+  }
+  setDigit(newDigit) {
+    if (newDigit === this.target) return;
+    const seq = this._sequence(this.target, newDigit);
+    this.target = newDigit;
+    this.queue.push(...seq);
+    this._processQueue();
+  }
+  _processQueue() {
+    if (this.flipping || this.queue.length === 0) return;
+    const speed = this.queue.length > 8 ? 80 : this.queue.length > 4 ? 120 : this.queue.length > 2 ? 160 : 220;
+    const nextDigit = this.queue.shift();
+    this._doFlip(this.current, nextDigit, speed);
+  }
+  _doFlip(oldDigit, newDigit, speed) {
+    this.flipping = true;
+    const flip = document.createElement("div");
+    flip.className = "fd-flip";
+    flip.style.setProperty("--flip-dur", speed + "ms");
+    flip.innerHTML = `<div class="fd-flip-front">${oldDigit}</div><div class="fd-flip-back">${newDigit}</div>`;
+    this.container.appendChild(flip);
+    flip.offsetHeight;
+    flip.classList.add("fd-flipping");
+    const onEnd = () => {
+      flip.remove();
+      const topSpan = this.container.querySelector(".fd-top span");
+      const botSpan = this.container.querySelector(".fd-bottom span");
+      if (topSpan) topSpan.textContent = newDigit;
+      if (botSpan) botSpan.textContent = newDigit;
+      this.current = newDigit;
+      this.flipping = false;
+      this._processQueue();
+    };
+    flip.addEventListener("animationend", onEnd, { once: true });
+    setTimeout(() => { if (this.flipping) { flip.remove(); onEnd(); } }, speed + 100);
+  }
+}
+
+function _buildFlipTime(container, initial) {
+  const h1 = initial[0], h2 = initial[1], m1 = initial[3], m2 = initial[4];
+  container.innerHTML = "";
+  const digits = [];
+  [[h1], [h2]].forEach(([d]) => {
+    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
+    container.appendChild(el); digits.push(new FlipDigit(el));
+  });
+  const sep = document.createElement("span"); sep.className = "fd-sep"; sep.textContent = ":";
+  container.appendChild(sep);
+  [[m1], [m2]].forEach(([d]) => {
+    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
+    container.appendChild(el); digits.push(new FlipDigit(el));
+  });
+  return digits;
+}
+
+function _buildFlipDate(container, initial) {
+  const m1 = initial[0], m2 = initial[1], d1 = initial[3], d2 = initial[4];
+  container.innerHTML = "";
+  const digits = [];
+  [[m1], [m2]].forEach(([d]) => {
+    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
+    container.appendChild(el); digits.push(new FlipDigit(el));
+  });
+  const sep1 = document.createElement("span"); sep1.className = "fd-sep"; sep1.textContent = "月";
+  container.appendChild(sep1);
+  [[d1], [d2]].forEach(([d]) => {
+    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
+    container.appendChild(el); digits.push(new FlipDigit(el));
+  });
+  const sep2 = document.createElement("span"); sep2.className = "fd-sep"; sep2.textContent = "日";
+  container.appendChild(sep2);
+  return digits;
+}
+
+// Timeline badge state
+let _tlTimeDigits = null;
+let _tlDateDigits = null;
+let _tlScrollBound = false;
+
+function _extractTimeDate(item) {
+  let timeStr = "00:00", dateStr = "01月01日";
+  const dt = item.time ? new Date(item.time) : null;
+  if (dt && !isNaN(dt)) {
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
+    const mo = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    timeStr = `${hh}:${mm}`;
+    dateStr = `${mo}月${dd}日`;
+  }
+  return { timeStr, dateStr };
+}
+
+function _initTimelineBadge() {
+  const badgeTimeEl = document.getElementById("badge-time");
+  const badgeDateEl = document.getElementById("badge-date");
+  if (!badgeTimeEl || !badgeDateEl) return;
+  _tlTimeDigits = _buildFlipTime(badgeTimeEl, "00:00");
+  _tlDateDigits = _buildFlipDate(badgeDateEl, "01月01日");
+  if (!_tlScrollBound) {
+    _tlScrollBound = true;
+    window.addEventListener("scroll", _updateTimelineBadge, { passive: true });
+  }
+  _updateTimelineBadge();
+}
+
+function _updateTimelineBadge() {
+  if (!_tlTimeDigits || !_tlDateDigits) return;
+  const cards = document.querySelectorAll("#tracking-history .tl-entry");
+  if (cards.length === 0) return;
+  const refY = window.scrollY + window.innerHeight * 0.6;
+  let closest = cards[0];
+  let minDist = Infinity;
+  cards.forEach(e => {
+    const rect = e.getBoundingClientRect();
+    const center = rect.top + window.scrollY + rect.height / 2;
+    const dist = Math.abs(center - refY);
+    if (dist < minDist) { minDist = dist; closest = e; }
+  });
+  const time = closest.dataset.time || "00:00";
+  const date = closest.dataset.date || "01月01日";
+  _tlTimeDigits[0].setDigit(time[0]);
+  _tlTimeDigits[1].setDigit(time[1]);
+  _tlTimeDigits[2].setDigit(time[3]);
+  _tlTimeDigits[3].setDigit(time[4]);
+  _tlDateDigits[0].setDigit(date[0]);
+  _tlDateDigits[1].setDigit(date[1]);
+  _tlDateDigits[2].setDigit(date[3]);
+  _tlDateDigits[3].setDigit(date[4]);
+}
 
 // ─── Render: Status ───
+function _getEcgStateDesc(n) {
+  if (n === 0) return "待机";
+  if (n <= 3) return "平静";
+  if (n <= 8) return "活跃";
+  if (n <= 12) return "频繁";
+  if (n <= 16) return "激烈";
+  return "狂热";
+}
+
 function renderStatus(data) {
   if (!data) return;
   const badge = document.getElementById("monitor-badge");
@@ -580,7 +968,25 @@ function renderStatus(data) {
   document.getElementById("stat-interval").textContent = `${data.poll_interval || 5} min`;
 
 
-  if (ecg) ecg.setActive(running);
+  if (ecg) {
+    ecg.setActive(running);
+    const pushCount = data.total_pushes || 0;
+    // 仅在推送数变化时重置波形，避免每次刷新都跳变
+    if (ecg.pushCount !== pushCount) {
+      ecg.setPushCount(pushCount);
+      const pcEl = document.getElementById("ecg-push-count");
+      if (pcEl) pcEl.textContent = pushCount;
+      const sdEl = document.getElementById("ecg-state-desc");
+      if (sdEl) sdEl.textContent = _getEcgStateDesc(pushCount);
+      // 自动模式下同步速度滑条位置和显示
+      if (ecg.speedOverride === null) {
+        const ss = document.getElementById("ecg-speed");
+        const sv = document.getElementById("ecg-speed-val");
+        if (ss) ss.value = ecg.speed.toFixed(2);
+        if (sv) sv.textContent = ecg.speed.toFixed(2);
+      }
+    }
+  }
 
   // Dynamic theme: use brand_color from status if dynamic mode
   if (state.uiConfig.color_mode === "dynamic" && data.brand_color) {
@@ -765,6 +1171,9 @@ function buildHistoryCard(item) {
 
   const el = document.createElement("div");
   el.className = "tl-entry tl-item";
+  const { timeStr, dateStr } = _extractTimeDate(item);
+  el.dataset.time = timeStr;
+  el.dataset.date = dateStr;
   el.innerHTML = `
     <div class="tl-node" style="background:${seed}"></div>
     <div class="tl-time-label">${escapeHtml(timeRaw)}</div>
@@ -888,6 +1297,7 @@ function renderHistory(data) {
         tlCt.appendChild(frag);
       }
       tlCt.classList.remove("tl-switching");
+      _initTimelineBadge();
     }, 150);
   }
 }
@@ -1004,6 +1414,26 @@ async function init() {
   syncThemeIcon();
 
   ecg = new EcgWaveform(document.getElementById("ecg-canvas"));
+
+  // ECG control sliders
+  const speedSlider = document.getElementById("ecg-speed");
+  const speedVal = document.getElementById("ecg-speed-val");
+  if (speedSlider) {
+    speedSlider.addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value);
+      if (speedVal) speedVal.textContent = v.toFixed(2);
+      ecg.setSpeed(v);
+    });
+  }
+  const complexitySlider = document.getElementById("ecg-complexity");
+  const complexityVal = document.getElementById("ecg-complexity-val");
+  if (complexitySlider) {
+    complexitySlider.addEventListener("input", (e) => {
+      const v = parseInt(e.target.value);
+      if (complexityVal) complexityVal.textContent = v;
+      ecg.setComplexity(v);
+    });
+  }
 
   // Tab clicks
   document.querySelectorAll(".tab[data-tab]").forEach(tab => {
