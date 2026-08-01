@@ -230,82 +230,79 @@ body {
 }
 .sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
 
-/* ═══ ECG Pulse Core Logo — SVG 动态心电图 ═══ */
+/* ═══ Radial Heartbeat Logo — 环形心电图 ═══ */
 .ecg-logo-svg { overflow: visible; }
 
 /* 渐变停靠点 — 跟随 --color-brand 动态变化 */
-.ecg-grad-bg-1 { stop-color: var(--color-brand); stop-opacity: 0.08; }
-.ecg-grad-bg-2 { stop-color: var(--color-brand); stop-opacity: 0.02; }
-.ecg-grad-bg-3 { stop-color: var(--color-brand); stop-opacity: 0; }
-.ecg-grad-start { stop-color: var(--color-brand); stop-opacity: 0.25; }
-.ecg-grad-mid   { stop-color: var(--color-brand); stop-opacity: 0.85; }
-.ecg-grad-end   { stop-color: var(--color-brand); stop-opacity: 1; }
+.ecg-grad-1 { stop-color: var(--color-brand); stop-opacity: 0.3; }
+.ecg-grad-2 { stop-color: var(--color-brand); stop-opacity: 0.7; }
+.ecg-grad-3 { stop-color: var(--color-brand); stop-opacity: 1; }
 
-.ecg-logo-bg-circle { fill: url(#ecg-logo-bg); }
-
-/* 双脉冲环 — 交替扩散, 模拟心跳节律 */
-.ecg-logo-ring {
+/* 基线引导环 — 极淡虚线 */
+.ecg-logo-guide {
   fill: none;
   stroke: var(--color-brand);
-  stroke-width: 0.4;
-  transform-origin: center;
-  transform-box: fill-box;
-  opacity: 0;
-}
-.ecg-logo-ring-1 { animation: ecg-pulse-ring 1.8s ease-out infinite; }
-.ecg-logo-ring-2 { animation: ecg-pulse-ring 1.8s ease-out infinite; animation-delay: 0.9s; }
-
-@keyframes ecg-pulse-ring {
-  0%   { transform: scale(0.65); opacity: 0; }
-  15%  { opacity: 0.5; }
-  100% { transform: scale(1.12); opacity: 0; }
+  stroke-width: 0.3;
+  stroke-opacity: 0.08;
+  stroke-dasharray: 1 3;
 }
 
-/* 波形组 — 辉光脉动, 在 R 波尖峰时刻最亮 */
-.ecg-logo-wave-group {
-  animation: ecg-glow 1.8s ease-in-out infinite;
-}
-@keyframes ecg-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 0.8px var(--color-brand)) drop-shadow(0 0 1.5px var(--color-brand));
-    opacity: 0.8;
-  }
-  28% {
-    filter: drop-shadow(0 0 2.5px var(--color-brand)) drop-shadow(0 0 6px var(--color-brand));
-    opacity: 1;
-  }
-  45% {
-    filter: drop-shadow(0 0 1.2px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand));
-    opacity: 0.9;
-  }
-}
-
-.ecg-logo-wave {
+/* 静态波形底层 — 始终可见的暗色轮廓 */
+.ecg-logo-wave-bg {
   fill: none;
-  stroke: url(#ecg-logo-stroke);
-  stroke-width: 1.1;
+  stroke: var(--color-brand);
+  stroke-width: 0.8;
+  stroke-opacity: 0.15;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* 扫描头 — 白色亮点沿波形路径移动 */
+/* 雷达扫描弧 — 亮色短弧沿环形路径移动 */
+.ecg-logo-wave-sweep {
+  fill: none;
+  stroke: url(#ecg-logo-stroke);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 22 78;
+  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand));
+  animation: ecg-sweep 2.5s linear infinite;
+}
+@keyframes ecg-sweep {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* 轨道光点 — 白色亮点沿波形路径运行 */
 .ecg-logo-dot {
   fill: #ffffff;
   filter: drop-shadow(0 0 2px var(--color-brand)) drop-shadow(0 0 5px var(--color-brand));
 }
 
-/* Hover: 加速心跳 (1.8s → 0.9s) */
-.sidebar-logo:hover .ecg-logo-ring-1,
-.sidebar-logo:hover .ecg-logo-ring-2 {
-  animation-duration: 0.9s;
+/* 中心脉冲核心 — 随心跳收缩扩张 */
+.ecg-logo-core {
+  fill: var(--color-brand);
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ecg-core-beat 2.5s ease-in-out infinite;
 }
-.sidebar-logo:hover .ecg-logo-wave-group {
-  animation-duration: 0.9s;
+@keyframes ecg-core-beat {
+  0%, 55%, 100% { transform: scale(0.5); opacity: 0.3; }
+  15%           { transform: scale(1.3); opacity: 1; }
+  25%           { transform: scale(0.8); opacity: 0.6; }
+  35%           { transform: scale(1.0); opacity: 0.8; }
+}
+
+/* Hover: 加速扫描与心跳 (2.5s → 1.2s) */
+.sidebar-logo:hover .ecg-logo-wave-sweep,
+.sidebar-logo:hover .ecg-logo-core {
+  animation-duration: 1.2s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-logo-ring-1, .ecg-logo-ring-2, .ecg-logo-wave-group { animation: none; }
-  .ecg-logo-ring { opacity: 0.3; }
+  .ecg-logo-wave-sweep, .ecg-logo-core { animation: none; }
+  .ecg-logo-wave-sweep { stroke-opacity: 0.7; stroke-dasharray: none; }
+  .ecg-logo-core { transform: scale(0.8); opacity: 0.6; }
 }
 
 .sidebar-title {
