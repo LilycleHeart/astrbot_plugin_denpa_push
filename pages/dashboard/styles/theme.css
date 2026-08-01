@@ -243,10 +243,17 @@ body {
   filter: drop-shadow(0 0 1px var(--color-brand)) drop-shadow(0 0 2px var(--color-brand));
 }
 
-/* 头部高光 — 沿波形路径移动的亮点 */
+/* 头部高光 — 沿波形路径移动的亮点, 移动后停顿再开始下一轮 */
 .ecg-logo-head {
   fill: #ffffff;
   filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px var(--color-brand)) drop-shadow(0 0 5px var(--color-brand));
+  animation: ecg-head-vis 1.3s linear infinite;
+}
+@keyframes ecg-head-vis {
+  0%       { opacity: 0; }
+  3%       { opacity: 1; }
+  38%      { opacity: 1; }
+  40%, 100% { opacity: 0; }
 }
 
 /* Hover 加速由 JS 控制 animateMotion dur 属性 */

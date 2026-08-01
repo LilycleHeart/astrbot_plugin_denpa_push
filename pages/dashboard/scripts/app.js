@@ -2273,9 +2273,18 @@ function liveApplySettings() {
 (function initEcgLogoHover() {
   const logo = document.querySelector(".sidebar-logo");
   const motion = document.querySelector(".ecg-logo-head animateMotion");
-  if (!logo || !motion) return;
-  logo.addEventListener("mouseenter", () => motion.setAttribute("dur", "0.4s"));
-  logo.addEventListener("mouseleave", () => motion.setAttribute("dur", "0.8s"));
+  const head = document.querySelector(".ecg-logo-head");
+  if (!logo || !motion || !head) return;
+  logo.addEventListener("mouseenter", () => {
+    motion.setAttribute("dur", "0.7s");
+    motion.setAttribute("keyTimes", "0;0.55;1");
+    head.style.animationDuration = "0.7s";
+  });
+  logo.addEventListener("mouseleave", () => {
+    motion.setAttribute("dur", "1.3s");
+    motion.setAttribute("keyTimes", "0;0.38;1");
+    head.style.animationDuration = "1.3s";
+  });
 })();
 
 init();
