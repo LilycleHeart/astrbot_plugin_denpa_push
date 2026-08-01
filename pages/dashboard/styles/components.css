@@ -451,9 +451,7 @@
 }
 .tl-card-wrap {
   min-width: 0;
-  /* JS 视差直接写 transform，不需要 CSS transition 干扰 */
   transform: perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px);
-  will-change: transform;
 }
 .tl-card-wrap:hover .card-inner {
   /* 浮起效果：阴影增强模拟抬高 */

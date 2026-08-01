@@ -856,9 +856,6 @@ let _tlHoverBound = false;
 let _tlCurrentTime = "";
 let _tlCurrentDate = "";
 let _tlHoveringCard = null;
-let _tlParallaxCard = null;
-let _parallaxMouseX = 0;
-let _parallaxMouseY = 0;
 
 function _extractTimeDate(item) {
   let timeStr = "00:00", dateStr = "01月01日";
@@ -889,7 +886,7 @@ function _initTimelineBadge() {
 }
 
 // 鼠标悬停卡片时，胶囊滑到对应位置并显示该卡片时间
-let _parallaxRAF = 0;
+// 点击卡片时播放一次视差偏移动画
 function _bindCardHover() {
   const container = document.getElementById("tracking-history");
   if (!container) return;
@@ -902,53 +899,38 @@ function _bindCardHover() {
     }
   });
 
-  // 视差：鼠标移动时卡片向指针方向偏移（rAF 节流，避免每帧多次 reflow）
-  container.addEventListener("mousemove", (e) => {
+  container.addEventListener("mouseleave", () => {
+    _tlHoveringCard = null;
+    // 回到视口中心卡片
+    _updateTimelineBadge();
+  });
+
+  // 视差：点击卡片时播放一次偏移动画，自动复位
+  container.addEventListener("click", (e) => {
     const card = e.target.closest(".tl-entry");
     if (!card) return;
     const wrap = card.querySelector(".tl-card-wrap");
     if (!wrap) return;
 
-    // 复位其他卡片的视差（只让当前卡片偏移）
-    if (_tlParallaxCard !== card) {
-      if (_tlParallaxCard) {
-        const oldWrap = _tlParallaxCard.querySelector(".tl-card-wrap");
-        if (oldWrap) oldWrap.style.transform = "";
-      }
-      _tlParallaxCard = card;
-    }
+    // 用点击位置作为偏移方向
+    const rect = wrap.getBoundingClientRect();
+    const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
+    const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
+    const maxMove = 10, maxTilt = 8;
+    const tx = dx * maxMove, ty = dy * maxMove;
+    const rx = -dy * maxTilt, ry = dx * maxTilt;
 
-    // 缓存鼠标坐标，rAF 内统一处理
-    _parallaxMouseX = e.clientX;
-    _parallaxMouseY = e.clientY;
+    // 加 transition 让偏移有动画感
+    wrap.style.transition = "transform 0.28s cubic-bezier(0.2, 0, 0, 1)";
+    wrap.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(20px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
 
-    if (!_parallaxRAF) {
-      _parallaxRAF = requestAnimationFrame(() => {
-        _parallaxRAF = 0;
-        if (!_tlParallaxCard) return;
-        const w = _tlParallaxCard.querySelector(".tl-card-wrap");
-        if (!w) return;
-        const rect = w.getBoundingClientRect();
-        const dx = (_parallaxMouseX - (rect.left + rect.width / 2)) / rect.width;
-        const dy = (_parallaxMouseY - (rect.top + rect.height / 2)) / rect.height;
-        const maxMove = 8, maxTilt = 6;
-        const tx = dx * maxMove, ty = dy * maxMove;
-        const rx = -dy * maxTilt, ry = dx * maxTilt;
-        w.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(0px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
-      });
-    }
-  });
-
-  container.addEventListener("mouseleave", () => {
-    _tlHoveringCard = null;
-    _tlParallaxCard = null;
-    if (_parallaxRAF) { cancelAnimationFrame(_parallaxRAF); _parallaxRAF = 0; }
-    // 回到视口中心卡片
-    _updateTimelineBadge();
-    // 复位所有卡片视差
-    container.querySelectorAll(".tl-card-wrap").forEach(w => {
-      w.style.transform = "";
-    });
+    // 400ms 后复位
+    clearTimeout(wrap._parallaxTimer);
+    wrap._parallaxTimer = setTimeout(() => {
+      wrap.style.transform = "";
+      // 复位后再清除 transition
+      setTimeout(() => { wrap.style.transition = ""; }, 300);
+    }, 420);
   });
 }
 
@@ -1531,9 +1513,8 @@ function _fullRenderHistory(tlCt, items, emptyMsg) {
   const hasExistingContent = tlCt.children.length > 0;
 
   if (hasExistingContent) {
-    // Reset hover/parallax — cards are about to be destroyed, mouseleave won't fire
+    // Reset hover — cards are about to be destroyed, mouseleave won't fire
     _tlHoveringCard = null;
-    _tlParallaxCard = null;
     // Hide rail immediately during transition
     const rail = document.getElementById("tl-rail");
     if (rail) rail.classList.remove("visible");
@@ -1839,9 +1820,8 @@ async function init() {
       const mode = tab.dataset.tlmode;
       if (state.timeline.mode === mode) return;
       state.timeline.mode = mode;
-      // Reset hover/parallax state — old cards will be destroyed, so mouseleave won't fire
+      // Reset hover state — old cards will be destroyed, so mouseleave won't fire
       _tlHoveringCard = null;
-      _tlParallaxCard = null;
       // Update active states
       subTabsWrap.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
