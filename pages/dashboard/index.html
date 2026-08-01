@@ -115,7 +115,7 @@
             </div>
           </section>
 
-          <!-- ── 目前追踪（纯时间线） ── -->
+          <!-- ── 目前追踪（信号流时间线） ── -->
           <section class="tab-content" id="tab-timeline">
             <div class="card">
               <div class="card-header">
@@ -124,17 +124,13 @@
                   <p class="card-subtitle">所有推送操作的溯源记录，按时间排列</p>
                 </div>
               </div>
-              <div class="timeline-container">
-                <div class="rail-col">
-                  <div class="rail-line"></div>
-                  <div class="rail-badge" id="rail-badge">
-                    <div class="badge-time" id="badge-time"></div>
-                    <span class="glow-bar"></span>
-                    <div class="badge-date" id="badge-date"></div>
-                  </div>
-                </div>
-                <div class="cards-col" id="tracking-history"></div>
-              </div>
+              <div class="tl-stream" id="tracking-history"></div>
+            </div>
+            <!-- 浮动时间导航 -->
+            <div class="tl-float-nav" id="tl-float-nav" aria-hidden="true">
+              <span class="tl-float-time" id="tl-float-time">--:--</span>
+              <span class="tl-float-pulse"></span>
+              <span class="tl-float-date" id="tl-float-date">--月--日</span>
             </div>
           </section>
 

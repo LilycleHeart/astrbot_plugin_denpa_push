@@ -794,128 +794,10 @@ function _ecgColorMix(color, alpha) {
   return color;
 }
 
-// ─── FlipDigit: 3D 立体分裂翻页数字 ───
-class FlipDigit {
-  constructor(container) {
-    this.container = container;
-    this.current = container.dataset.initial || "0";
-    this.flipping = false;
-    this._render();
-  }
-  _render() {
-    this.container.innerHTML =
-      `<div class="fd-top"><span>${this.current}</span></div>` +
-      `<div class="fd-bottom"><span>${this.current}</span></div>`;
-  }
-  _updateStatic(digit) {
-    const topSpan = this.container.querySelector(".fd-top span");
-    const botSpan = this.container.querySelector(".fd-bottom span");
-    if (topSpan) topSpan.textContent = digit;
-    if (botSpan) botSpan.textContent = digit;
-  }
-  setDigit(newDigit) {
-    if (newDigit === this.current || this.flipping) {
-      // 排队最后一个目标值，避免快速滚动时中间值堆积
-      this._pending = newDigit;
-      return;
-    }
-    if (newDigit === this.current) return;
-    this._doFlip(this.current, newDigit, 200);
-  }
-  _doFlip(oldDigit, newDigit, speed) {
-    this.flipping = true;
-    const fd = this.container;
-
-    // Phase 1: 上翻页翻下 (0° → -90°)，显示旧数字上半
-    const upper = document.createElement("div");
-    upper.className = "fd-flip-upper";
-    upper.style.setProperty("--flip-dur", speed + "ms");
-    upper.innerHTML = `<div class="fd-flip-upper-front">${oldDigit}</div>`;
-    fd.appendChild(upper);
-    // 立即更新静态上半为新数字（被 upper flip 遮挡）
-    this._updateStaticTop(newDigit);
-    upper.offsetHeight;
-    upper.classList.add("fd-flip-upper-anim");
-
-    const finishUpper = () => {
-      upper.remove();
-      // Phase 2: 下翻页翻上 (90° → 0°)，显示新数字下半
-      const lower = document.createElement("div");
-      lower.className = "fd-flip-lower";
-      lower.style.setProperty("--flip-dur", speed + "ms");
-      lower.innerHTML = `<div class="fd-flip-lower-front">${newDigit}</div>`;
-      fd.appendChild(lower);
-      lower.offsetHeight;
-      lower.classList.add("fd-flip-lower-anim");
-
-      const finishLower = () => {
-        lower.remove();
-        this._updateStaticBottom(newDigit);
-        this.current = newDigit;
-        this.flipping = false;
-        // 处理排队的最终值
-        if (this._pending !== undefined && this._pending !== this.current) {
-          const next = this._pending;
-          this._pending = undefined;
-          this._doFlip(this.current, next, 200);
-        }
-      };
-      lower.addEventListener("animationend", finishLower, { once: true });
-      setTimeout(() => { if (this.flipping) { lower.remove(); finishLower(); } }, speed + 100);
-    };
-    upper.addEventListener("animationend", finishUpper, { once: true });
-    setTimeout(() => { if (this.flipping && fd.contains(upper)) { upper.remove(); finishUpper(); } }, speed + 100);
-  }
-  _updateStaticTop(digit) {
-    const topSpan = this.container.querySelector(".fd-top span");
-    if (topSpan) topSpan.textContent = digit;
-  }
-  _updateStaticBottom(digit) {
-    const botSpan = this.container.querySelector(".fd-bottom span");
-    if (botSpan) botSpan.textContent = digit;
-  }
-}
-
-function _buildFlipTime(container, initial) {
-  const h1 = initial[0], h2 = initial[1], m1 = initial[3], m2 = initial[4];
-  container.innerHTML = "";
-  const digits = [];
-  [[h1], [h2]].forEach(([d]) => {
-    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
-    container.appendChild(el); digits.push(new FlipDigit(el));
-  });
-  const sep = document.createElement("span"); sep.className = "fd-sep"; sep.textContent = ":";
-  container.appendChild(sep);
-  [[m1], [m2]].forEach(([d]) => {
-    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
-    container.appendChild(el); digits.push(new FlipDigit(el));
-  });
-  return digits;
-}
-
-function _buildFlipDate(container, initial) {
-  const m1 = initial[0], m2 = initial[1], d1 = initial[3], d2 = initial[4];
-  container.innerHTML = "";
-  const digits = [];
-  [[m1], [m2]].forEach(([d]) => {
-    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
-    container.appendChild(el); digits.push(new FlipDigit(el));
-  });
-  const sep1 = document.createElement("span"); sep1.className = "fd-sep"; sep1.textContent = "月";
-  container.appendChild(sep1);
-  [[d1], [d2]].forEach(([d]) => {
-    const el = document.createElement("div"); el.className = "fd"; el.dataset.initial = d;
-    container.appendChild(el); digits.push(new FlipDigit(el));
-  });
-  const sep2 = document.createElement("span"); sep2.className = "fd-sep"; sep2.textContent = "日";
-  container.appendChild(sep2);
-  return digits;
-}
-
-// Timeline badge state
-let _tlTimeDigits = null;
-let _tlDateDigits = null;
+// Timeline 浮动导航状态
 let _tlScrollBound = false;
+let _tlCurrentTime = "";
+let _tlCurrentDate = "";
 
 function _extractTimeDate(item) {
   let timeStr = "00:00", dateStr = "01月01日";
@@ -932,11 +814,8 @@ function _extractTimeDate(item) {
 }
 
 function _initTimelineBadge() {
-  const badgeTimeEl = document.getElementById("badge-time");
-  const badgeDateEl = document.getElementById("badge-date");
-  if (!badgeTimeEl || !badgeDateEl) return;
-  _tlTimeDigits = _buildFlipTime(badgeTimeEl, "00:00");
-  _tlDateDigits = _buildFlipDate(badgeDateEl, "01月01日");
+  const floatNav = document.getElementById("tl-float-nav");
+  if (!floatNav) return;
   if (!_tlScrollBound) {
     _tlScrollBound = true;
     window.addEventListener("scroll", _updateTimelineBadge, { passive: true });
@@ -945,10 +824,20 @@ function _initTimelineBadge() {
 }
 
 function _updateTimelineBadge() {
-  if (!_tlTimeDigits || !_tlDateDigits) return;
+  const floatNav = document.getElementById("tl-float-nav");
+  if (!floatNav) return;
+  const timelineTab = document.getElementById("tab-timeline");
+  if (!timelineTab || !timelineTab.classList.contains("active")) {
+    floatNav.classList.remove("visible");
+    return;
+  }
   const cards = document.querySelectorAll("#tracking-history .tl-entry");
-  if (cards.length === 0) return;
-  const refY = window.scrollY + window.innerHeight * 0.6;
+  if (cards.length === 0) {
+    floatNav.classList.remove("visible");
+    return;
+  }
+  floatNav.classList.add("visible");
+  const refY = window.scrollY + window.innerHeight * 0.5;
   let closest = cards[0];
   let minDist = Infinity;
   cards.forEach(e => {
@@ -957,16 +846,23 @@ function _updateTimelineBadge() {
     const dist = Math.abs(center - refY);
     if (dist < minDist) { minDist = dist; closest = e; }
   });
-  const time = closest.dataset.time || "00:00";
-  const date = closest.dataset.date || "01月01日";
-  _tlTimeDigits[0].setDigit(time[0]);
-  _tlTimeDigits[1].setDigit(time[1]);
-  _tlTimeDigits[2].setDigit(time[3]);
-  _tlTimeDigits[3].setDigit(time[4]);
-  _tlDateDigits[0].setDigit(date[0]);
-  _tlDateDigits[1].setDigit(date[1]);
-  _tlDateDigits[2].setDigit(date[3]);
-  _tlDateDigits[3].setDigit(date[4]);
+  const time = closest.dataset.time || "--:--";
+  const date = closest.dataset.date || "--月--日";
+  _updateFloatText("tl-float-time", time, _tlCurrentTime);
+  _updateFloatText("tl-float-date", date, _tlCurrentDate);
+  _tlCurrentTime = time;
+  _tlCurrentDate = date;
+}
+
+function _updateFloatText(id, newText, oldText) {
+  if (newText === oldText) return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add("changing");
+  setTimeout(() => {
+    el.textContent = newText;
+    el.classList.remove("changing");
+  }, 140);
 }
 
 // ─── Render: Status ───
@@ -1206,7 +1102,7 @@ function buildHistoryCard(item) {
   const tweetUrl = item.tweet_url || "#";
 
   const el = document.createElement("div");
-  el.className = "tl-entry tl-item";
+  el.className = "tl-entry";
   const { timeStr, dateStr } = _extractTimeDate(item);
   el.dataset.time = timeStr;
   el.dataset.date = dateStr;
@@ -1329,17 +1225,24 @@ function renderHistory(data) {
         const frag = document.createDocumentFragment();
         const sliced = items.slice(0, 50);
         let lastDate = "";
+        let dateCount = 0;
+        let lastCountEl = null;
         sliced.forEach(item => {
           const { dateStr } = _extractTimeDate(item);
           if (dateStr !== lastDate) {
+            if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
             lastDate = dateStr;
+            dateCount = 0;
             const grp = document.createElement("div");
-            grp.className = "tl-date-group";
-            grp.textContent = dateStr;
+            grp.className = "tl-date-sep";
+            grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
             frag.appendChild(grp);
+            lastCountEl = grp.querySelector(".tl-date-sep-count");
           }
+          dateCount++;
           frag.appendChild(buildHistoryCard(item));
         });
+        if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
         tlCt.appendChild(frag);
       }
       tlCt.classList.remove("tl-switching");
@@ -1448,6 +1351,10 @@ function switchTab(name) {
   // Toggle sidebar sub-tabs visibility
   const subTabs = document.getElementById("timeline-sub-tabs");
   if (subTabs) subTabs.classList.toggle("show", name === "timeline");
+  // Update floating navigator visibility
+  if (name === "timeline") {
+    requestAnimationFrame(_updateTimelineBadge);
+  }
 }
 
 // ─── Init ───
