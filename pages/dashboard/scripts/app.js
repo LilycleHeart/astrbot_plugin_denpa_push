@@ -566,8 +566,9 @@ class EcgWaveform {
     this._lastBeatEnd = 0;
     this.beatCounter = 0;
     this.rhythm = new _RhythmEngine(this.intensity);
-    this._trail = [];
-    this._maxTrail = 6;
+    this._cachedBrand = null;
+    this._lastTheme = null;
+    this._lastTime = 0;
     this._resize();
     this._bindResize();
     this._applySpeed();
@@ -613,7 +614,6 @@ class EcgWaveform {
     this._beatIdx = 0;
     this._lastBeatEnd = 0;
     this.beatCounter = 0;
-    this._trail = [];
     this._applySpeed();
   }
 
@@ -635,7 +635,6 @@ class EcgWaveform {
     this._beatIdx = 0;
     this._lastBeatEnd = 0;
     this.beatCounter = 0;
-    this._trail = [];
   }
 
   _ensureBeats(upToX) {
@@ -714,72 +713,80 @@ class EcgWaveform {
     return beat.baseline + Math.sin(totalX*0.12+s)*amp*0.4 + Math.sin(totalX*0.25+s*2)*amp*0.3 + Math.sin(totalX*0.41+s*3)*amp*0.2 + (_ecgSR(totalX*7.3+s)-0.5)*amp*0.5 + (_ecgNoiseAt(totalX)-0.5)*this.noiseLevel*4;
   }
 
-  _loop() { this._draw(); requestAnimationFrame(() => this._loop()); }
+  _getBrand() {
+    const theme = document.documentElement.dataset.theme || "dark";
+    if (this._cachedBrand && this._lastTheme === theme) return this._cachedBrand;
+    this._lastTheme = theme;
+    this._cachedBrand = getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
+    return this._cachedBrand;
+  }
 
-  _draw() {
+  _loop(ts) {
+    this._draw(ts);
+    requestAnimationFrame((t) => this._loop(t));
+  }
+
+  _draw(ts) {
     const { ctx2d: ctx, w, h } = this;
     if (!w || !h) { this._resize(); return; }
     ctx.clearRect(0, 0, w, h);
-    this.offset += this.speed;
+
+    // Time-based delta for consistent speed regardless of frame rate
+    if (!this._lastTime) this._lastTime = ts || performance.now();
+    const now = ts || performance.now();
+    const dt = Math.min(50, now - this._lastTime); // cap at 50ms to avoid jumps after tab switch
+    this._lastTime = now;
+    this.offset += this.speed * (dt / 16.667); // normalize to 60fps baseline
+
     const mid = h * 0.55;
     const amp = h * 0.32 * this.ampScale;
-    const brand = getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
+    const brand = this._getBrand();
 
+    // Integer-aligned sampling for crisp rendering (no sub-pixel jitter)
     const pts = [];
-    const step = 1.2;
+    const step = 2;
     for (let x = 0; x <= w; x += step) pts.push({ x, y: mid - this._waveY(x) * amp });
-
-    this._trail.push(pts);
-    if (this._trail.length > this._maxTrail) this._trail.shift();
 
     // Fill under curve
     ctx.beginPath();
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
     const fg = ctx.createLinearGradient(0, mid - amp, 0, h);
-    fg.addColorStop(0, _ecgColorMix(brand, 0.08));
-    fg.addColorStop(0.5, _ecgColorMix(brand, 0.02));
+    fg.addColorStop(0, _ecgColorMix(brand, 0.14));
+    fg.addColorStop(0.5, _ecgColorMix(brand, 0.04));
     fg.addColorStop(1, _ecgColorMix(brand, 0));
     ctx.fillStyle = fg; ctx.fill();
 
-    // Phosphor trail
-    for (let i = 0; i < this._trail.length - 1; i++) {
-      const tp = this._trail[i];
-      const a = (i / this._trail.length) * 0.08;
-      if (a < 0.005) continue;
-      ctx.beginPath(); ctx.strokeStyle = _ecgColorMix(brand, a); ctx.lineWidth = 1.5;
-      ctx.lineJoin = "round"; ctx.lineCap = "round";
-      tp.forEach((p, j) => j === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-      ctx.stroke();
-    }
-
-    // Glow layers
-    [{ width: 6, alpha: 0.04 }, { width: 3.5, alpha: 0.09 }].forEach(layer => {
+    // Glow layers (widest first for proper blending)
+    [{ width: 8, alpha: 0.07 }, { width: 4.5, alpha: 0.14 }].forEach(layer => {
       ctx.beginPath(); ctx.strokeStyle = _ecgColorMix(brand, layer.alpha); ctx.lineWidth = layer.width;
       ctx.lineJoin = "round"; ctx.lineCap = "round";
-      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.stroke();
     });
 
     // Main line with gradient
     const lg = ctx.createLinearGradient(0, 0, w, 0);
     lg.addColorStop(0, _ecgColorMix(brand, 0));
-    lg.addColorStop(0.12, _ecgColorMix(brand, 0.3));
+    lg.addColorStop(0.12, _ecgColorMix(brand, 0.4));
     lg.addColorStop(0.85, _ecgColorMix(brand, 1));
-    lg.addColorStop(1, _ecgColorMix(brand, 0.6));
-    ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 8;
-    ctx.beginPath(); ctx.strokeStyle = lg; ctx.lineWidth = 1.8;
+    lg.addColorStop(1, _ecgColorMix(brand, 0.7));
+    ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.strokeStyle = lg; ctx.lineWidth = 2;
     ctx.lineJoin = "round"; ctx.lineCap = "round";
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.stroke(); ctx.restore();
 
     // Scan head
     const head = pts[pts.length - 1];
     if (head) {
-      ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 12;
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(head.x, head.y, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 20; ctx.fillStyle = _ecgColorMix(brand, 0.25);
-      ctx.beginPath(); ctx.arc(head.x, head.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 16;
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(head.x, head.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 28; ctx.fillStyle = _ecgColorMix(brand, 0.35);
+      ctx.beginPath(); ctx.arc(head.x, head.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
   }
 }
@@ -877,6 +884,20 @@ function renderStatus(data) {
   document.getElementById("stat-pushes").textContent = data.total_pushes || 0;
   document.getElementById("stat-subs").textContent = data.total_tracked || 0;
   document.getElementById("stat-interval").textContent = `${data.poll_interval || 5} min`;
+
+  // Additional status cards
+  const setIf = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setIf("stat-auth", data.auth_configured ? "已配置" : "未配置");
+  setIf("stat-pw", data.playwright_ready ? "就绪" : "未启动");
+  setIf("stat-lang", data.translation_language || "中文");
+  setIf("stat-sessions", data.session_count || 0);
+
+  // Token stats
+  const ts = data.token_stats || {};
+  setIf("stat-token-prompt", (ts.prompt || 0).toLocaleString());
+  setIf("stat-token-completion", (ts.completion || 0).toLocaleString());
+  setIf("stat-token-total", (ts.total || 0).toLocaleString());
+  setIf("stat-token-calls", ts.calls || 0);
 
 
   if (ecg) {
@@ -1183,23 +1204,6 @@ function renderHistory(data) {
 
   const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
 
-  // Overview (recent-pushes): always show first 10, no filter, compact mode (no timeline rail)
-  const recentCt = document.getElementById("recent-pushes");
-  if (recentCt) {
-    recentCt.innerHTML = "";
-    if (allItems.length === 0) {
-      recentCt.innerHTML = emptyHtml;
-    } else {
-      const frag = document.createDocumentFragment();
-      allItems.slice(0, 10).forEach(item => {
-        const card = buildHistoryCard(item);
-        card.classList.add("tl-compact");
-        frag.appendChild(card);
-      });
-      recentCt.appendChild(frag);
-    }
-  }
-
   // Timeline (tracking-history): apply tab filter
   const tlCt = document.getElementById("tracking-history");
   if (tlCt) {
@@ -1255,13 +1259,10 @@ function renderTimelineTabs() {
   const wrap = document.getElementById("timeline-sub-tabs");
   if (!wrap) return;
 
-  // Collect unique screen_names from subscriptions and history
+  // Only show subscribed accounts in sub-tabs (not unsubscribed manual push accounts)
   const names = new Set();
   for (const users of Object.values(state.subscriptions || {})) {
     for (const n of Object.keys(users)) names.add(n);
-  }
-  for (const it of state.timeline.history) {
-    if (it.screen_name) names.add(it.screen_name);
   }
   const sortedNames = [...names].sort();
 

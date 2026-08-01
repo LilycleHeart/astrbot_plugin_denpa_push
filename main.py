@@ -121,6 +121,7 @@ class DenpaPushPlugin(Star):
         self._push_logs = deque(maxlen=100)  # dashboard 信号日志
         self._push_history = deque(maxlen=50)  # dashboard 推送历史(含卡片详情)
         self._total_pushes = 0
+        self._token_stats = {"prompt": 0, "completion": 0, "total": 0, "calls": 0}
         self._register_dashboard_apis(context)
 
     def _get_data_path(self):
@@ -270,6 +271,7 @@ class DenpaPushPlugin(Star):
             "color_source": self.config.get("color_source", "avatar"),
             "gif_encoder": self.config.get("gif_encoder", "auto"),
             "proxy": self.config.get("proxy", ""),
+            "token_stats": dict(self._token_stats),
         })
 
     async def _api_dashboard_subscriptions(self):
@@ -1878,6 +1880,24 @@ class DenpaPushPlugin(Star):
             return pid.get("id", "")
         return str(pid) if pid else ""
 
+    def _track_token_usage(self, llm_resp):
+        """从 LLM 响应对象中提取 token 用量并累计。"""
+        if not llm_resp:
+            return
+        usage = getattr(llm_resp, "usage", None) or getattr(llm_resp, "token_usage", None)
+        if not usage:
+            return
+        try:
+            prompt_t = int(usage.get("prompt_tokens", usage.get("input_tokens", 0)))
+            completion_t = int(usage.get("completion_tokens", usage.get("output_tokens", 0)))
+            total_t = int(usage.get("total_tokens", prompt_t + completion_t))
+            self._token_stats["prompt"] += prompt_t
+            self._token_stats["completion"] += completion_t
+            self._token_stats["total"] += total_t
+            self._token_stats["calls"] += 1
+        except Exception:
+            pass
+
     async def _translate_text(self, data: dict) -> str:
         import re as _re
 
@@ -1949,6 +1969,7 @@ class DenpaPushPlugin(Star):
                     chat_provider_id=provider_id,
                     prompt=prompt,
                 )
+                self._track_token_usage(llm_resp)
                 if llm_resp and llm_resp.completion_text:
                     return llm_resp.completion_text.strip()
                 else:
@@ -2004,6 +2025,7 @@ class DenpaPushPlugin(Star):
                         ),
                         timeout=60,
                     )
+                    self._track_token_usage(resp)
                     return resp.completion_text or ""
                 except Exception as e:
                     logger.warning(
@@ -2027,6 +2049,7 @@ class DenpaPushPlugin(Star):
                         chat_provider_id=provider_id,
                         prompt=f"将以下内容翻译成{target_lang}:\n\n{text_in_image}",
                     )
+                    self._track_token_usage(llm_resp)
                     result = llm_resp.completion_text or ""
                     if result:
                         translations.append(result)

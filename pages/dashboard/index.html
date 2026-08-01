@@ -104,14 +104,51 @@
                 <span class="stat-value-sm" id="stat-interval">—</span>
               </div>
             </div>
-            <div class="card mt-l">
+
+            <div class="grid grid-4 mt-m">
+              <div class="stat-card">
+                <span class="stat-label">Twitter 认证</span>
+                <span class="stat-value-sm" id="stat-auth">—</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">浏览器引擎</span>
+                <span class="stat-value-sm" id="stat-pw">—</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">翻译语言</span>
+                <span class="stat-value-sm" id="stat-lang">—</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">会话数</span>
+                <span class="stat-value" id="stat-sessions">0</span>
+              </div>
+            </div>
+
+            <div class="card mt-m">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">最近推送</h2>
-                  <p class="card-subtitle">动态 MD3 配色卡片</p>
+                  <h2 class="card-title">Token 消耗</h2>
+                  <p class="card-subtitle">AI 翻译 API 调用统计（本次运行期间累计）</p>
                 </div>
               </div>
-              <div id="recent-pushes"></div>
+              <div class="grid grid-4">
+                <div class="stat-card">
+                  <span class="stat-label">输入 Tokens</span>
+                  <span class="stat-value" id="stat-token-prompt">0</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">输出 Tokens</span>
+                  <span class="stat-value" id="stat-token-completion">0</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">总计 Tokens</span>
+                  <span class="stat-value" id="stat-token-total">0</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">API 调用次数</span>
+                  <span class="stat-value" id="stat-token-calls">0</span>
+                </div>
+              </div>
             </div>
           </section>
 

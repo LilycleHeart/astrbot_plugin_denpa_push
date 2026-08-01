@@ -440,13 +440,7 @@
               0 0 0 1px color-mix(in srgb, var(--color-brand) 15%, transparent);
 }
 
-/* 状态总览里的紧凑卡片 */
-#recent-pushes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-s);
-}
-.tl-compact .tl-card-wrap { margin-left: 0; }
+
 
 /* —— 浮动时间导航 —— */
 .tl-float-nav {
