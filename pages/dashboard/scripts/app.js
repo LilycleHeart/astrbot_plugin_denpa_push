@@ -987,14 +987,22 @@ function _moveRailPillToCard(card, isHover) {
   // 卡片中心 Y 坐标（视口坐标）
   const cardCenterY = cardRect.top + cardRect.height / 2;
 
-  // 映射到 rail 高度上的百分比
-  const railTop = railRect.top;
-  const railH = railRect.height;
-  let pct = railH > 0 ? (cardCenterY - railTop) / railH : 0.5;
-  pct = Math.max(0.02, Math.min(0.98, pct));
+  // 转换为 rail 内的像素偏移
+  let yInRail = cardCenterY - railRect.top;
 
-  // 设置胶囊位置（top 百分比）
-  pill.style.top = (pct * 100) + "%";
+  // 限位：确保胶囊始终在视口可见的竖线部分内
+  const railH = railRect.height;
+  // 可见区域在 rail 内的像素范围
+  const visTop = Math.max(0, -railRect.top);
+  const visBottom = Math.min(railH, window.innerHeight - railRect.top);
+  // 胶囊边缘留白
+  const pillH = pill.offsetHeight || 30;
+  const margin = pillH / 2 + 4;
+
+  yInRail = Math.max(visTop + margin, Math.min(visBottom - margin, yInRail));
+
+  // 设置胶囊位置（像素）
+  pill.style.top = yInRail + "px";
 
   // 更新时间文字
   const time = card.dataset.time || "--:--";
