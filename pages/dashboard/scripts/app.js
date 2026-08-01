@@ -932,6 +932,11 @@ function _applyMasonry() {
   const minCol = 340;
   const gap = 16;
   const cw = container.clientWidth;
+
+  // If container is hidden (tab not active), clientWidth is 0 — skip layout
+  // entirely. It will be re-applied when the tab becomes visible via switchTab.
+  if (cw === 0) return;
+
   const numCols = Math.max(1, Math.floor((cw + gap) / (minCol + gap)));
 
   if (numCols <= 1) {
@@ -1624,9 +1629,17 @@ function switchTab(name) {
   // Toggle sidebar sub-tabs visibility
   const subTabs = document.getElementById("timeline-sub-tabs");
   if (subTabs) subTabs.classList.toggle("show", name === "timeline");
-  // Update floating navigator visibility
+  // Update floating navigator visibility + re-apply masonry when timeline becomes visible
   if (name === "timeline") {
-    requestAnimationFrame(_updateTimelineBadge);
+    requestAnimationFrame(() => {
+      _updateTimelineBadge();
+      // Re-apply masonry: container may have had clientWidth=0 when first rendered
+      // (timeline tab was hidden), so masonry was skipped. Now it's visible.
+      const tlCt = document.getElementById("tracking-history");
+      if (tlCt && tlCt.children.length > 0) {
+        _applyMasonry();
+      }
+    });
   }
 }
 
