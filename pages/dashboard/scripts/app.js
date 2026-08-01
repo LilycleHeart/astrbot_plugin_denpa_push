@@ -1445,14 +1445,21 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
   if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
   tlCt.appendChild(frag);
 
-  // Apply masonry BEFORE making container visible (prevents grid→masonry flash)
-  tlCt.classList.remove("tl-switching");
+  // Keep hidden during layout to prevent grid→masonry flash
+  tlCt.classList.add("tl-switching");
   _initTimelineBadge();
   _bindMasonryResize();
-  // Synchronous layout: measure + position while container is at opacity 1
-  // but entry animations are paused so offsetHeight is accurate
+
+  // Apply masonry synchronously, then reveal after a paint frame
   _applyMasonry();
   _watchMasonryImages(tlCt);
+
+  // Reveal on next frame — masonry positions are already set
+  requestAnimationFrame(() => {
+    // Re-measure once more (fonts may have shifted heights)
+    _applyMasonry();
+    tlCt.classList.remove("tl-switching");
+  });
 }
 
 function _insertNewCards(tlCt, newItems, allFilteredItems) {
