@@ -467,239 +467,143 @@
 
 
 
-/* —— 浮动时间导航（可展开时间轴跳转） —— */
-.tl-float-nav {
+/* —— 侧边竖直时间线 —— */
+.tl-rail {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 60vh;
+  width: 4px;
   z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  align-items: flex-start;
   opacity: 0;
-  transform: translateY(10px);
-  transition: opacity var(--motion-base) var(--motion-ease),
-              transform var(--motion-base) var(--motion-ease);
+  transition: opacity var(--motion-base) var(--motion-ease);
   pointer-events: none;
 }
-.tl-float-nav.visible {
+.tl-rail.visible {
   opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
 }
-
-/* 紧凑药丸（始终可见） */
-.tl-float-pill {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  padding: 8px 14px;
-  background: color-mix(in srgb, var(--color-app-bg) 72%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.8);
-  backdrop-filter: blur(16px) saturate(1.8);
-  border-radius: var(--radius-circular);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
-  box-shadow: var(--shadow-8), 0 0 20px color-mix(in srgb, var(--color-brand) 8%, transparent);
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  transition: transform var(--motion-fast) var(--motion-ease),
-              border-color var(--motion-fast) var(--motion-ease),
-              box-shadow var(--motion-fast) var(--motion-ease);
+/* 竖线 */
+.tl-rail-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom,
+    transparent,
+    color-mix(in srgb, var(--color-brand) 18%, transparent) 15%,
+    color-mix(in srgb, var(--color-brand) 25%, transparent) 50%,
+    color-mix(in srgb, var(--color-brand) 18%, transparent) 85%,
+    transparent);
+  border-radius: 1px;
 }
-.tl-float-pill:hover {
-  border-color: color-mix(in srgb, var(--color-brand) 40%, transparent);
-  box-shadow: var(--shadow-8), 0 0 28px color-mix(in srgb, var(--color-brand) 16%, transparent);
-}
-.tl-float-pill:active {
-  transform: scale(0.97);
-}
-.tl-float-chev {
-  width: 14px;
-  height: 14px;
-  color: var(--color-fg-3);
-  transition: transform var(--motion-base) var(--motion-ease),
-              color var(--motion-fast) var(--motion-ease);
-  flex-shrink: 0;
-}
-.tl-float-nav.expanded .tl-float-chev {
-  transform: rotate(180deg);
-  color: var(--color-brand);
-}
-
-.tl-float-time {
-  font-family: var(--font-family-mono);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-brand);
-  line-height: 1;
-  transition: opacity var(--motion-fast) var(--motion-ease);
-}
-.tl-float-pulse {
+/* 竖线端点光晕 */
+.tl-rail-line::before,
+.tl-rail-line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-brand);
-  flex-shrink: 0;
-  animation: tl-pulse 2.4s ease-in-out infinite;
+  background: color-mix(in srgb, var(--color-brand) 40%, transparent);
+  transform: translateX(-50%);
 }
-@keyframes tl-pulse {
-  0%, 100% { opacity: 0.35; box-shadow: 0 0 4px color-mix(in srgb, var(--color-brand) 50%, transparent); }
-  50%      { opacity: 1;    box-shadow: 0 0 10px color-mix(in srgb, var(--color-brand) 70%, transparent); }
-}
-.tl-float-date {
-  font-family: var(--font-family-mono);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-fg-2);
-  line-height: 1;
-  letter-spacing: 0.5px;
-  transition: opacity var(--motion-fast) var(--motion-ease);
-}
-.tl-float-time.changing,
-.tl-float-date.changing {
-  opacity: 0;
-}
+.tl-rail-line::before { top: 0; }
+.tl-rail-line::after  { bottom: 0; }
 
-/* —— 展开式时间轴跳转条 —— */
-.tl-scrubber {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  margin-bottom: 0;
-  transition: max-height var(--motion-base) var(--motion-ease),
-              opacity var(--motion-fast) var(--motion-ease),
-              margin-bottom var(--motion-base) var(--motion-ease);
-}
-.tl-float-nav.expanded .tl-scrubber {
-  max-height: 80px;
-  opacity: 1;
-  margin-bottom: 8px;
-}
-.tl-scrubber-track {
-  position: relative;
-  width: min(560px, calc(100vw - 40px));
-  height: 44px;
-  padding: 0 6px;
-  background: color-mix(in srgb, var(--color-app-bg) 80%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.8);
-  backdrop-filter: blur(16px) saturate(1.8);
-  border-radius: var(--radius-medium);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
-  box-shadow: var(--shadow-8);
-  cursor: pointer;
-}
-/* 轨道中线 */
-.tl-scrubber-track::before {
-  content: "";
+/* 胶囊（沿竖线滑动，显示鼠标指向卡片的时间） */
+.tl-rail-pill {
   position: absolute;
-  left: 14px;
-  right: 14px;
+  left: 50%;
   top: 50%;
-  height: 2px;
-  background: linear-gradient(to right,
-    color-mix(in srgb, var(--color-brand) 8%, transparent),
-    color-mix(in srgb, var(--color-brand) 22%, transparent),
-    color-mix(in srgb, var(--color-brand) 8%, transparent));
-  border-radius: 1px;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-/* 日期标记 */
-.tl-scrub-mark {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 0;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  transform: translateX(-50%);
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  padding: 0;
-  z-index: 2;
+  gap: 1px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--color-app-bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+  border-radius: var(--radius-circular);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
+  box-shadow: var(--shadow-4), 0 0 16px color-mix(in srgb, var(--color-brand) 12%, transparent);
+  white-space: nowrap;
+  transition: top 120ms cubic-bezier(0.2, 0, 0, 1),
+              border-color var(--motion-fast) var(--motion-ease),
+              box-shadow var(--motion-fast) var(--motion-ease);
 }
-.tl-scrub-mark-dot {
+/* 胶囊指示箭头（指向竖线） */
+.tl-rail-pill::before {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
+  transform: translateY(-50%);
+}
+/* 胶囊上的光点（嵌在竖线上） */
+.tl-rail-pill::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-bg-3) 80%, transparent);
-  border: 1.5px solid color-mix(in srgb, var(--color-brand) 50%, transparent);
-  transition: all var(--motion-fast) var(--motion-ease);
-  flex-shrink: 0;
-}
-.tl-scrub-mark:hover .tl-scrub-mark-dot {
   background: var(--color-brand);
-  border-color: var(--color-brand);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--color-brand) 60%, transparent);
-  transform: scale(1.35);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-brand) 60%, transparent);
+  z-index: 1;
 }
-.tl-scrub-mark.active .tl-scrub-mark-dot {
-  background: var(--color-brand);
+.tl-rail-pill.hovering {
   border-color: var(--color-brand);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--color-brand) 45%, transparent);
+  box-shadow: var(--shadow-8), 0 0 24px color-mix(in srgb, var(--color-brand) 25%, transparent);
 }
-.tl-scrub-mark-label {
+.tl-rail-pill.hovering::after {
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-brand) 75%, transparent);
+}
+.tl-rail-time {
+  font-family: var(--font-family-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand);
+  line-height: 1.2;
+  position: relative;
+  z-index: 2;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+.tl-rail-date {
   font-family: var(--font-family-mono);
   font-size: 9px;
   font-weight: 500;
-  color: var(--color-fg-3);
-  white-space: nowrap;
-  pointer-events: none;
-  transition: color var(--motion-fast) var(--motion-ease);
+  color: var(--color-fg-2);
   line-height: 1;
+  letter-spacing: 0.3px;
+  position: relative;
+  z-index: 2;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
-.tl-scrub-mark:hover .tl-scrub-mark-label,
-.tl-scrub-mark.active .tl-scrub-mark-label {
-  color: var(--color-brand);
-}
-.tl-scrub-mark-count {
-  font-family: var(--font-family-mono);
-  font-size: 8px;
-  color: var(--color-fg-3);
-  opacity: 0.6;
-  pointer-events: none;
-  line-height: 1;
-}
-/* 当前位置游标 */
-.tl-scrub-thumb {
-  position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 28px;
-  background: var(--color-brand);
-  border-radius: 2px;
-  box-shadow: 0 0 10px color-mix(in srgb, var(--color-brand) 65%, transparent);
-  transform: translate(-50%, -50%);
-  transition: left 80ms linear;
-  z-index: 4;
-  pointer-events: none;
-}
-.tl-scrub-thumb::before {
-  content: "";
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-brand);
-  transform: translateX(-50%);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-brand) 60%, transparent);
+.tl-rail-time.changing,
+.tl-rail-date.changing {
+  opacity: 0;
 }
 
 @media (max-width: 640px) {
   .tl-stream { grid-template-columns: 1fr; }
-  .tl-float-nav { bottom: 12px; left: 12px; }
-  .tl-float-pill { padding: 6px 12px; }
-  .tl-float-time { font-size: 14px; }
+  .tl-rail { right: 8px; height: 50vh; }
+  .tl-rail-time { font-size: 12px; }
+  .tl-rail-date { font-size: 8px; }
   .tl-date-sep-text { font-size: 15px; }
-  .tl-scrubber-track { width: calc(100vw - 24px); }
 }
 
 /* —— 推文卡片 —— */
