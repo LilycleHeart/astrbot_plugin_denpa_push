@@ -857,6 +857,8 @@ let _tlCurrentTime = "";
 let _tlCurrentDate = "";
 let _tlHoveringCard = null;
 let _tlParallaxCard = null;
+let _parallaxMouseX = 0;
+let _parallaxMouseY = 0;
 
 function _extractTimeDate(item) {
   let timeStr = "00:00", dateStr = "01月01日";
@@ -887,6 +889,7 @@ function _initTimelineBadge() {
 }
 
 // 鼠标悬停卡片时，胶囊滑到对应位置并显示该卡片时间
+let _parallaxRAF = 0;
 function _bindCardHover() {
   const container = document.getElementById("tracking-history");
   if (!container) return;
@@ -899,7 +902,7 @@ function _bindCardHover() {
     }
   });
 
-  // 视差：鼠标移动时卡片向指针方向偏移
+  // 视差：鼠标移动时卡片向指针方向偏移（rAF 节流，避免每帧多次 reflow）
   container.addEventListener("mousemove", (e) => {
     const card = e.target.closest(".tl-entry");
     if (!card) return;
@@ -915,25 +918,31 @@ function _bindCardHover() {
       _tlParallaxCard = card;
     }
 
-    const rect = wrap.getBoundingClientRect();
-    // 鼠标相对于卡片中心的偏移 (-0.5 ~ 0.5)
-    const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
-    const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
+    // 缓存鼠标坐标，rAF 内统一处理
+    _parallaxMouseX = e.clientX;
+    _parallaxMouseY = e.clientY;
 
-    // 最大偏移量：8px 位移 + 轻微 3D 旋转
-    const maxMove = 8;
-    const maxTilt = 6; // 度
-    const tx = dx * maxMove;
-    const ty = dy * maxMove;
-    const rx = -dy * maxTilt; // Y轴鼠标在上→卡片向后倾
-    const ry = dx * maxTilt;  // X轴鼠标在右→卡片向右倾
-
-    wrap.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(0px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+    if (!_parallaxRAF) {
+      _parallaxRAF = requestAnimationFrame(() => {
+        _parallaxRAF = 0;
+        if (!_tlParallaxCard) return;
+        const w = _tlParallaxCard.querySelector(".tl-card-wrap");
+        if (!w) return;
+        const rect = w.getBoundingClientRect();
+        const dx = (_parallaxMouseX - (rect.left + rect.width / 2)) / rect.width;
+        const dy = (_parallaxMouseY - (rect.top + rect.height / 2)) / rect.height;
+        const maxMove = 8, maxTilt = 6;
+        const tx = dx * maxMove, ty = dy * maxMove;
+        const rx = -dy * maxTilt, ry = dx * maxTilt;
+        w.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(0px) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+      });
+    }
   });
 
   container.addEventListener("mouseleave", () => {
     _tlHoveringCard = null;
     _tlParallaxCard = null;
+    if (_parallaxRAF) { cancelAnimationFrame(_parallaxRAF); _parallaxRAF = 0; }
     // 回到视口中心卡片
     _updateTimelineBadge();
     // 复位所有卡片视差
