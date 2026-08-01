@@ -970,19 +970,15 @@ function _bindCardHover() {
         _applyParallax(_parallaxActiveWrap, _parallaxMouseX, _parallaxMouseY);
       });
     } else if (m === "click") {
-      // 检测拖拽位移：超过 5px 标记为移动，放任浏览器原生选区
-      if (_parallaxActiveWrap && !_parallaxMoved) {
+      // 仅在 pending 阶段（尚未进入长按）检测拖拽位移
+      // 一旦进入长按跟随，鼠标移动就是视差跟随，不再判定为拖选
+      if (_parallaxActiveWrap && !_parallaxHolding && !_parallaxMoved) {
         const dx = e.clientX - _parallaxStartX;
         const dy = e.clientY - _parallaxStartY;
         if (Math.abs(dx) + Math.abs(dy) > 5) {
           _parallaxMoved = true;
-          // 已移动 → 取消长按定时器，放弃视差，让浏览器接管选区
+          // 已移动 → 取消长按定时器，放任浏览器接管选区
           clearTimeout(_parallaxHoldTimer);
-          if (_parallaxHolding) {
-            _parallaxHolding = false;
-            _parallaxActiveWrap.classList.remove("parallax-active");
-            _resetParallax(_parallaxActiveWrap, true);
-          }
         }
       }
       // 长按跟随视差
@@ -1025,17 +1021,18 @@ function _bindCardHover() {
     }, 300);
   });
 
-  // ── click：无位移的纯点击 → 一次性视差动画（拖选不会触发 click） ──
+  // ── click：无位移的纯点击 → 一次性视差动画 + 立即回弹（拖选不会触发 click） ──
   container.addEventListener("click", (e) => {
     if (mode() !== "click" || _parallaxMoved) return;
     const card = e.target.closest(".tl-entry");
     if (!card) return;
     const wrap = card.querySelector(".tl-card-wrap");
     if (!wrap) return;
-    wrap.style.transition = "transform 0.18s cubic-bezier(0.2, 0, 0, 1)";
+    wrap.style.transition = "transform 0.12s cubic-bezier(0.2, 0, 0, 1)";
     _applyParallax(wrap, e.clientX, e.clientY);
+    // 下一帧立即回弹，浏览器先渲染倾斜态再启动复位动画
     clearTimeout(wrap._parallaxTimer);
-    wrap._parallaxTimer = setTimeout(() => _resetParallax(wrap, true), 420);
+    wrap._parallaxTimer = setTimeout(() => _resetParallax(wrap, true), 16);
   });
 
   // ── mouseup：长按平滑复位 / 清理状态 ──
