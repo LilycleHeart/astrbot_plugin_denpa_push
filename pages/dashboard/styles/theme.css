@@ -224,7 +224,6 @@ body {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent));
 }
 .sidebar-logo svg, .sidebar-logo canvas { width: 22px; height: 22px; display: block; }
-.sidebar-logo canvas { width: 44px; height: 22px; }
 
 .sidebar-title {
   font-family: var(--font-family-display);

@@ -625,10 +625,39 @@ class EcgWaveform {
     this._cachedBrand = null;
     this._lastTheme = null;
     this._lastTime = 0;
+    this._visible = true;       // IntersectionObserver 控制
+    this._rafId = 0;
     this._resize();
     this._bindResize();
     this._applySpeed();
+    this._bindVisibility();
     this._loop();
+  }
+
+  _bindVisibility() {
+    // canvas 滚出视口时暂停渲染, 回到视口时恢复 (避免滚动卡顿)
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        this._visible = e.isIntersecting;
+        if (this._visible) {
+          // 重置时间基准, 避免 dt 跳跃导致波形瞬移
+          this._lastTime = 0;
+          if (!this._rafId) this._loop();
+        }
+      }
+    }, { threshold: 0.01 });
+    io.observe(this.canvas);
+    // 页面切到后台也暂停
+    document.addEventListener("visibilitychange", () => {
+      this._visible = !document.hidden && this._visible;
+      if (!this._visible && this._rafId) {
+        cancelAnimationFrame(this._rafId);
+        this._rafId = 0;
+      } else if (this._visible && !this._rafId) {
+        this._lastTime = 0;
+        this._loop();
+      }
+    });
   }
 
   _resize() {
@@ -778,8 +807,9 @@ class EcgWaveform {
   }
 
   _loop(ts) {
+    if (!this._visible) { this._rafId = 0; return; }
     this._draw(ts);
-    requestAnimationFrame((t) => this._loop(t));
+    this._rafId = requestAnimationFrame((t) => this._loop(t));
   }
 
   _draw(ts) {
@@ -844,46 +874,46 @@ class EcgWaveform {
       pts.push({ x: sx, y: mid - this._waveY(sx) * amp });
     }
 
+    // ── 构建路径一次, 复用给 fill + glow + line ──
+    const wavePath = new Path2D();
+    wavePath.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) wavePath.lineTo(pts[i].x, pts[i].y);
+
     // Fill under curve
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+    const fillPath = new Path2D(wavePath);
+    fillPath.lineTo(w, h); fillPath.lineTo(0, h); fillPath.closePath();
     const fg = ctx.createLinearGradient(0, mid - amp, 0, h);
     fg.addColorStop(0, _ecgColorMix(brand, 0.14));
     fg.addColorStop(0.5, _ecgColorMix(brand, 0.04));
     fg.addColorStop(1, _ecgColorMix(brand, 0));
-    ctx.fillStyle = fg; ctx.fill();
+    ctx.fillStyle = fg; ctx.fill(fillPath);
 
-    // Glow layers (widest first for proper blending)
-    [{ width: 8, alpha: 0.07 }, { width: 4.5, alpha: 0.14 }].forEach(layer => {
-      ctx.beginPath(); ctx.strokeStyle = _ecgColorMix(brand, layer.alpha); ctx.lineWidth = layer.width;
-      ctx.lineJoin = "round"; ctx.lineCap = "round";
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.stroke();
-    });
+    // Glow layers (widest first, 无 shadowBlur, 用多 stroke 宽度模拟)
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.strokeStyle = _ecgColorMix(brand, 0.06); ctx.lineWidth = 8;
+    ctx.stroke(wavePath);
+    ctx.strokeStyle = _ecgColorMix(brand, 0.12); ctx.lineWidth = 4.5;
+    ctx.stroke(wavePath);
 
-    // Main line with gradient
+    // Main line with gradient (shadowBlur 仅在此层使用一次)
     const lg = ctx.createLinearGradient(0, 0, w, 0);
     lg.addColorStop(0, _ecgColorMix(brand, 0));
     lg.addColorStop(0.12, _ecgColorMix(brand, 0.4));
     lg.addColorStop(0.85, _ecgColorMix(brand, 1));
     lg.addColorStop(1, _ecgColorMix(brand, 0.7));
-    ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 12;
-    ctx.beginPath(); ctx.strokeStyle = lg; ctx.lineWidth = 2;
-    ctx.lineJoin = "round"; ctx.lineCap = "round";
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 8;
+    ctx.strokeStyle = lg; ctx.lineWidth = 2;
+    ctx.stroke(wavePath); ctx.restore();
 
-    // Scan head
+    // Scan head (单次 shadowBlur, 合并两层为一个 arc)
     const head = pts[pts.length - 1];
     if (head) {
-      ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 16;
+      ctx.save(); ctx.shadowColor = brand; ctx.shadowBlur = 12;
+      ctx.fillStyle = _ecgColorMix(brand, 0.35);
+      ctx.beginPath(); ctx.arc(head.x, head.y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(head.x, head.y, 3.5, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 28; ctx.fillStyle = _ecgColorMix(brand, 0.35);
-      ctx.beginPath(); ctx.arc(head.x, head.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.restore();
     }
   }
 }
@@ -2234,95 +2264,86 @@ function liveApplySettings() {
   }
 }
 
-// ─── Mini ECG Logo Animation ───
+// ─── Mini ECG Logo Animation (22×22 canvas) ───
 (function initLogoEcg() {
   const canvas = document.getElementById("logo-ecg");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cw = 44, ch = 22;
-  canvas.width = cw * dpr;
-  canvas.height = ch * dpr;
+  const S = 22;
+  canvas.width = S * dpr;
+  canvas.height = S * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
-  const mid = ch * 0.5;
-  const speed = 0.9;          // px per frame (~60fps)
-  const fadeWidth = 18;       // trailing fade region width
-  const beatWidth = 36;       // one beat cycle width
-  // ECG beat shape (normalized 0..1 within beatWidth), y in -1..1
+  const mid = S * 0.5;
+  const brand = () => getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
+
+  // 心跳波形: x∈[0,1] 映射到 y 偏移 (正值=向上)
+  // 简洁的 QRS 脉冲 + 轻微 T 波
   function beatY(t) {
-    // t: 0..1 within one beat
-    if (t < 0.15) return 0;
-    if (t < 0.22) return Math.sin((t - 0.15) / 0.07 * Math.PI) * 0.15;          // P wave
-    if (t < 0.30) return 0;
-    if (t < 0.33) return -((t - 0.30) / 0.03) * 0.25;                            // Q dip
-    if (t < 0.37) return -0.25 + ((t - 0.33) / 0.04) * 1.5;                      // R spike up
-    if (t < 0.41) return 1.25 - ((t - 0.37) / 0.04) * 1.65;                      // S down
-    if (t < 0.46) return -0.4 + ((t - 0.41) / 0.05) * 0.4;                       // return to baseline
-    if (t < 0.65) return 0;
-    if (t < 0.80) return Math.sin((t - 0.65) / 0.15 * Math.PI) * 0.3;            // T wave
+    if (t < 0.35) return 0;
+    if (t < 0.40) return -((t - 0.35) / 0.05) * 0.15;       // Q 微下
+    if (t < 0.44) return -0.15 + ((t - 0.40) / 0.04) * 0.95; // R 尖峰上
+    if (t < 0.48) return 0.80 - ((t - 0.44) / 0.04) * 1.05;  // S 下
+    if (t < 0.55) return -0.25 + ((t - 0.48) / 0.07) * 0.25; // 回基线
+    if (t < 0.70) return Math.sin((t - 0.55) / 0.15 * Math.PI) * 0.18; // T 波
     return 0;
   }
 
-  let offset = 0;
-  const brand = () => getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
+  const cycle = 2200;  // 一次心跳周期 ms
+  const amp = S * 0.35;
+  let startT = performance.now();
 
   function draw() {
-    ctx.clearRect(0, 0, cw, ch);
+    const now = performance.now();
+    const elapsed = now - startT;
+    const phase = (elapsed % cycle) / cycle;
 
-    // Draw trail: sample points from (offset - fadeWidth) to offset
-    const xStart = 0;
-    const xEnd = cw;
-    const amp = ch * 0.38;
+    ctx.clearRect(0, 0, S, S);
 
+    // 绘制完整心跳波形 (静态位置, 不滚动)
+    const pts = [];
+    const segments = 44;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      pts.push({ x: 2 + t * (S - 4), y: mid - beatY(t) * amp });
+    }
+
+    const c = brand();
+
+    // 淡色底线
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 1.5;
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
 
-    const samples = [];
-    for (let x = xStart; x <= xEnd; x++) {
-      const totalX = x + offset;
-      const bt = (totalX % beatWidth) / beatWidth;
-      const y = mid - beatY(bt) * amp;
-      samples.push({ x, y });
-    }
-
-    // Draw the full line with gradient opacity (fading at right edge = new data)
-    for (let i = 0; i < samples.length - 1; i++) {
-      const s = samples[i], e = samples[i + 1];
-      // Right edge (latest) fades in, left edge fully visible
-      const distFromRight = xEnd - s.x;
-      let alpha = 1;
-      if (distFromRight < fadeWidth) {
-        alpha = 1 - (fadeWidth - distFromRight) / fadeWidth;
-        alpha = Math.max(0, alpha * alpha); // ease-in
-      }
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = brand();
+    // 亮色波形: 从左到右逐步绘制, 进度由 phase 决定
+    const drawLen = Math.floor(pts.length * phase);
+    if (drawLen > 1) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(e.x, e.y);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < drawLen; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.stroke();
-    }
 
-    // Glowing pulse point at the rightmost active position
-    const lastIdx = samples.length - 1 - 1; // one before the fully-faded edge
-    const pulse = samples[lastIdx];
-    if (pulse) {
-      const pulseAlpha = 1 - (fadeWidth * 0.3) / fadeWidth;
-      ctx.globalAlpha = Math.max(0, pulseAlpha);
-      ctx.shadowColor = brand();
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = brand();
-      ctx.beginPath();
-      ctx.arc(pulse.x, pulse.y, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      // 脉冲点: 跟随绘制末端
+      if (drawLen < pts.length) {
+        const p = pts[drawLen - 1];
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.globalAlpha = 1;
-    offset += speed;
     requestAnimationFrame(draw);
   }
   draw();
