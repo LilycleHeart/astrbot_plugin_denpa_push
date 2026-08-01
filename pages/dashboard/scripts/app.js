@@ -768,7 +768,7 @@ class EcgWaveform {
     this.offset += this.speed * (dt / 16.667); // normalize to 60fps baseline
 
     const mid = h * 0.55;
-    const amp = h * 0.288 * this.ampScale;
+    const amp = h * 0.2592 * this.ampScale;
     const brand = this._getBrand();
 
     // ── Wave-space sampling (jitter fix) ──
