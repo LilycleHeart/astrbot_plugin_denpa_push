@@ -154,7 +154,15 @@
 
           <!-- ── 目前追踪（信号流时间线） ── -->
           <section class="tab-content" id="tab-timeline">
-            <div class="card">
+            <!-- 侧边竖直时间线（sticky，不跟卡片挤） -->
+            <div class="tl-rail" id="tl-rail" aria-hidden="true">
+              <div class="tl-rail-line"></div>
+              <div class="tl-rail-pill" id="tl-rail-pill">
+                <span class="tl-rail-time" id="tl-rail-time">--:--</span>
+                <span class="tl-rail-date" id="tl-rail-date">--月--日</span>
+              </div>
+            </div>
+            <div class="card tl-main">
               <div class="card-header">
                 <div>
                   <h2 class="card-title">推送时间线</h2>
@@ -162,14 +170,6 @@
                 </div>
               </div>
               <div class="tl-stream" id="tracking-history"></div>
-            </div>
-            <!-- 侧边竖直时间线 -->
-            <div class="tl-rail" id="tl-rail" aria-hidden="true">
-              <div class="tl-rail-line"></div>
-              <div class="tl-rail-pill" id="tl-rail-pill">
-                <span class="tl-rail-time" id="tl-rail-time">--:--</span>
-                <span class="tl-rail-date" id="tl-rail-date">--月--日</span>
-              </div>
             </div>
           </section>
 

@@ -468,14 +468,24 @@
 
 
 /* —— 侧边竖直时间线 —— */
+/* timeline tab 用 flex 布局，竖线独占左侧空间，不跟卡片挤 */
+#tab-timeline.active {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+#tab-timeline.active .tl-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .tl-rail {
-  position: fixed;
-  right: 20px;
+  position: sticky;
   top: 50%;
   transform: translateY(-50%);
   height: 60vh;
-  width: 4px;
-  z-index: 50;
+  width: 52px;
+  flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--motion-base) var(--motion-ease);
   pointer-events: none;
@@ -536,41 +546,9 @@
               border-color var(--motion-fast) var(--motion-ease),
               box-shadow var(--motion-fast) var(--motion-ease);
 }
-/* 胶囊指示箭头（指向竖线） */
-.tl-rail-pill::before {
-  content: "";
-  position: absolute;
-  right: -5px;
-  top: 50%;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid color-mix(in srgb, var(--color-brand) 30%, transparent);
-  transform: translateY(-50%);
-}
-/* 胶囊上的光点（嵌在竖线上） */
-.tl-rail-pill::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-brand);
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-brand) 60%, transparent);
-  z-index: 1;
-}
 .tl-rail-pill.hovering {
   border-color: var(--color-brand);
   box-shadow: var(--shadow-8), 0 0 24px color-mix(in srgb, var(--color-brand) 25%, transparent);
-}
-.tl-rail-pill.hovering::after {
-  width: 10px;
-  height: 10px;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--color-brand) 75%, transparent);
 }
 .tl-rail-time {
   font-family: var(--font-family-mono);
@@ -578,8 +556,6 @@
   font-weight: 600;
   color: var(--color-brand);
   line-height: 1.2;
-  position: relative;
-  z-index: 2;
   transition: opacity var(--motion-fast) var(--motion-ease);
 }
 .tl-rail-date {
@@ -589,8 +565,6 @@
   color: var(--color-fg-2);
   line-height: 1;
   letter-spacing: 0.3px;
-  position: relative;
-  z-index: 2;
   transition: opacity var(--motion-fast) var(--motion-ease);
 }
 .tl-rail-time.changing,
@@ -600,10 +574,11 @@
 
 @media (max-width: 640px) {
   .tl-stream { grid-template-columns: 1fr; }
-  .tl-rail { right: 8px; height: 50vh; }
+  .tl-rail { width: 40px; height: 50vh; }
   .tl-rail-time { font-size: 12px; }
   .tl-rail-date { font-size: 8px; }
   .tl-date-sep-text { font-size: 15px; }
+  #tab-timeline.active { gap: 8px; }
 }
 
 /* —— 推文卡片 —— */
