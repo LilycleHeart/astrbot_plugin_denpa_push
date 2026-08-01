@@ -921,6 +921,80 @@ function _updateFloatText(id, newText, oldText) {
   }, 140);
 }
 
+// ─── Masonry: waterfall layout for timeline cards ───
+let _masonryResizeTimer = null;
+function _applyMasonry() {
+  const container = document.getElementById("tracking-history");
+  if (!container) return;
+  const items = Array.from(container.children);
+  if (items.length === 0) { container.classList.remove("masonry-ready"); return; }
+
+  const minCol = 340;
+  const gap = 16;
+  const cw = container.clientWidth;
+  const numCols = Math.max(1, Math.floor((cw + gap) / (minCol + gap)));
+
+  if (numCols <= 1) {
+    container.classList.remove("masonry-ready");
+    items.forEach(it => { it.style.position=""; it.style.left=""; it.style.top=""; it.style.width=""; });
+    container.style.height = "";
+    return;
+  }
+
+  const colW = (cw - gap * (numCols - 1)) / numCols;
+  const colH = new Array(numCols).fill(0);
+
+  container.classList.add("masonry-ready");
+
+  items.forEach(item => {
+    if (item.classList.contains("tl-date-sep")) {
+      const top = Math.max(...colH);
+      item.style.left = "0px";
+      item.style.top = top + "px";
+      item.style.width = "100%";
+      const mt = parseFloat(getComputedStyle(item).marginTop) || 0;
+      const mb = parseFloat(getComputedStyle(item).marginBottom) || 0;
+      colH.fill(top + item.offsetHeight + mt + mb + gap);
+    } else {
+      const col = colH.indexOf(Math.min(...colH));
+      item.style.left = (col * (colW + gap)) + "px";
+      item.style.top = colH[col] + "px";
+      item.style.width = colW + "px";
+      colH[col] += item.offsetHeight + gap;
+    }
+  });
+
+  container.style.height = Math.max(...colH) + "px";
+}
+
+function _scheduleMasonry() {
+  requestAnimationFrame(() => {
+    _applyMasonry();
+    // Re-run once more after a frame in case fonts/images shift layout
+    requestAnimationFrame(_applyMasonry);
+  });
+}
+
+function _bindMasonryResize() {
+  if (_masonryResizeTimer !== null) return; // already bound
+  let t;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(_applyMasonry, 150);
+  });
+  _masonryResizeTimer = 1;
+}
+
+function _watchMasonryImages(container) {
+  const imgs = container.querySelectorAll("img");
+  imgs.forEach(img => {
+    if (!img.complete) {
+      img.addEventListener("load", () => _scheduleMasonry(), { once: true });
+      img.addEventListener("error", () => _scheduleMasonry(), { once: true });
+    }
+  });
+}
+
 // ─── Render: Status ───
 function renderStatus(data) {
   if (!data) return;
@@ -1300,6 +1374,9 @@ function renderHistory(data) {
       }
       tlCt.classList.remove("tl-switching");
       _initTimelineBadge();
+      _bindMasonryResize();
+      _scheduleMasonry();
+      _watchMasonryImages(tlCt);
     }, 150);
   }
 }

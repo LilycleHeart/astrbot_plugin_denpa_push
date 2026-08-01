@@ -346,20 +346,31 @@
   overflow: hidden; word-break: break-all; line-height: 1.35;
 }
 
-/* —— Signal Stream 时间线 —— */
+/* —— Signal Stream 时间线 (Masonry 瀑布流) —— */
 .tl-stream {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--space-m);
-  align-items: start;
+  position: relative;
   padding-bottom: 80px;
   transition: opacity var(--motion-fast) var(--motion-ease);
 }
 .tl-stream.tl-switching { opacity: 0; }
+.tl-stream:not(.masonry-ready) {
+  /* Fallback: grid before masonry kicks in */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-m);
+  align-items: start;
+}
+.tl-stream.masonry-ready .tl-entry,
+.tl-stream.masonry-ready .tl-date-sep {
+  position: absolute;
+}
+.tl-stream.masonry-ready .tl-date-sep {
+  left: 0 !important;
+  width: 100% !important;
+}
 
 /* 日期分隔器 — 全宽横跨 */
 .tl-date-sep {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--space-m);
