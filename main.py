@@ -137,9 +137,14 @@ class DenpaPushPlugin(Star):
             if os.path.exists(self._push_history_path):
                 with open(self._push_history_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                # 向后兼容：旧格式是 list，新格式是 {"history": [...], "total_pushes": N}
                 if isinstance(data, list):
                     self._push_history = deque(data[:50], maxlen=50)
                     self._total_pushes = len(self._push_history)
+                elif isinstance(data, dict):
+                    hist = data.get("history", [])
+                    self._push_history = deque(hist[:50], maxlen=50)
+                    self._total_pushes = data.get("total_pushes", len(self._push_history))
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to load push history: {e}")
 
@@ -147,7 +152,10 @@ class DenpaPushPlugin(Star):
         try:
             os.makedirs(os.path.dirname(self._push_history_path), exist_ok=True)
             with open(self._push_history_path, "w", encoding="utf-8") as f:
-                json.dump(list(self._push_history), f, ensure_ascii=False)
+                json.dump({
+                    "history": list(self._push_history),
+                    "total_pushes": self._total_pushes,
+                }, f, ensure_ascii=False)
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to save push history: {e}")
 

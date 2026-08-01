@@ -600,8 +600,8 @@ class EcgWaveform {
     if (this.speedOverride !== null) {
       this.speed = this.speedOverride;
     } else {
-      // 自动：0推文=0.2，20推文=1.2，线性映射
-      this.speed = 0.2 + (Math.min(this.pushCount, 20) / 20) * 1.0;
+      // 自动：0推文=0.2，50推文=1.2，线性映射
+      this.speed = 0.2 + (Math.min(this.pushCount, 50) / 50) * 1.0;
     }
   }
 
@@ -613,8 +613,8 @@ class EcgWaveform {
     if (this.complexityOverride !== null) {
       this.intensity = Math.min(10, Math.max(0, this.complexityOverride));
     } else {
-      // 推文20时到达上限（intensity 10）
-      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 2));
+      // 累计推送 50 条时到达 intensity 10（与 speed 上限对齐，渐变更平缓）
+      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 5));
     }
     const ampMap = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
     const noiseMap = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
