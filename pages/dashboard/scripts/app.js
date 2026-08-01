@@ -806,7 +806,7 @@ function renderHistory(data) {
 }
 
 function renderTimelineTabs() {
-  const wrap = document.getElementById("timeline-tabs");
+  const wrap = document.getElementById("timeline-sub-tabs");
   if (!wrap) return;
 
   // Collect unique screen_names from subscriptions and history
@@ -820,18 +820,18 @@ function renderTimelineTabs() {
   const sortedNames = [...names].sort();
 
   const mode = state.timeline.mode;
-  let html = `<button class="tl-tab ${mode === "overview" ? "active" : ""}" data-tlmode="overview">总览</button>`;
+  let html = `<button class="sub-tab ${mode === "overview" ? "active" : ""}" data-tlmode="overview"><span class="dot"></span>总览</button>`;
 
   for (const n of sortedNames) {
     const info = Object.values(state.subscriptions || {}).find(u => u[n])?.[n] || {};
     const av = info.avatar_url || "";
     const letter = (n.charAt(0) || "?").toUpperCase();
-    html += `<button class="tl-tab ${mode === n ? "active" : ""}" data-tlmode="${escapeHtml(n)}">
-      <span class="tl-tab-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}
+    html += `<button class="sub-tab ${mode === n ? "active" : ""}" data-tlmode="${escapeHtml(n)}">
+      <span class="sub-tab-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}
     </button>`;
   }
 
-  html += `<button class="tl-tab ${mode === "manual" ? "active" : ""}" data-tlmode="manual">手动推送</button>`;
+  html += `<button class="sub-tab ${mode === "manual" ? "active" : ""}" data-tlmode="manual"><span class="dot"></span>手动推送</button>`;
   wrap.innerHTML = html;
 }
 
@@ -907,6 +907,9 @@ function switchTab(name) {
   document.querySelectorAll(".tab-content").forEach(p => p.classList.remove("active"));
   const panel = document.getElementById(`tab-${name}`);
   if (panel) panel.classList.add("active");
+  // Toggle sidebar sub-tabs visibility
+  const subTabs = document.getElementById("timeline-sub-tabs");
+  if (subTabs) subTabs.classList.toggle("show", name === "timeline");
 }
 
 // ─── Init ───
@@ -958,17 +961,17 @@ async function init() {
   // Refresh button
   document.getElementById("btn-refresh-all").addEventListener("click", refresh);
 
-  // Timeline tab switching (event delegation for dynamically generated tabs)
-  const tabsWrap = document.getElementById("timeline-tabs");
-  if (tabsWrap) {
-    tabsWrap.addEventListener("click", (e) => {
-      const tab = e.target.closest(".tl-tab");
+  // Timeline sub-tab switching (sidebar, event delegation for dynamically generated tabs)
+  const subTabsWrap = document.getElementById("timeline-sub-tabs");
+  if (subTabsWrap) {
+    subTabsWrap.addEventListener("click", (e) => {
+      const tab = e.target.closest(".sub-tab");
       if (!tab) return;
       const mode = tab.dataset.tlmode;
       if (state.timeline.mode === mode) return;
       state.timeline.mode = mode;
       // Update active states
-      tabsWrap.querySelectorAll(".tl-tab").forEach(t => t.classList.remove("active"));
+      subTabsWrap.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
       // Re-render filtered timeline with transition
       renderHistory({ history: state.timeline.history });
