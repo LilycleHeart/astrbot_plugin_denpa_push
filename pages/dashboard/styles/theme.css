@@ -243,7 +243,7 @@ body {
   stroke-linejoin: round;
 }
 
-/* 辉光拖尾 — 几乎覆盖整个图标，定义扫描方向 */
+/* 辉光拖尾 — 持续缓动，不留空 */
 .ecg-trail {
   fill: none;
   stroke: var(--color-brand);
@@ -253,10 +253,10 @@ body {
   stroke-dasharray: 85 15;
   opacity: 0.65;
   filter: drop-shadow(0 0 1.5px var(--color-brand));
-  animation: ecg-scan 1.5s linear infinite;
+  animation: ecg-trail-scan 1.5s linear infinite;
 }
 
-/* 脉冲高光 — 短段高亮，位于拖尾前端 */
+/* 脉冲高光 — 短段高亮，脉冲式扫过 */
 .ecg-pulse {
   fill: none;
   stroke: var(--color-brand-hover);
@@ -266,10 +266,10 @@ body {
   stroke-dasharray: 8 92;
   opacity: 1;
   filter: drop-shadow(0 0 2px var(--color-brand-hover)) drop-shadow(0 0 5px var(--color-brand));
-  animation: ecg-scan 1.5s linear infinite;
+  animation: ecg-pulse-scan 1.5s linear infinite;
 }
 
-/* 前端亮点 — 纯白高光，位于脉冲最前沿 */
+/* 前端亮点 — 纯白高光，跟随脉冲 */
 .ecg-dot {
   fill: none;
   stroke: #ffffff;
@@ -279,20 +279,29 @@ body {
   stroke-dasharray: 0.5 99.5;
   opacity: 1;
   filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
-  animation: ecg-scan 1.5s linear infinite;
+  animation: ecg-pulse-scan 1.5s linear infinite;
 }
 
-@keyframes ecg-scan {
-  0%   { stroke-dashoffset: 100; }
-  65%  { stroke-dashoffset: 100; }  /* 长时间停顿，等待下一次脉冲 */
-  80%  { stroke-dashoffset: 0; }    /* 快速扫过整个波形 */
-  100% { stroke-dashoffset: 0; }    /* 短暂停留 */
+/* 拖尾 — 持续缓动，间隙不断前移，保持活性 */
+@keyframes ecg-trail-scan {
+  0%   { stroke-dashoffset: 85; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* 脉冲 + 亮点 — 长时间停顿，快速扫过，扫完后隐藏 */
+@keyframes ecg-pulse-scan {
+  0%   { stroke-dashoffset: 100; opacity: 0; }
+  65%  { stroke-dashoffset: 100; opacity: 0; }
+  67%  { stroke-dashoffset: 96;  opacity: 1; }
+  80%  { stroke-dashoffset: 0;   opacity: 1; }
+  82%  { stroke-dashoffset: 0;   opacity: 0; }
+  100% { stroke-dashoffset: 0;   opacity: 0; }
 }
 
 /* Hover 加速由 JS 控制 animation-duration */
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-trail,
+  .ecg-trail { animation: none; }
   .ecg-pulse,
   .ecg-dot {
     animation: none;
