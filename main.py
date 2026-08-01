@@ -163,6 +163,9 @@ class DenpaPushPlugin(Star):
         if self.subscriptions and auto_monitor:
             self._start_monitor()
         logger.info("Twitter Monitor plugin initialized")
+        # 自动后台重建历史卡片（补齐缺失头像/媒体/配色）
+        if self._push_history:
+            asyncio.create_task(self._rebuild_history_async())
 
     def _apply_twitter_credentials(self):
         auth_token = self.config.get("twitter_auth_token", "")
@@ -192,7 +195,6 @@ class DenpaPushPlugin(Star):
             ("dashboard/config", self._api_dashboard_config, ["GET", "POST"], "插件配置读写"),
             ("dashboard/toggle_monitor", self._api_dashboard_toggle_monitor, ["POST"], "会话监控开关"),
             ("dashboard/history", self._api_dashboard_history, ["GET"], "推送历史详情"),
-            ("dashboard/rebuild_history", self._api_dashboard_rebuild_history, ["POST"], "重建历史卡片"),
             ("bg/upload", self._api_bg_upload, ["POST"], "上传背景图"),
             ("bg/remove", self._api_bg_remove, ["POST"], "移除背景图"),
         ]
@@ -208,6 +210,47 @@ class DenpaPushPlugin(Star):
             "type": log_type,
             "message": msg,
         })
+
+    def _record_push_history(self, info: dict, session_umo: str, source: str = "auto"):
+        """记录一条推送历史（自动/手动共用），含时间、会话与卡片详情。
+
+        info: _build_card_data 返回的富结构 dict
+        session_umo: 推送目标会话标识
+        source: "auto" | "manual"
+        """
+        hist_media = (
+            (info.get("images") or [])
+            + (info.get("gifs") or [])
+            + (info.get("videos") or [])
+        )
+        hist_thumbs = []
+        for m in hist_media[:4]:
+            mu = m.get("media_url", "")
+            if mu:
+                hist_thumbs.append(_twitter_media_url(mu, "medium"))
+        self._push_history.appendleft({
+            "time": datetime.now(timezone.utc).isoformat(),
+            "source": source,
+            "session": session_umo,
+            "tweet_id": info.get("tweet_id", ""),
+            "screen_name": info.get("screen_name", ""),
+            "user_name": info.get("user_name", ""),
+            "avatar_url": info.get("avatar_url", ""),
+            "text": (info.get("original_text") or "")[:300],
+            "translated_text": (info.get("translated_text") or "")[:300],
+            "tweet_url": info.get("tweet_url", ""),
+            "seed_color": info.get("seed_color", ""),
+            "palette": info.get("palette", []),
+            "thumbnail_urls": hist_thumbs,
+            "image_count": info.get("image_count", 0),
+            "gif_count": info.get("gif_count", 0),
+            "video_count": info.get("video_count", 0),
+            "has_media": bool(hist_thumbs),
+            "created_at_str": info.get("created_at_str", ""),
+            "quoted_screen_name": info.get("quoted_screen_name", ""),
+            "quoted_text": (info.get("quoted_text") or "")[:200],
+        })
+        self._save_push_history()
 
     async def _api_dashboard_status(self):
         """Dashboard 总览状态。"""
@@ -389,21 +432,6 @@ class DenpaPushPlugin(Star):
         return json_response({
             "history": list(self._push_history),
             "rebuilding": self._rebuild_running,
-        })
-
-    async def _api_dashboard_rebuild_history(self):
-        """触发后台重建历史 timeline 卡片：补齐 avatar/媒体/配色等缺失字段。"""
-        from astrbot.api.web import json_response
-
-        if self._rebuild_running:
-            return json_response({
-                "started": False,
-                "message": "重建任务进行中，请稍后刷新",
-            })
-        asyncio.create_task(self._rebuild_history_async())
-        return json_response({
-            "started": True,
-            "message": "已开始后台重建历史卡片",
         })
 
     async def _rebuild_history_async(self):
@@ -1030,6 +1058,14 @@ class DenpaPushPlugin(Star):
                         results.append(
                             _chain([CompVideo.fromFileSystem(f)])
                         )
+
+            # 记录到推送历史（手动推送），溯源时间与会话
+            self._total_pushes += 1
+            self._log_push(
+                f"@{info['screen_name']} [手动] → {event.unified_msg_origin[:20]}…",
+                "push",
+            )
+            self._record_push_history(info, event.unified_msg_origin, source="manual")
         except Exception as e:
             logger.error(f"Failed to push tweet {tweet_id}: {e}")
             results.append(_plain(f"推送失败: {str(e)[:100]}"))
@@ -1822,38 +1858,7 @@ class DenpaPushPlugin(Star):
                     f"@{info['screen_name']} → {session_umo[:20]}…",
                     "push",
                 )
-                # Build URL-form thumbnails for history (avoid data URIs in persisted JSON)
-                hist_media = (
-                    (info.get("images") or [])
-                    + (info.get("gifs") or [])
-                    + (info.get("videos") or [])
-                )
-                hist_thumbs = []
-                for m in hist_media[:4]:
-                    mu = m.get("media_url", "")
-                    if mu:
-                        hist_thumbs.append(_twitter_media_url(mu, "medium"))
-                self._push_history.appendleft({
-                    "time": datetime.now(timezone.utc).isoformat(),
-                    "tweet_id": info.get("tweet_id", ""),
-                    "screen_name": info.get("screen_name", ""),
-                    "user_name": info.get("user_name", ""),
-                    "avatar_url": info.get("avatar_url", ""),
-                    "text": (info.get("original_text") or "")[:300],
-                    "translated_text": (info.get("translated_text") or "")[:300],
-                    "tweet_url": info.get("tweet_url", ""),
-                    "seed_color": info.get("seed_color", ""),
-                    "palette": info.get("palette", []),
-                    "thumbnail_urls": hist_thumbs,
-                    "image_count": info.get("image_count", 0),
-                    "gif_count": info.get("gif_count", 0),
-                    "video_count": info.get("video_count", 0),
-                    "has_media": bool(hist_thumbs),
-                    "created_at_str": info.get("created_at_str", ""),
-                    "quoted_screen_name": info.get("quoted_screen_name", ""),
-                    "quoted_text": (info.get("quoted_text") or "")[:200],
-                })
-                self._save_push_history()
+                self._record_push_history(info, session_umo, source="auto")
             except Exception as e:
                 logger.error(f"[Push] Failed to push to {session_umo}: {e}")
                 self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")

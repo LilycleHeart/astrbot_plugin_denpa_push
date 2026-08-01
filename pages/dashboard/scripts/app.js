@@ -18,7 +18,7 @@ const state = {
   status: null,
   subscriptions: {},
   logs: [],
-  timeline: { mode: "overview", account: "", history: [] },
+  timeline: { mode: "overview", history: [] },
   uiConfig: {
     color_mode: "dynamic",
     brand_color: "#1d9bf0",
@@ -717,6 +717,9 @@ function buildHistoryCard(item) {
   if (vidN) badges.push(`🎬 ${vidN}`);
   const qSn = item.quoted_screen_name || "";
   const qTxt = item.quoted_text || "";
+  const isManual = item.source === "manual";
+  const sourceLabel = isManual ? "手动推送" : "已推送";
+  const sessionInfo = item.session ? escapeHtml(item.session) : "";
 
   const el = document.createElement("div");
   el.className = "tweet-card tl-item";
@@ -733,13 +736,14 @@ function buildHistoryCard(item) {
         <div class="t-handle">@${escapeHtml(item.screen_name)}</div>
       </div>
       <span class="t-time">${escapeHtml(timeRaw)}</span>
-      <span class="t-tag" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">✓ 已推送</span>
+      <span class="t-tag ${isManual ? "t-tag-manual" : ""}" style="background:color-mix(in srgb, ${seed} 12%, transparent);color:${primary}">${isManual ? "✎ " : "✓ "}${sourceLabel}</span>
     </div>
     <div class="t-body">${escapeHtml(item.text || "")}</div>
     ${item.translated_text ? `<div class="t-trans" style="background:color-mix(in srgb, ${seed} 5%, transparent);border-color:${seed}"><div class="label" style="color:${seed}">中文翻译</div>${escapeHtml(item.translated_text)}</div>` : ""}
     ${thumbs.length ? `<div class="t-media">${thumbs.map(u => `<div style="background-image:url('${escapeHtml(u)}');background-size:cover;background-position:center" referrerpolicy="no-referrer"></div>`).join("")}</div>` : ""}
     ${badges.length ? `<div class="t-badges">${badges.map(b => `<span class="t-badge">${escapeHtml(b)}</span>`).join("")}</div>` : ""}
     ${qSn ? `<div class="t-quote"><span class="t-quote-name">@${escapeHtml(qSn)}</span> ${escapeHtml(qTxt)}</div>` : ""}
+    ${sessionInfo ? `<div class="t-session">会话: ${sessionInfo}</div>` : ""}
     <div class="t-palette">
       ${Object.entries(pal).filter(([k, v]) => !k.endsWith("_rgb") && typeof v === "string" && v.startsWith("#")).slice(0, 4).map(([, c]) => `<span style="background:${c}"></span>`).join("")}
       <span class="pal-label">seed: ${seed}</span>
@@ -750,14 +754,10 @@ function buildHistoryCard(item) {
 
 function renderHistory(data) {
   const allItems = data?.history || [];
-  const rebuilding = data?.rebuilding;
+  state.timeline.history = allItems;
 
-  // Update rebuild button state if present
-  const rebuildBtn = document.getElementById("btn-rebuild-history");
-  if (rebuildBtn) {
-    rebuildBtn.disabled = !!rebuilding;
-    rebuildBtn.textContent = rebuilding ? "重建中…" : "重建历史卡片";
-  }
+  // Rebuild tabs (accounts may have changed)
+  renderTimelineTabs();
 
   const emptyHtml = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无推送记录</p>';
 
@@ -774,24 +774,30 @@ function renderHistory(data) {
     }
   }
 
-  // Timeline (tracking-history): apply account filter
+  // Timeline (tracking-history): apply tab filter
   const tlCt = document.getElementById("tracking-history");
   if (tlCt) {
     let items = allItems;
-    if (state.timeline.mode === "account" && state.timeline.account) {
-      items = allItems.filter(it => (it.screen_name || "") === state.timeline.account);
+    let emptyMsg = emptyHtml;
+
+    if (state.timeline.mode === "manual") {
+      items = allItems.filter(it => it.source === "manual");
+      emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无手动推送记录</p>';
+    } else if (state.timeline.mode !== "overview") {
+      // Account-specific filter (mode = screen_name)
+      items = allItems.filter(it => (it.screen_name || "") === state.timeline.mode);
+      emptyMsg = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">该账号暂无推送记录</p>';
     }
+
     // Crossfade transition
     tlCt.classList.add("tl-switching");
     setTimeout(() => {
       tlCt.innerHTML = "";
       if (items.length === 0) {
-        tlCt.innerHTML = state.timeline.mode === "account"
-          ? '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">该账号暂无推送记录</p>'
-          : emptyHtml;
+        tlCt.innerHTML = emptyMsg;
       } else {
         const frag = document.createDocumentFragment();
-        items.slice(0, 30).forEach(item => frag.appendChild(buildHistoryCard(item)));
+        items.slice(0, 50).forEach(item => frag.appendChild(buildHistoryCard(item)));
         tlCt.appendChild(frag);
       }
       tlCt.classList.remove("tl-switching");
@@ -799,30 +805,34 @@ function renderHistory(data) {
   }
 }
 
-function renderTimelineAccountChips() {
-  const wrap = document.getElementById("timeline-account-chips");
+function renderTimelineTabs() {
+  const wrap = document.getElementById("timeline-tabs");
   if (!wrap) return;
-  // Collect unique screen_names from subscriptions
+
+  // Collect unique screen_names from subscriptions and history
   const names = new Set();
   for (const users of Object.values(state.subscriptions || {})) {
     for (const n of Object.keys(users)) names.add(n);
   }
-  // Also include accounts present in history
   for (const it of state.timeline.history) {
     if (it.screen_name) names.add(it.screen_name);
   }
-  if (names.size === 0) { wrap.innerHTML = ""; return; }
-  wrap.innerHTML = `<button class="account-chip ${!state.timeline.account ? "active" : ""}" data-name="">全部</button>`;
-  [...names].sort().forEach(n => {
+  const sortedNames = [...names].sort();
+
+  const mode = state.timeline.mode;
+  let html = `<button class="tl-tab ${mode === "overview" ? "active" : ""}" data-tlmode="overview">总览</button>`;
+
+  for (const n of sortedNames) {
     const info = Object.values(state.subscriptions || {}).find(u => u[n])?.[n] || {};
     const av = info.avatar_url || "";
     const letter = (n.charAt(0) || "?").toUpperCase();
-    const chip = document.createElement("button");
-    chip.className = "account-chip" + (state.timeline.account === n ? " active" : "");
-    chip.dataset.name = n;
-    chip.innerHTML = `<span class="chip-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}`;
-    wrap.appendChild(chip);
-  });
+    html += `<button class="tl-tab ${mode === n ? "active" : ""}" data-tlmode="${escapeHtml(n)}">
+      <span class="tl-tab-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}
+    </button>`;
+  }
+
+  html += `<button class="tl-tab ${mode === "manual" ? "active" : ""}" data-tlmode="manual">手动推送</button>`;
+  wrap.innerHTML = html;
 }
 
 // ─── Render: Logs ───
@@ -881,7 +891,7 @@ async function refresh() {
       bridge.apiGet("dashboard/history"),
     ]);
     if (status) { state.status = status; renderStatus(status); }
-    if (subs) { state.subscriptions = subs; renderSubs(subs); renderTimelineAccountChips(); }
+    if (subs) { state.subscriptions = subs; renderSubs(subs); renderTimelineTabs(); }
     if (logs) { state.logs = logs; renderLogs(logs); }
     if (history) { state.timeline.history = history.history || []; renderHistory(history); }
   } catch (e) {
@@ -948,66 +958,19 @@ async function init() {
   // Refresh button
   document.getElementById("btn-refresh-all").addEventListener("click", refresh);
 
-  // Rebuild history cards (background)
-  document.getElementById("btn-rebuild-history")?.addEventListener("click", async () => {
-    const btn = document.getElementById("btn-rebuild-history");
-    try {
-      btn.disabled = true;
-      btn.textContent = "重建中…";
-      const res = await bridge.apiPost("dashboard/rebuild_history", {});
-      toast(res?.message || "已开始后台重建历史卡片", res?.started ? "success" : "info");
-      // Poll history while rebuilding
-      if (res?.started) {
-        const poll = async () => {
-          try {
-            const h = await bridge.apiGet("dashboard/history");
-            if (h) renderHistory(h);
-            if (h?.rebuilding) {
-              setTimeout(poll, 4000);
-            } else {
-              btn.disabled = false;
-              btn.textContent = "重建历史卡片";
-            }
-          } catch (e) {
-            btn.disabled = false;
-            btn.textContent = "重建历史卡片";
-          }
-        };
-        setTimeout(poll, 4000);
-      } else {
-        btn.disabled = false;
-        btn.textContent = "重建历史卡片";
-      }
-    } catch (e) {
-      toast(e?.message || "重建失败", "error");
-      btn.disabled = false;
-      btn.textContent = "重建历史卡片";
-    }
-  });
-
-  // Timeline segmented control (总览 / 账号)
-  document.querySelectorAll("#timeline-seg .seg-btn").forEach(b => {
-    b.addEventListener("click", () => {
-      if (b.classList.contains("active")) return;
-      document.querySelectorAll("#timeline-seg .seg-btn").forEach(x => x.classList.remove("active"));
-      b.classList.add("active");
-      state.timeline.mode = b.dataset.tlmode;
-      const chips = document.getElementById("timeline-account-chips");
-      if (chips) chips.style.display = state.timeline.mode === "account" ? "flex" : "none";
-      // Re-render timeline with transition using cached history
-      renderHistory({ history: state.timeline.history });
-    });
-  });
-
-  // Account chip clicks (event delegation)
-  const chipsWrap = document.getElementById("timeline-account-chips");
-  if (chipsWrap) {
-    chipsWrap.addEventListener("click", (e) => {
-      const chip = e.target.closest(".account-chip");
-      if (!chip) return;
-      state.timeline.account = chip.dataset.name || "";
-      chipsWrap.querySelectorAll(".account-chip").forEach(c => c.classList.remove("active"));
-      chip.classList.add("active");
+  // Timeline tab switching (event delegation for dynamically generated tabs)
+  const tabsWrap = document.getElementById("timeline-tabs");
+  if (tabsWrap) {
+    tabsWrap.addEventListener("click", (e) => {
+      const tab = e.target.closest(".tl-tab");
+      if (!tab) return;
+      const mode = tab.dataset.tlmode;
+      if (state.timeline.mode === mode) return;
+      state.timeline.mode = mode;
+      // Update active states
+      tabsWrap.querySelectorAll(".tl-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      // Re-render filtered timeline with transition
       renderHistory({ history: state.timeline.history });
     });
   }

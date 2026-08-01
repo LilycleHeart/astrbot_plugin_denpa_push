@@ -120,17 +120,10 @@
               <div class="card-header">
                 <div>
                   <h2 class="card-title">推送时间线</h2>
-                  <p class="card-subtitle">已订阅账号的推送内容，按时间排列</p>
-                </div>
-                <div class="flex gap-s" style="align-items:center;flex-wrap:wrap">
-                  <div class="seg" id="timeline-seg" role="tablist">
-                    <button class="seg-btn active" data-tlmode="overview" role="tab">总览</button>
-                    <button class="seg-btn" data-tlmode="account" role="tab">账号</button>
-                  </div>
-                  <button class="btn btn-subtle btn-sm" id="btn-rebuild-history" title="后台重新拉取头像与媒体，补全历史卡片">重建历史卡片</button>
+                  <p class="card-subtitle">所有推送操作的溯源记录，按时间排列</p>
                 </div>
               </div>
-              <div class="account-chips" id="timeline-account-chips" style="display:none"></div>
+              <div class="tl-tabs" id="timeline-tabs" role="tablist"></div>
               <div id="tracking-history" class="timeline-list"></div>
             </div>
           </section>
