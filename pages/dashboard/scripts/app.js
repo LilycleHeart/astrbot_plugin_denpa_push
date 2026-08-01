@@ -2274,8 +2274,8 @@ function liveApplySettings() {
   const logo = document.querySelector(".sidebar-logo");
   if (!logo) return;
   const animated = logo.querySelectorAll(".ecg-trail, .ecg-pulse, .ecg-dot");
-  const normalDur = "1.8s";
-  const fastDur = "0.8s";
+  const normalDur = "1.5s";
+  const fastDur = "0.7s";
   logo.addEventListener("mouseenter", () => {
     animated.forEach(el => el.style.animationDuration = fastDur);
   });

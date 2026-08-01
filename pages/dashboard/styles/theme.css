@@ -236,9 +236,9 @@ body {
 /* 背景波形 — 静态暗影，勾勒完整 PQRST 轮廓 */
 .ecg-bg-wave {
   fill: none;
-  stroke: var(--color-brand);
+  stroke: var(--color-brand-hover);
   stroke-width: 1.1;
-  opacity: 0.15;
+  opacity: 0.35;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -251,22 +251,22 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 85 15;
-  opacity: 0.35;
-  filter: drop-shadow(0 0 1px var(--color-brand));
-  animation: ecg-scan 1.8s linear infinite;
+  opacity: 0.65;
+  filter: drop-shadow(0 0 1.5px var(--color-brand));
+  animation: ecg-scan 1.5s linear infinite;
 }
 
 /* 脉冲高光 — 短段高亮，位于拖尾前端 */
 .ecg-pulse {
   fill: none;
-  stroke: var(--color-brand);
+  stroke: var(--color-brand-hover);
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 8 92;
-  opacity: 0.85;
-  filter: drop-shadow(0 0 2px var(--color-brand)) drop-shadow(0 0 4px var(--color-brand));
-  animation: ecg-scan 1.8s linear infinite;
+  opacity: 1;
+  filter: drop-shadow(0 0 2px var(--color-brand-hover)) drop-shadow(0 0 5px var(--color-brand));
+  animation: ecg-scan 1.5s linear infinite;
 }
 
 /* 前端亮点 — 纯白高光，位于脉冲最前沿 */
@@ -279,12 +279,14 @@ body {
   stroke-dasharray: 0.5 99.5;
   opacity: 1;
   filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
-  animation: ecg-scan 1.8s linear infinite;
+  animation: ecg-scan 1.5s linear infinite;
 }
 
 @keyframes ecg-scan {
   0%   { stroke-dashoffset: 100; }
-  100% { stroke-dashoffset: 0; }
+  65%  { stroke-dashoffset: 100; }  /* 长时间停顿，等待下一次脉冲 */
+  80%  { stroke-dashoffset: 0; }    /* 快速扫过整个波形 */
+  100% { stroke-dashoffset: 0; }    /* 短暂停留 */
 }
 
 /* Hover 加速由 JS 控制 animation-duration */
