@@ -990,21 +990,6 @@ function renderStatus(data) {
     if (ecg.pushCount !== pushCount) {
       ecg.setPushCount(pushCount);
     }
-    // 更新 ECG 控制面板显示
-    const pcEl = document.getElementById("ecg-push-count");
-    if (pcEl) pcEl.textContent = pushCount;
-    // 自动模式下同步速度滑块显示
-    const speedEl = document.getElementById("ecg-speed");
-    const speedValEl = document.getElementById("ecg-speed-val");
-    if (speedEl && ecg.speedOverride === null) {
-      speedEl.value = ecg.speed.toFixed(2);
-      if (speedValEl) speedValEl.textContent = "自动";
-    }
-    const compEl = document.getElementById("ecg-complexity");
-    const compValEl = document.getElementById("ecg-complexity-val");
-    if (compEl && ecg.complexityOverride === null) {
-      if (compValEl) compValEl.textContent = "自动";
-    }
   }
 
   // Dynamic theme: use brand_color from status if dynamic mode
@@ -1475,40 +1460,6 @@ async function init() {
   syncThemeIcon();
 
   ecg = new EcgWaveform(document.getElementById("ecg-canvas"));
-
-  // ECG speed slider
-  const ecgSpeedEl = document.getElementById("ecg-speed");
-  const ecgSpeedVal = document.getElementById("ecg-speed-val");
-  if (ecgSpeedEl) {
-    ecgSpeedEl.addEventListener("input", () => {
-      const v = parseFloat(ecgSpeedEl.value);
-      ecg.setSpeed(v);
-      if (ecgSpeedVal) ecgSpeedVal.textContent = v.toFixed(1) + "x";
-    });
-    // Double-click to reset to auto
-    ecgSpeedEl.addEventListener("dblclick", () => {
-      ecg.speedOverride = null;
-      ecg._applySpeed();
-      ecgSpeedVal.textContent = "自动";
-      ecgSpeedEl.value = ecg.speed.toFixed(2);
-    });
-  }
-  // ECG complexity slider
-  const ecgCompEl = document.getElementById("ecg-complexity");
-  const ecgCompVal = document.getElementById("ecg-complexity-val");
-  if (ecgCompEl) {
-    ecgCompEl.addEventListener("input", () => {
-      const c = parseInt(ecgCompEl.value);
-      ecg.setComplexity(c);
-      if (ecgCompVal) ecgCompVal.textContent = c;
-    });
-    ecgCompEl.addEventListener("dblclick", () => {
-      ecg.complexityOverride = null;
-      ecg.setPushCount(ecg.pushCount);
-      ecgCompVal.textContent = "自动";
-      ecgCompEl.value = 0;
-    });
-  }
 
   // Tab clicks
   document.querySelectorAll(".tab[data-tab]").forEach(tab => {
