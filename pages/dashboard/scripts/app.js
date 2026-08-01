@@ -626,6 +626,7 @@ class EcgWaveform {
     this._lastTheme = null;
     this._lastTime = 0;
     this._visible = true;       // IntersectionObserver 控制
+    this._pageVisible = true;   // visibilitychange 控制 (标签页前台/后台)
     this._rafId = 0;
     this._resize();
     this._bindResize();
@@ -634,30 +635,34 @@ class EcgWaveform {
     this._loop();
   }
 
+  _shouldRender() { return this._visible && this._pageVisible; }
+
   _bindVisibility() {
     // canvas 滚出视口时暂停渲染, 回到视口时恢复 (避免滚动卡顿)
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         this._visible = e.isIntersecting;
-        if (this._visible) {
-          // 重置时间基准, 避免 dt 跳跃导致波形瞬移
-          this._lastTime = 0;
-          if (!this._rafId) this._loop();
-        }
+        this._checkResume();
       }
     }, { threshold: 0.01 });
     io.observe(this.canvas);
     // 页面切到后台也暂停
     document.addEventListener("visibilitychange", () => {
-      this._visible = !document.hidden && this._visible;
-      if (!this._visible && this._rafId) {
+      this._pageVisible = !document.hidden;
+      if (!this._pageVisible && this._rafId) {
         cancelAnimationFrame(this._rafId);
         this._rafId = 0;
-      } else if (this._visible && !this._rafId) {
-        this._lastTime = 0;
-        this._loop();
+      } else {
+        this._checkResume();
       }
     });
+  }
+
+  _checkResume() {
+    if (this._shouldRender() && !this._rafId) {
+      this._lastTime = 0;  // 重置时间基准, 避免 dt 跳跃
+      this._loop();
+    }
   }
 
   _resize() {
@@ -807,7 +812,7 @@ class EcgWaveform {
   }
 
   _loop(ts) {
-    if (!this._visible) { this._rafId = 0; return; }
+    if (!this._shouldRender()) { this._rafId = 0; return; }
     this._draw(ts);
     this._rafId = requestAnimationFrame((t) => this._loop(t));
   }
@@ -2264,7 +2269,7 @@ function liveApplySettings() {
   }
 }
 
-// ─── Mini ECG Logo Animation (22×22 canvas) ───
+// ─── Logo: 电波信号扩散动画 (22×22 canvas) ───
 (function initLogoEcg() {
   const canvas = document.getElementById("logo-ecg");
   if (!canvas) return;
@@ -2274,74 +2279,63 @@ function liveApplySettings() {
   canvas.width = S * dpr;
   canvas.height = S * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
 
-  const mid = S * 0.5;
+  const cx = S * 0.5;
+  const cy = S * 0.5;
   const brand = () => getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim() || "#1d9bf0";
 
-  // 心跳波形: x∈[0,1] 映射到 y 偏移 (正值=向上)
-  // 简洁的 QRS 脉冲 + 轻微 T 波
-  function beatY(t) {
-    if (t < 0.35) return 0;
-    if (t < 0.40) return -((t - 0.35) / 0.05) * 0.15;       // Q 微下
-    if (t < 0.44) return -0.15 + ((t - 0.40) / 0.04) * 0.95; // R 尖峰上
-    if (t < 0.48) return 0.80 - ((t - 0.44) / 0.04) * 1.05;  // S 下
-    if (t < 0.55) return -0.25 + ((t - 0.48) / 0.07) * 0.25; // 回基线
-    if (t < 0.70) return Math.sin((t - 0.55) / 0.15 * Math.PI) * 0.18; // T 波
-    return 0;
-  }
-
-  const cycle = 2200;  // 一次心跳周期 ms
-  const amp = S * 0.35;
-  let startT = performance.now();
+  const numRings = 3;
+  const cycle = 2000;       // ms per ring
+  const minR = 2.5;
+  const maxR = 9.5;
 
   function draw() {
     const now = performance.now();
-    const elapsed = now - startT;
-    const phase = (elapsed % cycle) / cycle;
-
     ctx.clearRect(0, 0, S, S);
-
-    // 绘制完整心跳波形 (静态位置, 不滚动)
-    const pts = [];
-    const segments = 44;
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      pts.push({ x: 2 + t * (S - 4), y: mid - beatY(t) * amp });
-    }
-
     const c = brand();
 
-    // 淡色底线
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = c;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
+    // 3 个扩散波纹环, 错开 1/3 周期
+    for (let i = 0; i < numRings; i++) {
+      const t = ((now + i * (cycle / numRings)) % cycle) / cycle;
+      // ease-out: 环扩散速度先快后慢
+      const ease = 1 - Math.pow(1 - t, 2);
+      const r = minR + (maxR - minR) * ease;
+      // alpha: 开始亮, 扩散到边缘时淡出
+      const alpha = (1 - t) * 0.7;
+      if (alpha <= 0.01) continue;
 
-    // 亮色波形: 从左到右逐步绘制, 进度由 phase 决定
-    const drawLen = Math.floor(pts.length * phase);
-    if (drawLen > 1) {
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha;
       ctx.strokeStyle = c;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 - t * 0.8;  // 环越扩越细
       ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < drawLen; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.stroke();
-
-      // 脉冲点: 跟随绘制末端
-      if (drawLen < pts.length) {
-        const p = pts[drawLen - 1];
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
+
+    // 中心信号源: 带呼吸脉冲的亮点
+    const pulseT = (now % cycle) / cycle;
+    const pulseScale = 1 + Math.sin(pulseT * Math.PI * 2) * 0.15;
+    const coreR = 2.2 * pulseScale;
+
+    // 外层柔光
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR + 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 实心核心
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 高光
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(cx - 0.5, cy - 0.5, coreR * 0.4, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.globalAlpha = 1;
     requestAnimationFrame(draw);
