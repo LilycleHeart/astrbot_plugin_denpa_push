@@ -610,8 +610,8 @@ class EcgWaveform {
     if (this.complexityOverride !== null) {
       this.intensity = Math.min(10, Math.max(0, this.complexityOverride));
     } else {
-      // 推文40时到达上限（intensity 10）
-      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 4));
+      // 推文20时到达上限（intensity 10）
+      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 2));
     }
     const ampMap = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
     const noiseMap = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
@@ -750,16 +750,24 @@ class EcgWaveform {
     const amp = h * 0.32 * this.ampScale;
     const brand = this._getBrand();
 
-    // Peak-aware sampling: grid + forced samples at every component's peak center
-    // This eliminates aliasing on narrow QRS spikes (0.8-1.8px wide) that grid
-    // sampling alone can skip entirely when both neighbors land on baseline.
-    const sampleXs = [];
+    // ── Wave-space sampling (jitter fix) ──
+    // Sample at fixed wave-space (texture) positions, NOT fixed screen positions.
+    //
+    // Old approach (screen-space): sample at screen x=0,2,4… → wave-space
+    //   positions = x+offset drift each frame as offset changes → sharp peaks
+    //   are captured some frames, missed others → flicker/shimmer.
+    //
+    // New approach (wave-space): sample at fixed wave-space integers
+    //   (e.g. 100,102,104…) → same wave values every frame → screen positions
+    //   shift smoothly by sub-pixel amounts → canvas anti-aliasing produces
+    //   stable, smooth scrolling with zero jitter.
     const step = 2;
-    for (let x = 0; x <= w; x += step) sampleXs.push(x);
-
-    // Collect peak-center positions for all visible beats
-    const txStart = this.offset;
+    const txStart = Math.floor(this.offset / step) * step;
     const txEnd = this.offset + w;
+    const sampleTxs = [];
+    for (let tx = txStart; tx <= txEnd + step; tx += step) sampleTxs.push(tx);
+
+    // Add peak-center positions (already in wave-space) for narrow QRS spikes
     this._ensureBeats(txEnd + 100);
     for (const beat of this.beats) {
       if (beat.startX + beat.length < txStart) continue;
@@ -767,25 +775,25 @@ class EcgWaveform {
       if (!beat.components || beat.type === "fib" || beat.type === "flatline" || beat.type === "pause") continue;
       for (const comp of beat.components) {
         const peakTx = beat.startX + comp.pos * beat.length;
-        const peakSx = peakTx - this.offset;
-        if (peakSx >= 0 && peakSx <= w) {
-          sampleXs.push(peakSx);
-          // Also sample slightly before/after the peak to capture its shoulders
-          sampleXs.push(peakSx - 1);
-          sampleXs.push(peakSx + 1);
+        if (peakTx >= txStart - step && peakTx <= txEnd + step) {
+          sampleTxs.push(peakTx);
+          sampleTxs.push(peakTx - 1);
+          sampleTxs.push(peakTx + 1);
         }
       }
     }
 
-    // Sort and deduplicate, then sample
-    sampleXs.sort((a, b) => a - b);
+    // Sort & deduplicate in wave-space, map to screen, evaluate
+    sampleTxs.sort((a, b) => a - b);
     const pts = [];
-    let lastX = -Infinity;
-    for (const x of sampleXs) {
-      if (x < 0 || x > w) continue;
-      if (x - lastX < 0.3) continue;
-      lastX = x;
-      pts.push({ x, y: mid - this._waveY(x) * amp });
+    let lastTx = -Infinity;
+    for (const tx of sampleTxs) {
+      if (tx - lastTx < 0.3) continue;
+      lastTx = tx;
+      const sx = tx - this.offset;          // screen position (may be fractional)
+      if (sx < -1 || sx > w + 1) continue;
+      // _waveY(sx) internally computes totalX = sx + offset = tx
+      pts.push({ x: sx, y: mid - this._waveY(sx) * amp });
     }
 
     // Fill under curve
