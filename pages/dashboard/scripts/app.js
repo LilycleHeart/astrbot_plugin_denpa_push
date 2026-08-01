@@ -527,10 +527,27 @@ function _genFlutter(seed,intensity){
   return{length:280,baseline:0,components:C,type:"flutter"};
 }
 
-// Rhythm engine — v2: expanded pattern pools + shorter cycles at high intensity + early-switch
+// Rhythm engine — v3: 15s 切换 + 顺序遍历(不重复)
 class _RhythmEngine{
-  constructor(intensity){this.intensity=intensity;this.pattern=null;this.patternLen=0;this.patternIdx=0;this._pickPattern();}
-  _pickPattern(){const i=this.intensity;let p;
+  constructor(intensity){
+    this.intensity=intensity;
+    this.pattern=null;
+    this.patternLen=0;
+    this.patternIdx=0;
+    this._pool=[];
+    this._poolIdx=0;
+    this._poolKey="";
+    this._pickPattern();
+  }
+  _shuffle(arr){
+    for(let i=arr.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      const t=arr[i];arr[i]=arr[j];arr[j]=t;
+    }
+    return arr;
+  }
+  _pickPattern(){
+    const i=this.intensity;let p;
     if(i===0)p=["flatline"];
     else if(i<=1)p=["normal","normal","normal","occasional_pac"];
     else if(i<=2)p=["normal","occasional_pac","occasional_pvc"];
@@ -542,19 +559,29 @@ class _RhythmEngine{
     else if(i<=8)p=["salvo","multifocal","polymorphic_run","bigeminy","couplets","torsades_burst","vfib_segment"];
     else if(i<=9)p=["polymorphic_run","salvo","multifocal","torsades_burst","vfib_segment","flutter_rhythm","couplets","chaotic_mix"];
     else p=["polymorphic_run","salvo","vfib_segment","flutter_rhythm","torsades_burst","multifocal","chaotic_mix","couplets","bigeminy","chaotic_mix"];
-    // 高强度时缩短 pattern 长度, 加快节奏切换, 避免长时间同一波形
-    const baseLen = i>=8?6:i>=5?10:15;
-    const varLen  = i>=8?12:i>=5?18:30;
-    this.pattern=p[Math.floor(Math.random()*p.length)];
+    // pattern 长度: 高强度 ~5 拍 ≈ 15s (72px/s × 15s ÷ ~217px/beat)
+    const baseLen = i>=8?4:i>=5?8:12;
+    const varLen  = i>=8?3:i>=5?6:8;
     this.patternLen=baseLen+Math.floor(Math.random()*varLen);
-    this.patternIdx=0;}
+    this.patternIdx=0;
+    // 顺序遍历 pattern 池, 走完再 reshuffle, 避免重复选取
+    const key=p.join(",");
+    if(this._poolKey!==key){
+      this._poolKey=key;
+      this._pool=this._shuffle([...p]);
+      this._poolIdx=0;
+    }
+    if(this._poolIdx>=this._pool.length){
+      this._pool=this._shuffle([...p]);
+      this._poolIdx=0;
+    }
+    this.pattern=this._pool[this._poolIdx++];
+  }
   _rPVC(){const t=["pvc_wide","pvc_notched","pvc_tall","pvc_dwarf"];const w=[0.35,0.30,0.20,0.15];let r=Math.random();
     for(let i=0;i<t.length;i++){r-=w[i];if(r<=0)return t[i];}return t[0];}
   nextBeatType(){
     if(this.patternIdx>=this.patternLen)this._pickPattern();
     this.patternIdx++;
-    // 高强度时小概率提前切换 pattern, 增加视觉变化感
-    if(this.intensity>=5&&Math.random()<0.02+this.intensity*0.004){this._pickPattern();}
     const p=this.pattern;const r=Math.random();
     switch(p){
       case"flatline":return"flatline";
@@ -618,8 +645,8 @@ class EcgWaveform {
     if (this.speedOverride !== null) {
       this.speed = this.speedOverride;
     } else {
-      // 自动：0推文=0.2，50推文=1.2，线性映射（基于今日推送数）
-      this.speed = 0.2 + (Math.min(this.pushCount, 50) / 50) * 1.0;
+      // 自动：0推文=0.2，20推文=1.2，线性映射（基于今日推送数）
+      this.speed = 0.2 + (Math.min(this.pushCount, 20) / 20) * 1.0;
     }
   }
 
@@ -631,8 +658,8 @@ class EcgWaveform {
     if (this.complexityOverride !== null) {
       this.intensity = Math.min(10, Math.max(0, this.complexityOverride));
     } else {
-      // 今日推送 50 条时到达 intensity 10（基于日均而非历史累计）
-      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 5));
+      // 今日推送 20 条时到达 intensity 10（基于日均而非历史累计）
+      this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 2));
     }
     const ampMap = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
     const noiseMap = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
