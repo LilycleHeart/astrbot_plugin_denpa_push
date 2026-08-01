@@ -1522,6 +1522,12 @@ function _fullRenderHistory(tlCt, items, emptyMsg) {
   const hasExistingContent = tlCt.children.length > 0;
 
   if (hasExistingContent) {
+    // Reset hover/parallax — cards are about to be destroyed, mouseleave won't fire
+    _tlHoveringCard = null;
+    _tlParallaxCard = null;
+    // Hide rail immediately during transition
+    const rail = document.getElementById("tl-rail");
+    if (rail) rail.classList.remove("visible");
     // Tab switch: fade out old → swap → fade in new
     tlCt.classList.add("tl-switching");
     setTimeout(() => {
@@ -1824,6 +1830,9 @@ async function init() {
       const mode = tab.dataset.tlmode;
       if (state.timeline.mode === mode) return;
       state.timeline.mode = mode;
+      // Reset hover/parallax state — old cards will be destroyed, so mouseleave won't fire
+      _tlHoveringCard = null;
+      _tlParallaxCard = null;
       // Update active states
       subTabsWrap.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
