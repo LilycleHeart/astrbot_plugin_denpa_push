@@ -141,8 +141,11 @@
                 </select>
               </div>
               <div id="subs-session-list"></div>
-              <div class="flex gap-s mt-m">
+              <div class="flex gap-s mt-m" style="align-items:center;flex-wrap:wrap">
                 <input class="input" id="add-username" placeholder="@username" style="max-width:220px" spellcheck="false" />
+                <select class="select" id="add-session-select" style="max-width:200px">
+                  <option value="">选择会话…</option>
+                </select>
                 <button class="btn btn-primary" id="btn-add-sub">
                   <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                   追踪

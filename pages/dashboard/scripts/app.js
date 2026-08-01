@@ -571,7 +571,7 @@ function renderStatus(data) {
   if (!data) return;
   const badge = document.getElementById("monitor-badge");
   const running = data.monitor_running;
-  badge.className = `badge ${running ? "badge-success" : "badge-neutral"}`;
+  badge.className = `badge ${running ? "badge-active" : "badge-neutral"}`;
   badge.textContent = running ? "● 监控中" : "○ 离线";
 
   document.getElementById("stat-loop").textContent = running ? "运行中" : "已停止";
@@ -610,6 +610,20 @@ function renderSubs(data) {
       sessionSelect.appendChild(opt);
     });
     if (sessions.includes(curVal) || curVal === "__all__") sessionSelect.value = curVal;
+  }
+
+  // Update add-subscription session selector
+  const addSessionSelect = document.getElementById("add-session-select");
+  if (addSessionSelect) {
+    const curVal = addSessionSelect.value;
+    addSessionSelect.innerHTML = '<option value="">选择会话…</option>';
+    sessions.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s.length > 28 ? s.slice(0, 28) + "…" : s;
+      addSessionSelect.appendChild(opt);
+    });
+    if (sessions.includes(curVal)) addSessionSelect.value = curVal;
   }
 
   if (sessions.length === 0) {
@@ -896,12 +910,7 @@ function renderTimelineTabs() {
   let html = `<button class="sub-tab ${mode === "overview" ? "active" : ""}" data-tlmode="overview"><span class="dot"></span>总览</button>`;
 
   for (const n of sortedNames) {
-    const info = Object.values(state.subscriptions || {}).find(u => u[n])?.[n] || {};
-    const av = info.avatar_url || "";
-    const letter = (n.charAt(0) || "?").toUpperCase();
-    html += `<button class="sub-tab ${mode === n ? "active" : ""}" data-tlmode="${escapeHtml(n)}">
-      <span class="sub-tab-av" style="background:var(--color-brand)"><span>${escapeHtml(letter)}</span>${av ? `<img src="${escapeHtml(av)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" onload="this.previousElementSibling.style.display='none'"/>` : ""}</span>@${escapeHtml(n)}
-    </button>`;
+    html += `<button class="sub-tab ${mode === n ? "active" : ""}" data-tlmode="${escapeHtml(n)}"><span class="dot"></span>@${escapeHtml(n)}</button>`;
   }
 
   html += `<button class="sub-tab ${mode === "manual" ? "active" : ""}" data-tlmode="manual"><span class="dot"></span>手动推送</button>`;
@@ -1056,12 +1065,17 @@ async function init() {
     const input = document.getElementById("add-username");
     const name = input.value.trim().replace(/^@/, "");
     if (!name) return;
-    const sessionSelect = document.getElementById("session-select");
-    const session = sessionSelect && sessionSelect.value !== "__all__" ? sessionSelect.value : "";
+    const addSessionSelect = document.getElementById("add-session-select");
+    const session = addSessionSelect ? addSessionSelect.value : "";
+    if (!session) {
+      toast("请先选择目标会话", "warning");
+      return;
+    }
     try {
       await bridge.apiPost("dashboard/subscribe", { username: name, session });
       toast(`已开始追踪 @${name}`, "success");
       input.value = "";
+      addSessionSelect.value = "";
       refresh();
     } catch (e) {
       toast(e?.message || "添加失败", "error");
