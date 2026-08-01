@@ -230,87 +230,99 @@ body {
 }
 .sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
 
-/* ═══ ECG Logo — 动态扫描脉冲 ═══ */
-.ecg-logo-svg { overflow: visible; }
+/* ═══ ECG Logo — 实时绘制式心跳脉冲 ═══ */
+.ecg-logo-svg {
+  overflow: visible;
+}
 
-/* 背景波形 — 静态暗影，勾勒完整 PQRST 轮廓 */
-.ecg-bg-wave {
+/* 基线暗影 — 监护仪屏幕底色, 常驻波形轮廓 */
+.ecg-ghost {
   fill: none;
   stroke: var(--color-brand-hover);
   stroke-width: 1.1;
-  opacity: 0.35;
+  opacity: 0.22;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* 辉光拖尾 — 30-unit 尾迹，跟随光点，与光点同速 */
-.ecg-trail {
+/* 绘制前沿 — 波形从左到右实时画出, 保持后淡出 (路径 100 单位) */
+.ecg-draw {
   fill: none;
   stroke: var(--color-brand);
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 30 70;
-  opacity: 0.65;
-  filter: drop-shadow(0 0 1.5px var(--color-brand));
-  animation: ecg-trail-scan 3s linear infinite;
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 4px var(--color-brand));
+  animation: ecg-draw-cycle 3.4s linear infinite;
 }
 
-/* 脉冲高光 — 短段高亮，脉冲式扫过 */
-.ecg-pulse {
-  fill: none;
-  stroke: var(--color-brand-hover);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 8 92;
-  opacity: 1;
-  filter: drop-shadow(0 0 2px var(--color-brand-hover)) drop-shadow(0 0 5px var(--color-brand));
-  animation: ecg-pulse-scan 3s linear infinite;
-}
-
-/* 前端亮点 — 纯白高光，跟随脉冲 */
-.ecg-dot {
+/* 笔尖亮点 — 白色光点, 始终位于绘制前沿 */
+.ecg-tip {
   fill: none;
   stroke: #ffffff;
-  stroke-width: 2.5;
+  stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 0.5 99.5;
-  opacity: 1;
+  stroke-dasharray: 1.5 98.5;
+  stroke-dashoffset: 0;
+  opacity: 0;
   filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
-  animation: ecg-pulse-scan 3s linear infinite;
+  animation: ecg-tip-cycle 3.4s linear infinite;
 }
 
-/* 拖尾 — 偏移 30 单位在光点后方，与光点同速扫过 */
-@keyframes ecg-trail-scan {
-  0%   { stroke-dashoffset: -30; opacity: 0; }
-  65%  { stroke-dashoffset: -30; opacity: 0; }
-  67%  { stroke-dashoffset: -26; opacity: 0.65; }
-  80%  { stroke-dashoffset: 70;  opacity: 0.65; }
-  82%  { stroke-dashoffset: 70;  opacity: 0; }
-  100% { stroke-dashoffset: 70;  opacity: 0; }
+/* 节拍闪光 — 笔尖掠过 R 波尖峰时的心跳双闪 */
+.ecg-beat {
+  fill: #ffffff;
+  opacity: 0;
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 5px var(--color-brand));
+  animation: ecg-beat-cycle 3.4s linear infinite;
 }
 
-/* 脉冲 + 亮点 — 长时间停顿，快速扫过，扫完后隐藏 */
-@keyframes ecg-pulse-scan {
-  0%   { stroke-dashoffset: 100; opacity: 0; }
-  65%  { stroke-dashoffset: 100; opacity: 0; }
-  67%  { stroke-dashoffset: 96;  opacity: 1; }
-  80%  { stroke-dashoffset: 0;   opacity: 1; }
-  82%  { stroke-dashoffset: 0;   opacity: 0; }
-  100% { stroke-dashoffset: 0;   opacity: 0; }
+/* 绘制主循环: 停顿 → 画出 → 保持 → 淡出 */
+@keyframes ecg-draw-cycle {
+  0%, 22.9%  { stroke-dashoffset: 100; opacity: 0; }
+  23%        { stroke-dashoffset: 100; opacity: 1; }
+  50%        { stroke-dashoffset: 0;   opacity: 1; }
+  77%        { stroke-dashoffset: 0;   opacity: 1; }
+  100%       { stroke-dashoffset: 0;   opacity: 0; }
+}
+
+/* 笔尖与绘制前沿同步, 画完后立刻熄灭 */
+@keyframes ecg-tip-cycle {
+  0%, 22.9%  { stroke-dashoffset: 0; opacity: 0; }
+  23%        { stroke-dashoffset: 0; opacity: 1; }
+  50%        { stroke-dashoffset: 100; opacity: 1; }
+  50.5%      { stroke-dashoffset: 100; opacity: 0; }
+  100%       { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* R 波尖峰心跳闪光 — 双闪节奏 */
+@keyframes ecg-beat-cycle {
+  0%    { opacity: 0; }
+  27%   { opacity: 0; }
+  27.6% { opacity: 1; }
+  29%   { opacity: 0.3; }
+  30%   { opacity: 1; }
+  31%   { opacity: 0; }
+  100%  { opacity: 0; }
 }
 
 /* Hover 加速由 JS 控制 animation-duration */
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-trail { animation: none; }
-  .ecg-pulse,
-  .ecg-dot {
+  .ecg-draw {
     animation: none;
+    opacity: 0.9;
+    stroke-dashoffset: 0;
   }
-  .ecg-bg-wave { opacity: 0.3; }
+  .ecg-tip,
+  .ecg-beat {
+    display: none;
+  }
+  .ecg-ghost { opacity: 0.25; }
 }
 
 .sidebar-title {

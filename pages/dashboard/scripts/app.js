@@ -2269,13 +2269,13 @@ function liveApplySettings() {
   }
 }
 
-// ─── ECG Logo: hover 加速扫描脉冲 ───
+// ─── ECG Logo: hover 加速绘制脉冲 ───
 (function initEcgLogoHover() {
   const logo = document.querySelector(".sidebar-logo");
   if (!logo) return;
-  const animated = logo.querySelectorAll(".ecg-trail");
-  const pulsed = logo.querySelectorAll(".ecg-pulse, .ecg-dot");
-  const normalDur = "3s";
+  const animated = logo.querySelectorAll(".ecg-draw");
+  const pulsed = logo.querySelectorAll(".ecg-tip, .ecg-beat");
+  const normalDur = "3.4s";
   const fastDur = "1.2s";
   logo.addEventListener("mouseenter", () => {
     animated.forEach(el => el.style.animationDuration = fastDur);
