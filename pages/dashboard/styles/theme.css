@@ -544,7 +544,7 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* 三层背景: 染色(scroll) / 壁纸(fixed+cover 与视口对齐, 滚动不出戏) / 噪点 */
+  /* 三层背景: 染色(scroll) / 壁纸(fixed+cover 映射视口, 真实时采样) / 噪点 */
   background-attachment: scroll, fixed, scroll;
   background-size: auto, cover, auto;
   background-position: 0 0, center, 0 0;

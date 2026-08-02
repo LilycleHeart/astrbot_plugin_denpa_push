@@ -232,18 +232,17 @@ function applyPalette(sourceHex, isDark) {
   window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
-// Mica 背景: 区块采样染色层 + 实时壁纸层 ——
-// 1) 染色层: 壁纸网格采样列色(低饱和混合)生成多 stop 渐变(区块色调); 无采样时品牌两色
-// 2) 壁纸层: 实时壁纸图(background-attachment: fixed 与视口对齐, 滚动不出戏)
-// 3) 噪点; 无壁纸时壁纸层为透明占位
+// Mica 背景: 真实时方案 ——
+// 1) 壁纸层: 壁纸图 background-attachment: fixed + cover 直接映射视口,
+//    滚动时面板显示壁纸对应区域(真·实时采样, 非固定色带)
+// 2) 染色层: 区块采样列色(低饱和混合)半透明叠加, 提供主题化区块色调
+// 3) 噪点; 无壁纸时壁纸层透明占位, 染色层不透明保底
 function refreshMicaBg() {
   const root = document.documentElement;
   const isDark = currentIsDark();
   const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-bg-1").trim()
     || (isDark ? "#1e2530" : "#f0f2f5");
   const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
-
-  // 染色层: 区块采样多 stop(半透明, 壁纸透出) / 无采样: 品牌两色不透明(无壁纸时可见)
   let tint;
   if (state._micaStops && state._micaStops.length >= 2) {
     const alpha = wall ? 0.45 : 1;
@@ -376,7 +375,7 @@ function applyUiConfig() {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
   }
-  // Mica: 实时壁纸层 + 区块采样(与当前背景模式无关, 配置了壁纸即生效)
+  // Mica 真实时: 壁纸层变量 + 区块采样(与当前背景模式无关, 配置了壁纸即生效)
   if (ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     root.style.setProperty("--mica-wallpaper", `url('${bgSrc}')`);
