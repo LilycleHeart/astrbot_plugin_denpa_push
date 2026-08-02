@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>鐢垫尝鎺ㄩ€?鎺у埗鍙?/title>
+    <title>电波推送 控制台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -17,16 +17,16 @@
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
     <div class="app-shell" id="app">
 
-      <!-- 鈺愨晲鈺?Sidebar 鈺愨晲鈺?-->
+      <!-- ═══ Sidebar ═══ -->
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-logo" aria-hidden="true">
             <svg class="ecg-logo-svg" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
-              <!-- ECG 鏆楃嚎 -->
+              <!-- ECG 暗线 -->
               <polyline class="ecg-base" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
-              <!-- 闈掕壊闀垮熬 -->
+              <!-- 青色长尾 -->
               <polyline class="ecg-tail" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
-              <!-- 鐧借壊浜偣 -->
+              <!-- 白色亮点 -->
               <polyline class="ecg-head" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
             </svg>
           </span>
@@ -34,99 +34,99 @@
         </div>
 
         <nav class="tabs" role="tablist">
-          <button class="tab active" data-tab="overview" title="鐘舵€佹€昏">
+          <button class="tab active" data-tab="overview" title="状态总览">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-            <span class="tab-label">鐘舵€佹€昏</span>
+            <span class="tab-label">状态总览</span>
           </button>
-          <button class="tab" data-tab="timeline" title="鐩墠杩借釜">
+          <button class="tab" data-tab="timeline" title="目前追踪">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-            <span class="tab-label">鐩墠杩借釜</span>
+            <span class="tab-label">目前追踪</span>
           </button>
           <div class="sub-tabs" id="timeline-sub-tabs"></div>
-          <button class="tab" data-tab="subs" title="绠＄悊璁㈤槄">
+          <button class="tab" data-tab="subs" title="管理订阅">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            <span class="tab-label">绠＄悊璁㈤槄</span>
+            <span class="tab-label">管理订阅</span>
           </button>
-          <button class="tab" data-tab="logs" title="鎺ㄩ€佹棩蹇?>
+          <button class="tab" data-tab="logs" title="推送日志">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-            <span class="tab-label">鎺ㄩ€佹棩蹇?/span>
+            <span class="tab-label">推送日志</span>
           </button>
-          <button class="tab" data-tab="config" title="閰嶇疆">
+          <button class="tab" data-tab="config" title="配置">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-            <span class="tab-label">閰嶇疆</span>
+            <span class="tab-label">配置</span>
           </button>
-          <button class="tab" data-tab="settings" title="鐣岄潰璁剧疆">
+          <button class="tab" data-tab="settings" title="界面设置">
             <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
-            <span class="tab-label">鐣岄潰璁剧疆</span>
+            <span class="tab-label">界面设置</span>
           </button>
         </nav>
 
-        <button class="sidebar-toggle" id="sidebar-toggle" title="鏀惰捣 / 灞曞紑渚ц竟鏍?>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="收起 / 展开侧边栏">
           <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.41 16.59L13.82 12l4.59-4.59L17 6l-6 6 6 6zM6 6h2v12H6z"/></svg>
-          <span class="tab-label">鏀惰捣渚ф爮</span>
+          <span class="tab-label">收起侧栏</span>
         </button>
       </aside>
 
-      <!-- 鈺愨晲鈺?涓诲唴瀹瑰垪 鈺愨晲鈺?-->
+      <!-- ═══ 主内容列 ═══ -->
       <div class="main-area">
 
-        <!-- Hero: ECG 蹇冪數鍥?-->
+        <!-- Hero: ECG 心电图 -->
         <header class="hero">
           <div class="hero-content">
-            <h1>鐢垫尝鎺ㄩ€?<span class="hero-en">DenpaPush</span></h1>
-            <p class="subtitle">Twitter/X 鐩戞帶 路 AI 缈昏瘧 路 MD3 鍔ㄦ€佸崱鐗?路 缇よ亰鎺ㄩ€?/p>
+            <h1>电波推送 <span class="hero-en">DenpaPush</span></h1>
+            <p class="subtitle">Twitter/X 监控 · AI 翻译 · MD3 动态卡片 · 群聊推送</p>
           </div>
           <canvas id="ecg-canvas" class="hero-wave"></canvas>
           <div class="hero-actions">
-            <span id="monitor-badge" class="badge badge-neutral">妫€娴嬩腑</span>
-            <button class="btn btn-subtle btn-sm" id="btn-theme" title="鍒囨崲涓婚">
+            <span id="monitor-badge" class="badge badge-neutral">检测中</span>
+            <button class="btn btn-subtle btn-sm" id="btn-theme" title="切换主题">
               <svg id="icon-theme" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px">
                 <path id="icon-theme-path" d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
-              </svg><span id="btn-theme-label">浜壊涓婚</span>
+              </svg><span id="btn-theme-label">亮色主题</span>
             </button>
-            <button class="btn btn-subtle btn-sm" id="btn-refresh-all">鍒锋柊</button>
+            <button class="btn btn-subtle btn-sm" id="btn-refresh-all">刷新</button>
           </div>
         </header>
 
         <!-- Tab Panels -->
         <main class="tab-panels">
 
-          <!-- 鈹€鈹€ 鐘舵€佹€昏 鈹€鈹€ -->
+          <!-- ── 状态总览 ── -->
           <section class="tab-content active" id="tab-overview">
             <div class="grid grid-4" id="overview-stats">
               <div class="stat-card">
-                <span class="stat-label">鐩戞帶寰幆</span>
-                <span class="stat-value-sm" id="stat-loop">鈥?/span>
+                <span class="stat-label">监控循环</span>
+                <span class="stat-value-sm" id="stat-loop">—</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">浠婃棩鎺ㄩ€?/span>
+                <span class="stat-label">今日推送</span>
                 <span class="stat-value" id="stat-pushes">0</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">杩借釜璐﹀彿</span>
+                <span class="stat-label">追踪账号</span>
                 <span class="stat-value" id="stat-subs">0</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">杞闂撮殧</span>
-                <span class="stat-value-sm" id="stat-interval">鈥?/span>
+                <span class="stat-label">轮询间隔</span>
+                <span class="stat-value-sm" id="stat-interval">—</span>
               </div>
             </div>
 
             <div class="grid grid-4 mt-m">
               <div class="stat-card">
-                <span class="stat-label">Twitter 璁よ瘉</span>
-                <span class="stat-value-sm" id="stat-auth">鈥?/span>
+                <span class="stat-label">Twitter 认证</span>
+                <span class="stat-value-sm" id="stat-auth">—</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">娴忚鍣ㄥ紩鎿?/span>
-                <span class="stat-value-sm" id="stat-pw">鈥?/span>
+                <span class="stat-label">浏览器引擎</span>
+                <span class="stat-value-sm" id="stat-pw">—</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">缈昏瘧璇█</span>
-                <span class="stat-value-sm" id="stat-lang">鈥?/span>
+                <span class="stat-label">翻译语言</span>
+                <span class="stat-value-sm" id="stat-lang">—</span>
               </div>
               <div class="stat-card">
-                <span class="stat-label">浼氳瘽鏁?/span>
+                <span class="stat-label">会话数</span>
                 <span class="stat-value" id="stat-sessions">0</span>
               </div>
             </div>
@@ -134,281 +134,281 @@
             <div class="card mt-m">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">Token 娑堣€?/h2>
-                  <p class="card-subtitle">AI 缈昏瘧 API 璋冪敤缁熻锛堟湰娆¤繍琛屾湡闂寸疮璁★級</p>
+                  <h2 class="card-title">Token 消耗</h2>
+                  <p class="card-subtitle">AI 翻译 API 调用统计（本次运行期间累计）</p>
                 </div>
               </div>
               <div class="grid grid-4">
                 <div class="stat-card">
-                  <span class="stat-label">杈撳叆 Tokens</span>
+                  <span class="stat-label">输入 Tokens</span>
                   <span class="stat-value" id="stat-token-prompt">0</span>
                 </div>
                 <div class="stat-card">
-                  <span class="stat-label">杈撳嚭 Tokens</span>
+                  <span class="stat-label">输出 Tokens</span>
                   <span class="stat-value" id="stat-token-completion">0</span>
                 </div>
                 <div class="stat-card">
-                  <span class="stat-label">鎬昏 Tokens</span>
+                  <span class="stat-label">总计 Tokens</span>
                   <span class="stat-value" id="stat-token-total">0</span>
                 </div>
                 <div class="stat-card">
-                  <span class="stat-label">API 璋冪敤娆℃暟</span>
+                  <span class="stat-label">API 调用次数</span>
                   <span class="stat-value" id="stat-token-calls">0</span>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- 鈹€鈹€ 鐩墠杩借釜锛堜俊鍙锋祦鏃堕棿绾匡級 鈹€鈹€ -->
+          <!-- ── 目前追踪（信号流时间线） ── -->
           <section class="tab-content" id="tab-timeline">
-            <!-- 渚ц竟绔栫洿鏃堕棿绾匡紙sticky锛屼笉璺熷崱鐗囨尋锛?-->
+            <!-- 侧边竖直时间线（sticky，不跟卡片挤） -->
             <div class="tl-rail" id="tl-rail" aria-hidden="true">
               <div class="tl-rail-line"></div>
               <div class="tl-rail-pill" id="tl-rail-pill">
                 <span class="tl-rail-time" id="tl-rail-time">--:--</span>
-                <span class="tl-rail-date" id="tl-rail-date">--鏈?-鏃?/span>
+                <span class="tl-rail-date" id="tl-rail-date">--月--日</span>
               </div>
             </div>
             <div class="card tl-main">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">鎺ㄩ€佹椂闂寸嚎</h2>
-                  <p class="card-subtitle">鎵€鏈夋帹閫佹搷浣滅殑婧簮璁板綍锛屾寜鏃堕棿鎺掑垪</p>
+                  <h2 class="card-title">推送时间线</h2>
+                  <p class="card-subtitle">所有推送操作的溯源记录，按时间排列</p>
                 </div>
               </div>
               <div class="tl-stream" id="tracking-history"></div>
             </div>
           </section>
 
-          <!-- 鈹€鈹€ 绠＄悊璁㈤槄 鈹€鈹€ -->
+          <!-- ── 管理订阅 ── -->
           <section class="tab-content" id="tab-subs">
             <div class="card">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">绠＄悊璁㈤槄</h2>
-                  <p class="card-subtitle">鎸変細璇濈鐞嗚拷韪处鍙蜂笌鐩戞帶寮€鍏?/p>
+                  <h2 class="card-title">管理订阅</h2>
+                  <p class="card-subtitle">按会话管理追踪账号与监控开关</p>
                 </div>
                 <select class="select" id="session-select" style="max-width:240px">
-                  <option value="__all__">鍏ㄩ儴浼氳瘽</option>
+                  <option value="__all__">全部会话</option>
                 </select>
               </div>
               <div id="subs-session-list"></div>
               <div class="flex gap-s mt-m" style="align-items:center;flex-wrap:wrap">
                 <input class="input" id="add-username" placeholder="@username" style="max-width:200px" spellcheck="false" />
-                <input class="input" id="add-session-input" placeholder="鎴栬緭鍏ヤ細璇滻D" style="max-width:180px" spellcheck="false" />
+                <input class="input" id="add-session-input" placeholder="或输入会话ID" style="max-width:180px" spellcheck="false" />
                 <select class="select" id="add-session-select" style="max-width:180px">
-                  <option value="">閫夋嫨浼氳瘽鈥?/option>
+                  <option value="">选择会话…</option>
                 </select>
                 <button class="btn btn-primary" id="btn-add-sub">
                   <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                  杩借釜
+                  追踪
                 </button>
               </div>
             </div>
           </section>
 
-          <!-- 鈹€鈹€ 鎺ㄩ€佹棩蹇?鈹€鈹€ -->
+          <!-- ── 推送日志 ── -->
           <section class="tab-content" id="tab-logs">
             <div class="card">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">淇″彿鏃ュ織</h2>
-                  <p class="card-subtitle">鎺ㄩ€併€佸紓甯镐笌杞璁板綍</p>
+                  <h2 class="card-title">信号日志</h2>
+                  <p class="card-subtitle">推送、异常与轮询记录</p>
                 </div>
               </div>
               <div class="log-list" id="log-list"></div>
             </div>
           </section>
 
-          <!-- 鈹€鈹€ 閰嶇疆 鈹€鈹€ -->
+          <!-- ── 配置 ── -->
           <section class="tab-content" id="tab-config">
             <div class="card">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">鎻掍欢閰嶇疆</h2>
-                  <p class="card-subtitle">瀵瑰簲 _conf_schema.json锛屼繚瀛樺悗绔嬪嵆鐢熸晥</p>
+                  <h2 class="card-title">插件配置</h2>
+                  <p class="card-subtitle">对应 _conf_schema.json，保存后立即生效</p>
                 </div>
               </div>
 
               <div class="grid grid-2">
                 <div class="form-row">
                   <label class="form-label">Twitter auth_token</label>
-                  <input class="input" id="cfg-twitter_auth_token" type="password" placeholder="娴忚鍣?Cookies 鈫?x.com 鈫?auth_token" spellcheck="false" />
+                  <input class="input" id="cfg-twitter_auth_token" type="password" placeholder="浏览器 Cookies → x.com → auth_token" spellcheck="false" />
                 </div>
                 <div class="form-row">
                   <label class="form-label">Twitter ct0</label>
-                  <input class="input" id="cfg-twitter_ct0" type="password" placeholder="娴忚鍣?Cookies 鈫?x.com 鈫?ct0" spellcheck="false" />
+                  <input class="input" id="cfg-twitter_ct0" type="password" placeholder="浏览器 Cookies → x.com → ct0" spellcheck="false" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">杞闂撮殧锛堝垎閽燂級</label>
+                  <label class="form-label">轮询间隔（分钟）</label>
                   <input class="input" id="cfg-poll_interval" type="number" min="1" max="120" value="5" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">浠ｇ悊鍦板潃</label>
-                  <input class="input" id="cfg-proxy" type="text" placeholder="濡?http://127.0.0.1:7890锛岀暀绌虹洿杩? spellcheck="false" />
+                  <label class="form-label">代理地址</label>
+                  <input class="input" id="cfg-proxy" type="text" placeholder="如 http://127.0.0.1:7890，留空直连" spellcheck="false" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鏂囧瓧缈昏瘧鎻愪緵鍟?ID</label>
-                  <input class="input" id="cfg-text_translate_provider" type="text" placeholder="AstrBot AI 鎻愪緵鍟?ID" spellcheck="false" />
+                  <label class="form-label">文字翻译提供商 ID</label>
+                  <input class="input" id="cfg-text_translate_provider" type="text" placeholder="AstrBot AI 提供商 ID" spellcheck="false" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鍥剧墖缈昏瘧鎻愪緵鍟?ID</label>
-                  <input class="input" id="cfg-image_translate_provider" type="text" placeholder="闇€澶氭ā鎬佽兘鍔? spellcheck="false" />
+                  <label class="form-label">图片翻译提供商 ID</label>
+                  <input class="input" id="cfg-image_translate_provider" type="text" placeholder="需多模态能力" spellcheck="false" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鍥剧墖缈昏瘧妯″紡</label>
+                  <label class="form-label">图片翻译模式</label>
                   <select class="select" id="cfg-image_translate_mode">
-                    <option value="multimodal">multimodal锛堝妯℃€佺洿鎺ョ炕璇戯級</option>
-                    <option value="text_extraction">text_extraction锛圤CR 鎻愬彇鍚庣炕璇戯級</option>
+                    <option value="multimodal">multimodal（多模态直接翻译）</option>
+                    <option value="text_extraction">text_extraction（OCR 提取后翻译）</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">缈昏瘧鐩爣璇█</label>
-                  <input class="input" id="cfg-translation_language" type="text" value="涓枃" />
+                  <label class="form-label">翻译目标语言</label>
+                  <input class="input" id="cfg-translation_language" type="text" value="中文" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鍗＄墖鍙栬壊鏉ユ簮</label>
+                  <label class="form-label">卡片取色来源</label>
                   <select class="select" id="cfg-color_source">
-                    <option value="avatar">avatar锛堝ご鍍忓彇鑹诧級</option>
-                    <option value="first_image">first_image锛堥鍥惧彇鑹诧級</option>
+                    <option value="avatar">avatar（头像取色）</option>
+                    <option value="first_image">first_image（首图取色）</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">GIF 缂栫爜鍣?/label>
+                  <label class="form-label">GIF 编码器</label>
                   <select class="select" id="cfg-gif_encoder">
-                    <option value="auto">auto锛堜紭鍏?gifski锛?/option>
-                    <option value="gifski">gifski锛堥珮璐ㄩ噺锛?/option>
-                    <option value="ffmpeg">ffmpeg锛坧alettegen锛?/option>
+                    <option value="auto">auto（优先 gifski）</option>
+                    <option value="gifski">gifski（高质量）</option>
+                    <option value="ffmpeg">ffmpeg（palettegen）</option>
                   </select>
                 </div>
               </div>
 
               <div class="form-row mt-m">
-                <label class="form-label">鏂囧瓧缈昏瘧 Prompt <span class="text-mono">鍙敤: {lang} {text} {prefix}</span></label>
-                <textarea class="textarea" id="cfg-text_translate_prompt" rows="3" placeholder="鐣欑┖浣跨敤榛樿"></textarea>
+                <label class="form-label">文字翻译 Prompt <span class="text-mono">可用: {lang} {text} {prefix}</span></label>
+                <textarea class="textarea" id="cfg-text_translate_prompt" rows="3" placeholder="留空使用默认"></textarea>
               </div>
               <div class="form-row mt-s">
-                <label class="form-label">鍥剧墖缈昏瘧 Prompt <span class="text-mono">鍙敤: {lang}</span></label>
-                <textarea class="textarea" id="cfg-image_translate_prompt" rows="3" placeholder="鐣欑┖浣跨敤榛樿"></textarea>
+                <label class="form-label">图片翻译 Prompt <span class="text-mono">可用: {lang}</span></label>
+                <textarea class="textarea" id="cfg-image_translate_prompt" rows="3" placeholder="留空使用默认"></textarea>
               </div>
 
               <div class="flex gap-s mt-m">
                 <button class="btn btn-primary" id="btn-save-config">
                   <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                  淇濆瓨閰嶇疆
+                  保存配置
                 </button>
               </div>
             </div>
           </section>
 
-          <!-- 鈹€鈹€ 鐣岄潰璁剧疆 鈹€鈹€ -->
+          <!-- ── 界面设置 ── -->
           <section class="tab-content" id="tab-settings">
             <div class="card">
               <div class="card-header">
                 <div>
-                  <h2 class="card-title">鐣岄潰璁剧疆</h2>
-                  <p class="card-subtitle">鍙栬壊銆佽儗鏅€佹潗璐ㄣ€佸瓧浣撲笌鏁堟灉</p>
+                  <h2 class="card-title">界面设置</h2>
+                  <p class="card-subtitle">取色、背景、材质、字体与效果</p>
                 </div>
               </div>
               <div class="grid grid-2">
                 <div class="form-row">
-                  <label class="form-label">鍙栬壊妯″紡</label>
+                  <label class="form-label">取色模式</label>
                   <select class="select" id="ui-color-mode">
-                    <option value="dynamic">鍔ㄦ€侊紙鑳屾櫙鍥?Material 鍙栬壊锛?/option>
-                    <option value="static">闈欐€侊紙鑷畾涔夐鑹诧級</option>
+                    <option value="dynamic">动态（背景图 Material 取色）</option>
+                    <option value="static">静态（自定义颜色）</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鑳屾櫙妯″紡</label>
+                  <label class="form-label">背景模式</label>
                   <select class="select" id="ui-bg-mode">
-                    <option value="theme">璺熼殢涓婚</option>
-                    <option value="brand_gradient">涓婚鑹叉笎鍙?/option>
-                    <option value="custom">鑷畾涔?/option>
-                    <option value="image">鑳屾櫙鍥剧墖</option>
+                    <option value="theme">跟随主题</option>
+                    <option value="brand_gradient">主题色渐变</option>
+                    <option value="custom">自定义</option>
+                    <option value="image">背景图片</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鏉愯川绫诲瀷</label>
+                  <label class="form-label">材质类型</label>
                   <select class="select" id="ui-material-type">
-                    <option value="acrylic">浜氬厠鍔涳紙Acrylic锛屽崐閫忔槑妯＄硦锛?/option>
-                    <option value="mica">浜戞瘝锛圡ica锛屼綆妯＄硦甯﹀绾歌壊璋冿級</option>
+                    <option value="acrylic">亚克力（Acrylic，半透明模糊）</option>
+                    <option value="mica">云母（Mica，低模糊带壁纸色调）</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">瀛椾綋</label>
+                  <label class="form-label">字体</label>
                   <select class="select" id="ui-font">
-                    <option value="misans">MiSans锛堥粯璁わ紝闇€鑱旂綉鍔犺浇锛?/option>
-                    <option value="builtin">鍐呯疆瀛椾綋锛堢郴缁熷瓧浣撴爤锛?/option>
+                    <option value="misans">MiSans（默认，需联网加载）</option>
+                    <option value="builtin">内置字体（系统字体栈）</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鍦嗚澶у皬锛坧x锛?<span id="ui-radius-val" class="text-mono">14px</span></label>
+                  <label class="form-label">圆角大小（px） <span id="ui-radius-val" class="text-mono">14px</span></label>
                   <input type="number" class="input" id="ui-radius" value="14" min="0" max="40" />
                 </div>
               </div>
 
-              <!-- 寮€鍏?-->
+              <!-- 开关 -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
                 <div class="form-row" style="display:flex;align-items:center;gap:8px">
                   <input type="checkbox" id="ui-acrylic-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">鍚敤鏉愯川锛堝叧闂垯杞疄搴曪級</label>
+                  <label class="form-label" style="margin:0">启用材质（关闭则转实底）</label>
                 </div>
                 <div class="form-row" style="display:flex;align-items:center;gap:8px">
                   <input type="checkbox" id="ui-glow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">鍚敤涓婚娉涘厜</label>
+                  <label class="form-label" style="margin:0">启用主题泛光</label>
                 </div>
                 <div class="form-row" style="display:flex;align-items:center;gap:8px">
                   <input type="checkbox" id="ui-shadow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">鍚敤鎶曞奖闃村奖</label>
+                  <label class="form-label" style="margin:0">启用投影阴影</label>
                 </div>
                 <div class="form-row" style="display:flex;align-items:center;gap:8px">
                   <input type="checkbox" id="ui-parallax-hover" style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">鍗＄墖瑙嗗樊锛氭偓鍋滃父椹伙紙榛樿鐐瑰嚮/闀挎寜瑙﹀彂锛?/label>
+                  <label class="form-label" style="margin:0">卡片视差：悬停常驻（默认点击/长按触发）</label>
                 </div>
               </div>
 
-              <!-- 婊戞潯 -->
+              <!-- 滑条 -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
                 <div class="form-row">
-                  <label class="form-label">鏉愯川涓嶉€忔槑搴?<span id="ui-material-val" class="text-mono">45%</span></label>
+                  <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
                   <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">妯＄硦寮哄害 <span id="ui-blur-val" class="text-mono">5px</span></label>
+                  <label class="form-label">模糊强度 <span id="ui-blur-val" class="text-mono">5px</span></label>
                   <input type="range" class="slider" id="ui-blur" min="0" max="100" value="5" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">娉涘厜寮哄害 <span id="ui-glow-val" class="text-mono">15%</span></label>
+                  <label class="form-label">泛光强度 <span id="ui-glow-val" class="text-mono">15%</span></label>
                   <input type="range" class="slider" id="ui-glow" min="0" max="100" value="15" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">闃村奖寮哄害 <span id="ui-shadow-val" class="text-mono">60%</span></label>
+                  <label class="form-label">阴影强度 <span id="ui-shadow-val" class="text-mono">60%</span></label>
                   <input type="range" class="slider" id="ui-shadow" min="0" max="100" value="60" />
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鑳屾櫙鍥炬殫鑹查伄缃?<span id="ui-scrim-val" class="text-mono">40%</span></label>
+                  <label class="form-label">背景图暗色遮罩 <span id="ui-scrim-val" class="text-mono">40%</span></label>
                   <input type="range" class="slider" id="ui-scrim" min="0" max="80" value="40" />
                 </div>
               </div>
 
-              <!-- 棰滆壊 -->
+              <!-- 颜色 -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
                 <div class="form-row">
-                  <label class="form-label">涓婚鑹?/label>
+                  <label class="form-label">主题色</label>
                   <div class="flex gap-s">
                     <input type="color" class="input" id="ui-brand-color-picker" value="#1d9bf0" style="width:60px;padding:4px" />
                     <input class="input" id="ui-brand-color" value="#1d9bf0" />
                   </div>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鑷畾涔変寒鑹茶儗鏅?/label>
+                  <label class="form-label">自定义亮色背景</label>
                   <div class="flex gap-s">
                     <input type="color" class="input" id="ui-custom-bg-picker" value="#F5F6F8" style="width:60px;padding:4px" />
                     <input class="input" id="ui-custom-bg" value="#F5F6F8" />
                   </div>
                 </div>
                 <div class="form-row">
-                  <label class="form-label">鑷畾涔夋殫鑹茶儗鏅?/label>
+                  <label class="form-label">自定义暗色背景</label>
                   <div class="flex gap-s">
                     <input type="color" class="input" id="ui-custom-bg-dark-picker" value="#0C0E13" style="width:60px;padding:4px" />
                     <input class="input" id="ui-custom-bg-dark" value="#0C0E13" />
@@ -417,22 +417,22 @@
               </div>
 
               <div class="form-row mt-m" id="bg-image-row">
-                <label class="form-label">鑳屾櫙鍥剧墖涓婁紶</label>
+                <label class="form-label">背景图片上传</label>
                 <div class="flex gap-s flex-wrap">
                   <label class="file-drop" id="bg-drop" style="flex:1;min-width:200px">
                     <input type="file" id="bg-image-file" accept=".jpg,.jpeg,.png,.webp,.gif" />
-                    <div id="bg-file-name">鐐瑰嚮鎴栨嫋鎷藉浘鐗囧埌姝ゅ锛坖pg/png/webp/gif锛屽缓璁?鈮?0MB锛?/div>
+                    <div id="bg-file-name">点击或拖拽图片到此处（jpg/png/webp/gif，建议 ≤20MB）</div>
                   </label>
-                  <button class="btn" id="btn-bg-upload">涓婁紶</button>
-                  <button class="btn btn-subtle" id="btn-bg-remove">绉婚櫎</button>
+                  <button class="btn" id="btn-bg-upload">上传</button>
+                  <button class="btn btn-subtle" id="btn-bg-remove">移除</button>
                 </div>
                 <div id="bg-preview-wrap" class="mt-s" style="display:none">
-                  <img id="bg-preview" alt="鑳屾櫙棰勮" style="max-width:100%;max-height:160px;border-radius:var(--radius-xlarge);border:1px solid var(--color-stroke-2)" />
+                  <img id="bg-preview" alt="背景预览" style="max-width:100%;max-height:160px;border-radius:var(--radius-xlarge);border:1px solid var(--color-stroke-2)" />
                 </div>
               </div>
               <div class="flex gap-s mt-m">
-                <button class="btn btn-primary" id="btn-save-ui">淇濆瓨璁剧疆</button>
-                <button class="btn btn-subtle" id="btn-reset-ui">鎭㈠榛樿</button>
+                <button class="btn btn-primary" id="btn-save-ui">保存设置</button>
+                <button class="btn btn-subtle" id="btn-reset-ui">恢复默认</button>
               </div>
             </div>
           </section>
