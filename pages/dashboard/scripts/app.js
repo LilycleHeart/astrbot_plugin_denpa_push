@@ -123,6 +123,9 @@ function derivePalette(sourceHex, isDark) {
   const bg2 = alphaComposite(primaryHex, cMid, SCRIM.mid);
   const bg3 = alphaComposite(primaryHex, cHigh, SCRIM.high);
   const bg4 = alphaComposite(primaryHex, cHighest, SCRIM.highest);
+  // Mica 色调: 壁纸/品牌主色叠在表面色上形成低饱和染色 (跟随动态取色)
+  const micaA = alphaComposite(primaryHex, cLow, isDark ? 0.12 : 0.08);
+  const micaB = alphaComposite(primaryHex, cMid, isDark ? 0.18 : 0.12);
   const pal = {
     brand: hexFromArgb(s.primary),
     onBrand: hexFromArgb(s.onPrimary),
@@ -155,8 +158,8 @@ function derivePalette(sourceHex, isDark) {
     fgTinted2: hexFromArgb(tp.tone(isDark ? 70 : 44)),
     popupBg: isDark ? sc(st.high) : sc(st.highest),
     popupFg: hexFromArgb(s.onSurface),
-    mica1: sc(isDark ? st.low : st.appBg),
-    mica2: sc(isDark ? st.appBg : st.low),
+    mica1: micaA,
+    mica2: micaB,
     errorFg: hexFromArgb(s.error),
     errorBg: hexFromArgb(s.errorContainer),
   };
@@ -210,6 +213,8 @@ function applyPalette(sourceHex, isDark) {
   set("--popup-fg", p.popupFg);
   set("--mica-tint-1", p.mica1);
   set("--mica-tint-2", p.mica2);
+  set("--mica-rgb-1", rgbStr(p.mica1));
+  set("--mica-rgb-2", rgbStr(p.mica2));
   set("--acrylic-rgb", rgbStr(p.bg2));
   set("--acrylic-rgb-low", rgbStr(p.bg1));
   set("--acrylic-rgb-high", rgbStr(p.bg4));

@@ -169,6 +169,8 @@
   --text-depth: 0 1px 1px rgba(17, 20, 28, 0.14);
   --mica-tint-1: #f8f9fa;
   --mica-tint-2: #f0f4f8;
+  --mica-rgb-1: 248, 249, 250;
+  --mica-rgb-2: 240, 244, 248;
   --mica-surface: color-mix(in srgb, var(--color-bg-1) 78%, var(--color-app-bg));
 
   /* —— 侧边栏 —— */
@@ -276,6 +278,8 @@
   --text-depth: 0 1px 2px rgba(0, 0, 0, 0.45);
   --mica-tint-1: #1a1c1e;
   --mica-tint-2: #121316;
+  --mica-rgb-1: 26, 28, 30;
+  --mica-rgb-2: 18, 19, 22;
   --mica-surface: color-mix(in srgb, var(--color-bg-1) 70%, var(--color-app-bg));
 
   color-scheme: dark;
