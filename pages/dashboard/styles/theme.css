@@ -542,13 +542,27 @@ body {
 .material-mica .hero,
 .material-mica .stat-card,
 .material-mica .tab-content.active {
+  position: relative;   /* 伪元素定位基准 */
+  isolation: isolate;   /* 自身 stacking context: 伪元素 z-index:-1 不逃逸到页面底层 */
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* 低分辨率采样图: 100% 拉伸铺满, 双线性插值平滑(Mica 柔和渐变) */
+}
+/* 采样背景放伪元素: CSS filter: blur 高质量柔和(与 feGaussianBlur 同源),
+   只糊背景不糊内容, GPU 合成不占 JS; 区块 CELL=16 + blur 8px = 可辨且柔和 */
+.material-mica .sidebar::before,
+.material-mica .hero::before,
+.material-mica .stat-card::before,
+.material-mica .tab-content.active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;   /* 跟随面板圆角 */
   background:
     var(--mica-grid, linear-gradient(180deg, var(--mica-tint-1), var(--mica-tint-2)))
-      center / 100% 100% no-repeat,
-    var(--material-noise);
+      center / cover no-repeat;
+  filter: blur(8px);
+  pointer-events: none;
 }
 
 /* 设置面板: mica 模式下隐藏无关调节项块(不透明度/模糊强度), 带展开收起动画 */
