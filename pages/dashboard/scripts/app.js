@@ -2273,8 +2273,8 @@ function liveApplySettings() {
 (function initEcgLogoHover() {
   const logo = document.querySelector(".sidebar-logo");
   if (!logo) return;
-  const animated = logo.querySelectorAll(".ecg-draw");
-  const pulsed = logo.querySelectorAll(".ecg-tip, .ecg-beat");
+  const animated = logo.querySelectorAll(".ecg-draw, .ecg-halo, .ecg-echo");
+  const pulsed = logo.querySelectorAll(".ecg-tip, .ecg-beat, .ecg-ripple");
   const normalDur = "3.4s";
   const fastDur = "1.2s";
   logo.addEventListener("mouseenter", () => {
