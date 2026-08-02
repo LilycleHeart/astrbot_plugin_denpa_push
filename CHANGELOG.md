@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.0.0 (2026-08-03)
+
+### Features
+- **Sidebar ECG Logo — three-line sweep style**: Final redesign with dark base trace + theme-colored comet tail + white leading tip with glow, drawn in native 22×22 viewBox
+- **Activity-driven logo speed**: Logo animation switches between three gears by daily push count (0 → 2.4s slow / 10 → 1.6s normal / 20 → 0.8s fast), with hover acceleration
+- **Dynamic color integration**: Logo colors now follow the plugin's Material 3 dynamic palette (wallpaper accent extraction / custom brand color), auto-adapting to light & dark themes
+- **ECG waveform generator** (`ecg-generator.js`): Gaussian pulse synthesis of physiological PQRST waveforms — PR / QRS / ST / QT intervals verified within normal ranges (75bpm), asymmetric T wave, baseline drift; parameterized SVG path & animated icon output; Node CLI + browser dual mode
+- **Hero ECG waveform**: Waveform diversity with 15s rotation, speed/intensity driven by today's push count (capped at 20), rendering performance optimization
+- **Parallax wallpaper interactions**: Click / long-press / drag-select three-state interactions, configurable parallax mode, responsive sidebar
+- **MD3 card rendering**: Layered card layout with full palette roles, per-avatar accent extraction, light/dark auto switching
+
+### Fixes
+- **Hero waveform ignores custom brand color in static color mode**: `applyPalette()` now dispatches a `palette-changed` event to invalidate the waveform's cached brand color, so static custom theme colors apply immediately
+- **Tracked tweet cards stuck in dark theme**: Card MD3 palette is now re-derived per current theme (light included) instead of reusing backend-precomputed palettes that may be dark-only
+- **Card theme switching & tab double-glass**: Fixed card theme toggle bug and duplicated glass layers inside tab content
+- **ECG Logo white tip color**: Leading tip forced to pure white (Material `on-primary` can carry a hue tint); bumped cached resource version to force refresh
+- **Resource cache invalidation**: Versioned `?v=` query strings for dashboard CSS/JS so updates always take effect
+
+### Chores
+- Dashboard asset cache versioning (`?v=` bump per release)
+- Ruff formatting & metadata sync
+
 ## v1.1.0 (2026-05-22)
 
 ### Features

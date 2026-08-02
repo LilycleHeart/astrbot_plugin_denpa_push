@@ -33,6 +33,13 @@
 - 自动提取头像主色调生成视觉主题
 - 支持深色 / 浅色模式自动切换
 
+### 🖥 Web 控制台
+- 实时状态总览：监控状态、今日推送数、Token 统计
+- 动态 ECG 波形 Hero，速度 / 强度随推送活跃度实时变化
+- 侧边栏 ECG Logo 三线扫描动画，速度档位随日均推文数自动切换（0 慢速 / 10 标准 / 20 快速）
+- Material 3 动态取色：壁纸取色 / 自定义主题色，深浅主题自适应
+- 2.5D 视差壁纸交互（点击 / 长按 / 拖选）
+
 ### 🌐 AI 翻译
 - 基于 AstrBot LLM Provider
 - 支持：
@@ -193,6 +200,9 @@ astrbot_plugin_denpa_push/
 ├── twitter_client.py
 ├── templates/
 │   └── tweet_card.html
+├── pages/
+│   └── dashboard/          # Web 控制台
+├── ecg-generator.js        # ECG 波形生成器
 ├── metadata.yaml
 ├── _conf_schema.json
 └── requirements.txt
