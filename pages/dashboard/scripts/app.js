@@ -19,6 +19,8 @@ const state = {
   subscriptions: {},
   logs: [],
   timeline: { mode: "overview", history: [] },
+  _micaStops: null,  // 壁纸区块采样列色(实时壁纸染色层)
+  _micaSampledSrc: "",  // 已采样壁纸源(缓存)
   uiConfig: {
     color_mode: "dynamic",
     brand_color: "#1d9bf0",
@@ -230,20 +232,61 @@ function applyPalette(sourceHex, isDark) {
   window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
-// Mica 背景: 实时壁纸层方案 ——
-// 面板背景直接显示壁纸图(background-attachment: fixed 与视口对齐, 滚动不出戏),
-// 叠加品牌色轻染色 + 噪点; 无壁纸时退化为不透明双色渐变(官方 Mica: opaque)
+// Mica 背景: 区块采样染色层 + 实时壁纸层 ——
+// 1) 染色层: 壁纸网格采样列色(低饱和混合)生成多 stop 渐变(区块色调); 无采样时品牌两色
+// 2) 壁纸层: 实时壁纸图(background-attachment: fixed 与视口对齐, 滚动不出戏)
+// 3) 噪点; 无壁纸时壁纸层为透明占位
 function refreshMicaBg() {
   const root = document.documentElement;
-  const r1 = root.style.getPropertyValue("--mica-rgb-1").trim() || "248, 249, 250";
-  const r2 = root.style.getPropertyValue("--mica-rgb-2").trim() || "240, 244, 248";
+  const isDark = currentIsDark();
+  const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-bg-1").trim()
+    || (isDark ? "#1e2530" : "#f0f2f5");
   const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
-  // 有壁纸: 轻染色(壁纸提供图案); 无壁纸: 不透明 hex 渐变(避免半透明深色≈透明)
-  const tint = wall
-    ? `linear-gradient(180deg, rgba(${r1}, 0.38), rgba(${r2}, 0.45))`
-    : `linear-gradient(180deg, ${root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa"}, ${root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8"})`;
+
+  // 染色层: 区块采样多 stop(半透明, 壁纸透出) / 无采样: 品牌两色不透明(无壁纸时可见)
+  let tint;
+  if (state._micaStops && state._micaStops.length >= 2) {
+    const alpha = wall ? 0.45 : 1;
+    const stops = state._micaStops
+      .map(c => alphaComposite(c, surface, 0.35))
+      .map((c, i) => `rgba(${rgbStr(c)}, ${alpha}) ${Math.round((i / (state._micaStops.length - 1)) * 100)}%`)
+      .join(", ");
+    tint = `linear-gradient(90deg, ${stops})`;
+  } else {
+    const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+    const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
+    tint = `linear-gradient(180deg, ${c1}, ${c2})`;
+  }
   const wallpaper = wall || "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
   root.style.setProperty("--mica-bg", `${tint}, ${wallpaper}, var(--material-noise)`);
+}
+
+// 壁纸区块采样: 缩小到 cols×rows, 每列平均色 → 列色数组(原始采样色, 低饱和化在 refreshMicaBg 做)
+async function sampleMicaGrid(bgSrc, cols = 5, rows = 3) {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = bgSrc;
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    const cvs = document.createElement("canvas");
+    cvs.width = cols; cvs.height = rows;
+    const c = cvs.getContext("2d");
+    c.drawImage(img, 0, 0, cols, rows);
+    const d = c.getImageData(0, 0, cols, rows).data;
+    const colHex = [];
+    for (let x = 0; x < cols; x++) {
+      let r = 0, g = 0, b = 0;
+      for (let y = 0; y < rows; y++) {
+        const i = (y * cols + x) * 4;
+        r += d[i]; g += d[i + 1]; b += d[i + 2];
+      }
+      const h = (v) => Math.round(v / rows).toString(16).padStart(2, "0");
+      colHex.push(`#${h(r)}${h(g)}${h(b)}`);
+    }
+    return colHex;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -333,13 +376,24 @@ function applyUiConfig() {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
   }
-  // Mica 实时壁纸层: 只要配置了壁纸就显示(与当前背景模式无关),
-  // 切到非 image 模式时 mica 面板仍实时呈现壁纸
+  // Mica: 实时壁纸层 + 区块采样(与当前背景模式无关, 配置了壁纸即生效)
   if (ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     root.style.setProperty("--mica-wallpaper", `url('${bgSrc}')`);
+    if (state._micaSampledSrc !== bgSrc) {
+      state._micaSampledSrc = bgSrc;
+      state._micaStops = null;
+      sampleMicaGrid(bgSrc).then(stops => {
+        if (stops && stops.length >= 2) {
+          state._micaStops = stops;
+          refreshMicaBg();
+        }
+      });
+    }
   } else {
     root.style.setProperty("--mica-wallpaper", "");
+    state._micaStops = null;
+    state._micaSampledSrc = "";
   }
   refreshMicaBg();
 
