@@ -531,17 +531,11 @@ body {
 
 /* ═══ 材质: Mica — 壁纸染色半透明面板 (Windows 11 Mica 风格) ═══
  * 面板 = 品牌/壁纸主色调双色渐变 + 噪点, 半透明且不模糊,
- * 背后壁纸/背景清晰透出; 色调由 JS 从动态取色写入 --mica-rgb-* */
+ * 背后壁纸/背景清晰透出; 完整 background 值由 JS 写入 --mica-bg */
 .material-mica {
-  --surface-bg: linear-gradient(180deg,
-      rgba(var(--mica-rgb-1), var(--material-opacity)),
-      rgba(var(--mica-rgb-2), var(--material-opacity))) var(--material-noise);
-  --surface-bg-low: linear-gradient(180deg,
-      rgba(var(--mica-rgb-1), calc(var(--material-opacity) * 0.85)),
-      rgba(var(--mica-rgb-2), calc(var(--material-opacity) * 0.95))) var(--material-noise);
-  --surface-bg-high: linear-gradient(180deg,
-      rgba(var(--mica-rgb-2), var(--material-opacity)),
-      rgba(var(--mica-rgb-1), calc(var(--material-opacity) * 0.9))) var(--material-noise);
+  --surface-bg: var(--mica-bg, var(--acrylic-bg));
+  --surface-bg-low: var(--mica-bg, var(--acrylic-bg));
+  --surface-bg-high: var(--mica-bg, var(--acrylic-bg));
   --surface-blur: none;
 }
 .material-mica .sidebar,
