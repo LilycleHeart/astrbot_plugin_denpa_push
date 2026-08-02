@@ -530,19 +530,13 @@ body {
 .acrylic-off .stat-card { background: var(--color-bg-2); }
 
 /* ═══ 材质: Mica — 不透明壁纸采样染色 (Windows 11 官方 Mica) ═══
- * 面板 = 不透明渐变(壁纸/品牌主色低 alpha 叠表面色) + 噪点,
- * 无图案透出、无模糊(官方: opaque, wallpaper sampled once, no blur);
- * 失焦时 .mica-inactive 回退中性色 */
+ * 面板 = 不透明渐变(壁纸网格采样列色低饱和化 + 噪点), 图案不透出、无模糊
+ * (官方: opaque, wallpaper sampled, no blur) */
 .material-mica {
   --surface-bg: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-low: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-high: var(--mica-bg, var(--acrylic-bg));
   --surface-blur: none;
-}
-.material-mica.mica-inactive {
-  --surface-bg: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
-  --surface-bg-low: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
-  --surface-bg-high: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
 }
 .material-mica .sidebar,
 .material-mica .hero,

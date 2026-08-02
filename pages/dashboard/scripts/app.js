@@ -19,6 +19,7 @@ const state = {
   subscriptions: {},
   logs: [],
   timeline: { mode: "overview", history: [] },
+  _micaStops: null,  // 壁纸网格采样列色(Mica 多 stop 渐变)
   uiConfig: {
     color_mode: "dynamic",
     brand_color: "#1d9bf0",
@@ -230,15 +231,56 @@ function applyPalette(sourceHex, isDark) {
   window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
-// Mica 背景(官方定义: opaque 不透明材质, 壁纸仅采样染色, 图案不透出、不模糊)
-// 两层 background: ① 不透明壁纸采样色渐变(micaA/micaB = 主色低 alpha 叠表面色,
-// 已是具体不透明色值) ② 噪点纹理; 失焦时由 mica-inactive 类回退中性色
+// Mica 背景(官方定义: opaque 不透明材质, 壁纸采样染色, 图案不透出、不模糊)
+// 有网格采样结果时: 按列平均生成多 stop 水平渐变(还原壁纸区域色调变化);
+// 无采样结果时: 两色渐变 fallback
 function refreshMicaBg() {
   const root = document.documentElement;
-  const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
-  const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
-  root.style.setProperty("--mica-bg",
-    `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
+  const isDark = currentIsDark();
+  const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-bg-1").trim()
+    || (isDark ? "#1e2530" : "#f0f2f5");
+  let bg;
+  if (state._micaStops && state._micaStops.length >= 2) {
+    // 采样色低饱和化: 与主题表面色混合 (采样色 35% 叠表面色)
+    const stops = state._micaStops
+      .map(c => alphaComposite(c, surface, 0.35))
+      .map((c, i) => `${c} ${Math.round((i / (state._micaStops.length - 1)) * 100)}%`)
+      .join(", ");
+    bg = `linear-gradient(90deg, ${stops}), var(--material-noise)`;
+  } else {
+    const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+    const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
+    bg = `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`;
+  }
+  root.style.setProperty("--mica-bg", bg);
+}
+
+// 壁纸网格采样: 缩小到 cols×rows, 每列平均色 → 列色调数组(原始采样色, 混合在 refreshMicaBg 做)
+async function sampleMicaGrid(bgSrc, cols = 5, rows = 3) {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = bgSrc;
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    const cvs = document.createElement("canvas");
+    cvs.width = cols; cvs.height = rows;
+    const c = cvs.getContext("2d");
+    c.drawImage(img, 0, 0, cols, rows);
+    const d = c.getImageData(0, 0, cols, rows).data;
+    const colHex = [];
+    for (let x = 0; x < cols; x++) {
+      let r = 0, g = 0, b = 0;
+      for (let y = 0; y < rows; y++) {
+        const i = (y * cols + x) * 4;
+        r += d[i]; g += d[i + 1]; b += d[i + 2];
+      }
+      const h = (v) => Math.round(v / rows).toString(16).padStart(2, "0");
+      colHex.push(`#${h(r)}${h(g)}${h(b)}`);
+    }
+    return colHex;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -327,6 +369,14 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
+    // Mica 网格采样: 还原壁纸区域色调(异步, 完成后刷新 --mica-bg)
+    state._micaStops = null;
+    sampleMicaGrid(bgSrc).then(stops => {
+      if (stops && stops.length >= 2) {
+        state._micaStops = stops;
+        refreshMicaBg();
+      }
+    });
   }
   refreshMicaBg();
 
@@ -2298,14 +2348,6 @@ function liveApplySettings() {
     clearTimeout(_parallaxHoldTimer);
   }
 }
-
-// Mica 失焦回退(官方: inactive 时回落中性色, 相当于 SolidBackgroundFillColorBase)
-(function initMicaFocusFallback() {
-  const appEl = document.getElementById("app");
-  if (!appEl) return;
-  window.addEventListener("blur", () => appEl.classList.add("mica-inactive"));
-  window.addEventListener("focus", () => appEl.classList.remove("mica-inactive"));
-})();
 
 // ─── ECG Logo: hover 加速绘制脉冲 ───
 (function initEcgLogoHover() {
