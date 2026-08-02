@@ -20,6 +20,7 @@ const state = {
   logs: [],
   timeline: { mode: "overview", history: [] },
   _micaStops: null,  // 壁纸网格采样列色(Mica 多 stop 渐变)
+  _micaSampledSrc: "",  // 已采样的壁纸源(缓存, 避免重复采样)
   uiConfig: {
     color_mode: "dynamic",
     brand_color: "#1d9bf0",
@@ -369,14 +370,24 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
-    // Mica 网格采样: 还原壁纸区域色调(异步, 完成后刷新 --mica-bg)
+  }
+  // Mica 壁纸采样: 只要配置了壁纸就采样(与当前背景模式无关, 采样结果缓存复用),
+  // 切到非 image 模式时 mica 面板仍保留壁纸色调
+  if (ui.background_image) {
+    const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
+    if (state._micaSampledSrc !== bgSrc) {
+      state._micaSampledSrc = bgSrc;
+      state._micaStops = null;
+      sampleMicaGrid(bgSrc).then(stops => {
+        if (stops && stops.length >= 2) {
+          state._micaStops = stops;
+          refreshMicaBg();
+        }
+      });
+    }
+  } else {
     state._micaStops = null;
-    sampleMicaGrid(bgSrc).then(stops => {
-      if (stops && stops.length >= 2) {
-        state._micaStops = stops;
-        refreshMicaBg();
-      }
-    });
+    state._micaSampledSrc = "";
   }
   refreshMicaBg();
 

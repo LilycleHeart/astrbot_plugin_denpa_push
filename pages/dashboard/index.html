@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260803j" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260803j" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260803j" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260803k" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260803k" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260803k" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -369,11 +369,11 @@
 
               <!-- 滑条 -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row">
+                <div class="form-row mica-hide">
                   <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
                   <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
                 </div>
-                <div class="form-row">
+                <div class="form-row mica-hide">
                   <label class="form-label">模糊强度 <span id="ui-blur-val" class="text-mono">5px</span></label>
                   <input type="range" class="slider" id="ui-blur" min="0" max="100" value="5" />
                 </div>
@@ -442,6 +442,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260803j"></script>
+    <script type="module" src="./scripts/app.js?v=20260803k"></script>
   </body>
 </html>
