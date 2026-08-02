@@ -221,6 +221,7 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--color-brand);
+  --speed: 1.6s;  /* 默认标准速度, 由日均推文档位类覆盖 */
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-brand) 40%, transparent));
   transition: filter var(--motion-fast, 140ms) var(--motion-ease, cubic-bezier(0.33, 0, 0.67, 1));
   cursor: pointer;
@@ -229,6 +230,11 @@ body {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-brand) 60%, transparent));
 }
 .sidebar-logo svg { width: 22px; height: 22px; display: block; overflow: visible; }
+
+/* 速度档位 — 由日均推文数驱动 (JS 切换类): 0→慢速 2.4s / 10→标准 1.6s / 20→快速 0.8s */
+.sidebar-logo.slow   { --speed: 2.4s; }
+.sidebar-logo.normal { --speed: 1.6s; }
+.sidebar-logo.fast   { --speed: 0.8s; }
 
 /* ═══ ECG Logo — 暗线底迹 · 青色尾迹 · 白色亮点 ═══ */
 .ecg-logo-svg {
@@ -245,7 +251,7 @@ body {
   stroke-linejoin: round;
 }
 
-/* 青色长尾 — 循环扫过整条波形(主题主色) */
+/* 青色长尾 — 循环扫过整条波形(主题主色, 速度随档位) */
 .ecg-tail {
   fill: none;
   stroke: var(--color-brand);
@@ -253,7 +259,7 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 55 30;
-  animation: ecg-tail-move 1.6s linear infinite;
+  animation: ecg-tail-move var(--speed, 1.6s) linear infinite;
 }
 
 /* 白色亮点 — 提前相位, 位于尾迹前沿(纯白 + 主题辉光) */
@@ -264,7 +270,7 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 4 81;
-  animation: ecg-head-move 1.6s linear infinite;
+  animation: ecg-head-move var(--speed, 1.6s) linear infinite;
   filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--color-brand));
 }
 

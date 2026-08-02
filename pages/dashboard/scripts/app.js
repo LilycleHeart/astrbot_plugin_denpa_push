@@ -1341,6 +1341,12 @@ function renderStatus(data) {
     if (ecg.pushCount !== pushCount) {
       ecg.setPushCount(pushCount);
     }
+    // 侧边栏 ECG Logo 速度档位: 0→慢速 2.4s / 10→标准 1.6s / 20→快速 0.8s
+    const logo = document.querySelector(".sidebar-logo");
+    if (logo) {
+      logo.classList.remove("slow", "normal", "fast");
+      logo.classList.add(pushCount <= 0 ? "slow" : pushCount < 15 ? "normal" : "fast");
+    }
   }
 
   // Dynamic theme: use brand_color from status if dynamic mode
@@ -2274,13 +2280,13 @@ function liveApplySettings() {
   const logo = document.querySelector(".sidebar-logo");
   if (!logo) return;
   const animated = logo.querySelectorAll(".ecg-tail, .ecg-head");
-  const normalDur = "1.6s";
   const fastDur = "0.7s";
   logo.addEventListener("mouseenter", () => {
     animated.forEach(el => el.style.animationDuration = fastDur);
   });
+  // 离开 hover 时清除内联时长, 恢复 --speed 档位速度 (日均推文驱动)
   logo.addEventListener("mouseleave", () => {
-    animated.forEach(el => el.style.animationDuration = normalDur);
+    animated.forEach(el => el.style.animationDuration = "");
   });
 })();
 
