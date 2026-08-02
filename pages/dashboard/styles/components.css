@@ -407,7 +407,8 @@ input[type="color"].input {
 .tl-stream {
   position: relative;
   padding-bottom: 80px;
-  transition: opacity var(--motion-fast) var(--motion-ease);
+  transition: opacity var(--motion-fast) var(--motion-ease),
+              height var(--motion-slow) var(--motion-ease);
 }
 .tl-stream.tl-switching { opacity: 0; }
 .tl-stream:not(.masonry-ready) {
@@ -505,6 +506,15 @@ input[type="color"].input {
 /* 新增日期分隔器 */
 .tl-sep-new {
   animation: tl-sep-in var(--motion-base) var(--motion-ease) both;
+}
+
+/* 重排/增量更新时:已有卡片平滑滑动到新位置,不再瞬间跳变。
+   新插入卡片(.tl-entry-new / .tl-sep-new)排除在外,
+   它们用自己的入场动画(滑入 + 淡入)表现。 */
+.tl-stream.masonry-ready.tl-reflow .tl-entry:not(.tl-entry-new),
+.tl-stream.masonry-ready.tl-reflow .tl-date-sep:not(.tl-sep-new) {
+  transition: top var(--motion-slow) var(--motion-ease),
+              left var(--motion-slow) var(--motion-ease);
 }
 .tl-card-wrap {
   min-width: 0;
