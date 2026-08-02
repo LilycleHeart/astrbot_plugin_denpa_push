@@ -544,7 +544,11 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* per-panel 色带: 背景由 JS 实时采样内联 --surface-bg(滚动时更新) */
+  /* 方格采样背景: JS 实时生成马赛克 SVG 写入 --mica-grid(center/cover, slice 保方形) */
+  background:
+    var(--mica-grid, linear-gradient(180deg, var(--mica-tint-1), var(--mica-tint-2)))
+      center / cover,
+    var(--material-noise);
 }
 
 /* 设置面板: mica 模式下隐藏无关调节项块(不透明度/模糊强度), 带展开收起动画 */

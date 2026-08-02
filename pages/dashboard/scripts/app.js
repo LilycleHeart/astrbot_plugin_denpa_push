@@ -237,7 +237,6 @@ function applyPalette(sourceHex, isDark) {
 // 面板覆盖的壁纸区域 → 5 行行平均色 → per-panel 色带渐变(内联 --surface-bg)。
 // 面板滚到哪, 色带就是壁纸对应位置的颜色 —— 真·实时采样(窗口滚过壁纸)
 let _micaCanvas = null;
-let _micaRaf = 0;
 
 function _micaSurfaceColor() {
   const isDark = currentIsDark();
@@ -250,6 +249,7 @@ const _MICA_PANELS = ".material-mica .sidebar, .material-mica .hero, .material-m
 // 清理所有面板的 mica 内联采样变量(切离 mica / 无壁纸时调用)
 function clearMicaInline() {
   document.querySelectorAll(".sidebar, .hero, .stat-card, .tab-content.active").forEach(el => {
+    el.style.removeProperty("--mica-grid");
     el.style.removeProperty("--surface-bg");
     el.style.removeProperty("--surface-bg-low");
     el.style.removeProperty("--surface-bg-high");
@@ -266,7 +266,19 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 实时采样: 每个面板覆盖的壁纸区域 → 5 行行平均色 → 垂直渐变
+// 生成方格 SVG(马赛克): cols×rows 个色块, slice 保持方格不变形
+function buildGridSvg(colors, cols, rows) {
+  const cell = 10;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${cols * cell}" height="${rows * cell}" viewBox="0 0 ${cols * cell} ${rows * cell}" preserveAspectRatio="xMidYMid slice">`;
+  for (let i = 0; i < colors.length; i++) {
+    const x = (i % cols) * cell, y = Math.floor(i / cols) * cell;
+    s += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${colors[i]}"/>`;
+  }
+  s += "</svg>";
+  return `url("data:image/svg+xml,${encodeURIComponent(s)}")`;
+}
+
+// 实时采样: 面板覆盖的壁纸区域 → cols×rows 方格, 每格中心点取色 → 马赛克背景
 function refreshMicaLive() {
   if (!_micaCanvas) { refreshMicaBg(); return; }
   try {
@@ -277,43 +289,32 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const c1 = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
-    const c2 = document.documentElement.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
-    const ROWS = 12;   // 区块采样行数(更细, 色带平滑)
-    const COLS = 8;    // 每行横向采样点数
+    const fallback = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+    const GRID_COLS = 8, GRID_ROWS = 6;   // 方格密度
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
       const y1 = Math.max(0, rect.top), y2 = Math.min(vh, rect.bottom);
       // 不可见: 保留旧采样值(不更新也不清理, 避免滚出/滚入视口边缘时背景反复切换闪烁)
       if (y2 - y1 < 4) return;
-      const stops = [];
-      for (let r = 0; r < ROWS; r++) {
-        const vy = y1 + ((r + 0.5) / ROWS) * (y2 - y1);   // 面板内行中心(视口坐标)
-        const iy = Math.round((vy - oy) / scale);         // → 壁纸 y
-        if (iy < 0 || iy >= ih) { stops.push(null); continue; }
-        let rr = 0, gg = 0, bb = 0, n = 0;
-        for (let k = 0; k < COLS; k++) {                  // 横向多点平均
-          const ix = Math.round(((k + 0.5) / COLS) * iw);
-          if (ix < 0 || ix >= iw) continue;
+      const colors = [];
+      for (let gy = 0; gy < GRID_ROWS; gy++) {
+        for (let gx = 0; gx < GRID_COLS; gx++) {
+          const vx = rect.left + ((gx + 0.5) / GRID_COLS) * rect.width;  // 格中心(视口 x)
+          const vy = y1 + ((gy + 0.5) / GRID_ROWS) * (y2 - y1);          // 格中心(视口 y)
+          const ix = Math.round((vx - ox) / scale);                      // → 壁纸坐标
+          const iy = Math.round((vy - oy) / scale);
+          if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) { colors.push(fallback); continue; }
           const i = (iy * iw + ix) * 4;
-          rr += imgData[i]; gg += imgData[i + 1]; bb += imgData[i + 2]; n++;
+          const hex = "#" + [imgData[i], imgData[i + 1], imgData[i + 2]]
+            .map(v => v.toString(16).padStart(2, "0")).join("");
+          colors.push(alphaComposite(hex, surface, 0.35));               // 低饱和混合
         }
-        if (!n) { stops.push(null); continue; }
-        const hex = "#" + [Math.round(rr / n), Math.round(gg / n), Math.round(bb / n)]
-          .map(v => v.toString(16).padStart(2, "0")).join("");
-        stops.push(alphaComposite(hex, surface, 0.35));   // 低饱和混合
       }
-      const grad = stops
-        .map((c, i) => `${c || (i < ROWS / 2 ? c1 : c2)} ${Math.round((i / (ROWS - 1)) * 100)}%`)
-        .join(", ");
-      const bgVal = `linear-gradient(180deg, ${grad}), var(--material-noise)`;
+      const gridUrl = buildGridSvg(colors, GRID_COLS, GRID_ROWS);
       // 值未变化时跳过(避免滚动中无谓重绘)
-      if (el.style.getPropertyValue("--surface-bg") === bgVal) return;
-      // sidebar/hero 用 --surface-bg-low, 其余面板用 --surface-bg: 三个都设
-      el.style.setProperty("--surface-bg", bgVal);
-      el.style.setProperty("--surface-bg-low", bgVal);
-      el.style.setProperty("--surface-bg-high", bgVal);
+      if (el.style.getPropertyValue("--mica-grid") === gridUrl) return;
+      el.style.setProperty("--mica-grid", gridUrl);
     });
   } catch (e) {
     refreshMicaBg();
@@ -339,15 +340,20 @@ function loadMicaWallpaper(bgSrc) {
   img.src = bgSrc;
 }
 
-// 滚动/缩放时实时重采样(rAF 节流)
-window.addEventListener("scroll", () => {
-  if (_micaRaf) return;
-  _micaRaf = requestAnimationFrame(() => { _micaRaf = 0; refreshMicaLive(); });
-}, { passive: true });
-window.addEventListener("resize", () => {
-  if (_micaRaf) return;
-  _micaRaf = requestAnimationFrame(() => { _micaRaf = 0; refreshMicaLive(); });
-}, { passive: true });
+// 滚动/缩放实时重采样: rAF 循环检测 scrollY / 窗口尺寸变化即采样。
+// 不依赖 scroll 事件(在部分环境不可靠, 如 headless 虚拟时间模式)
+let _micaLastY = -1, _micaLastW = -1, _micaLastH = -1;
+(function micaWatch() {
+  requestAnimationFrame(() => {
+    if (window.scrollY !== _micaLastY || window.innerWidth !== _micaLastW || window.innerHeight !== _micaLastH) {
+      _micaLastY = window.scrollY;
+      _micaLastW = window.innerWidth;
+      _micaLastH = window.innerHeight;
+      refreshMicaLive();
+    }
+    micaWatch();
+  });
+})();
 
 // ─── Dynamic Accent from Background Image ───
 // 照搬 denpa_echo: MCU sourceColorFromImage 需要 Image 元素，不能传 canvas
