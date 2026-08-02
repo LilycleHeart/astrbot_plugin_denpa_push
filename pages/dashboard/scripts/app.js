@@ -280,9 +280,9 @@ function _gaussianBlur5(ctx, w, h) {
           const xx = Math.min(w - 1, Math.max(0, x + kx));
           const idx = (yy * w + xx) * 4;
           const wgt = G[(ky + 2) * 5 + kx + 2];
-          r += src.data[idx] * wgt;
-          g += src.data[idx + 1] * wgt;
-          b += src.data[idx + 2] * wgt;
+          r += src[idx] * wgt;
+          g += src[idx + 1] * wgt;
+          b += src[idx + 2] * wgt;
         }
       }
       const o = (y * w + x) * 4;
