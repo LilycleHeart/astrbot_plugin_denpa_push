@@ -392,7 +392,7 @@ let _micaLayoutTimer = 0;
       refreshMicaLive();
     }, 100);
   });
-  observer.observe(appEl, { attributes: true, childList: true, subtree: true, attributeFilter: ["class"] });
+  observer.observe(appEl, { attributes: true, childList: true, characterData: true, subtree: true, attributeFilter: ["class"] });
 })();
 
 // 初始兜底: DOM 稳定后强制采样一次(不依赖滚动/布局变化)
