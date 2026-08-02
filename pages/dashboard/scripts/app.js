@@ -250,7 +250,11 @@ const _MICA_PANELS = ".material-mica .sidebar, .material-mica .hero, .material-m
 // 无壁纸 fallback: 品牌两色渐变, 并清理 per-panel 内联
 function refreshMicaBg() {
   const root = document.documentElement;
-  document.querySelectorAll(_MICA_PANELS).forEach(el => el.style.removeProperty("--surface-bg"));
+  document.querySelectorAll(_MICA_PANELS).forEach(el => {
+    el.style.removeProperty("--surface-bg");
+    el.style.removeProperty("--surface-bg-low");
+    el.style.removeProperty("--surface-bg-high");
+  });
   const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
   const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
   root.style.setProperty("--mica-bg",
@@ -275,7 +279,13 @@ function refreshMicaLive() {
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
       const y1 = Math.max(0, rect.top), y2 = Math.min(vh, rect.bottom);
-      if (y2 - y1 < 4) { el.style.removeProperty("--surface-bg"); return; }  // 不可见
+      if (y2 - y1 < 4) {
+        // 不可见: 清理内联
+        el.style.removeProperty("--surface-bg");
+        el.style.removeProperty("--surface-bg-low");
+        el.style.removeProperty("--surface-bg-high");
+        return;
+      }
       const stops = [];
       for (let r = 0; r < ROWS; r++) {
         const vy = y1 + ((r + 0.5) / ROWS) * (y2 - y1);   // 面板内行中心(视口坐标)
@@ -296,8 +306,11 @@ function refreshMicaLive() {
       const grad = stops
         .map((c, i) => `${c || (i < ROWS / 2 ? c1 : c2)} ${Math.round((i / (ROWS - 1)) * 100)}%`)
         .join(", ");
-      el.style.setProperty("--surface-bg",
-        `linear-gradient(180deg, ${grad}), var(--material-noise)`);
+      const bgVal = `linear-gradient(180deg, ${grad}), var(--material-noise)`;
+      // sidebar/hero 用 --surface-bg-low, 其余面板用 --surface-bg: 三个都设
+      el.style.setProperty("--surface-bg", bgVal);
+      el.style.setProperty("--surface-bg-low", bgVal);
+      el.style.setProperty("--surface-bg-high", bgVal);
     });
   } catch (e) {
     refreshMicaBg();
