@@ -266,14 +266,20 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 生成方格 SVG(马赛克): cols×rows 个色块, slice 保持方格不变形
+// 生成方格 SVG: cols×rows 个色块 + feGaussianBlur 柔化。
+// 采样是网格(实时二维), 渲染柔和过渡(Mica 观感, 非硬边马赛克)
 function buildGridSvg(colors, cols, rows) {
   const cell = 10;
+  const blur = 8;   // 色块柔化半径: 区块融合成平滑渐变(Mica 云母质感, 非马赛克)
   let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${cols * cell}" height="${rows * cell}" viewBox="0 0 ${cols * cell} ${rows * cell}" preserveAspectRatio="xMidYMid slice">`;
+  if (blur > 0) {
+    s += `<defs><filter id="b" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs><g filter="url(#b)">`;
+  }
   for (let i = 0; i < colors.length; i++) {
     const x = (i % cols) * cell, y = Math.floor(i / cols) * cell;
     s += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${colors[i]}"/>`;
   }
+  if (blur > 0) s += "</g>";
   s += "</svg>";
   return `url("data:image/svg+xml,${encodeURIComponent(s)}")`;
 }
@@ -290,7 +296,7 @@ function refreshMicaLive() {
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
     const fallback = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
-    const GRID_COLS = 8, GRID_ROWS = 6;   // 方格密度
+    const GRID_COLS = 12, GRID_ROWS = 9;   // 区块采样密度(越细, 柔化后越平滑)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
