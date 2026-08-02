@@ -544,10 +544,7 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* 三层背景: 染色(scroll) / 壁纸(fixed+cover 映射视口, 真实时采样) / 噪点 */
-  background-attachment: scroll, fixed, scroll;
-  background-size: auto, cover, auto;
-  background-position: 0 0, center, 0 0;
+  /* per-panel 色带: 背景由 JS 实时采样内联 --surface-bg(滚动时更新) */
 }
 
 /* 设置面板: mica 模式下隐藏无关调节项块(不透明度/模糊强度), 带展开收起动画 */

@@ -19,7 +19,6 @@ const state = {
   subscriptions: {},
   logs: [],
   timeline: { mode: "overview", history: [] },
-  _micaStops: null,  // 壁纸区块采样列色(实时壁纸染色层)
   _micaSampledSrc: "",  // 已采样壁纸源(缓存)
   uiConfig: {
     color_mode: "dynamic",
@@ -217,7 +216,7 @@ function applyPalette(sourceHex, isDark) {
   set("--mica-tint-2", p.mica2);
   set("--mica-rgb-1", rgbStr(p.mica1));
   set("--mica-rgb-2", rgbStr(p.mica2));
-  refreshMicaBg();
+  refreshMicaLive();  // 主题色变化 → 实时采样重混表面色
   set("--acrylic-rgb", rgbStr(p.bg2));
   set("--acrylic-rgb-low", rgbStr(p.bg1));
   set("--acrylic-rgb-high", rgbStr(p.bg4));
@@ -233,60 +232,106 @@ function applyPalette(sourceHex, isDark) {
 }
 
 // Mica 背景: 真实时方案 ——
-// 1) 壁纸层: 壁纸图 background-attachment: fixed + cover 直接映射视口,
-//    滚动时面板显示壁纸对应区域(真·实时采样, 非固定色带)
-// 2) 染色层: 区块采样列色(低饱和混合)半透明叠加, 提供主题化区块色调
-// 3) 噪点; 无壁纸时壁纸层透明占位, 染色层不透明保底
-function refreshMicaBg() {
-  const root = document.documentElement;
+// ─── Mica 真实时采样 ───
+// 壁纸载入小尺寸 canvas; 滚动/缩放时对**每个面板**按自身视口位置采样:
+// 面板覆盖的壁纸区域 → 5 行行平均色 → per-panel 色带渐变(内联 --surface-bg)。
+// 面板滚到哪, 色带就是壁纸对应位置的颜色 —— 真·实时采样(窗口滚过壁纸)
+let _micaCanvas = null;
+let _micaRaf = 0;
+
+function _micaSurfaceColor() {
   const isDark = currentIsDark();
-  const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-bg-1").trim()
+  return getComputedStyle(document.documentElement).getPropertyValue("--color-bg-1").trim()
     || (isDark ? "#1e2530" : "#f0f2f5");
-  const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
-  let tint;
-  if (state._micaStops && state._micaStops.length >= 2) {
-    const alpha = wall ? 0.45 : 1;
-    const stops = state._micaStops
-      .map(c => alphaComposite(c, surface, 0.35))
-      .map((c, i) => `rgba(${rgbStr(c)}, ${alpha}) ${Math.round((i / (state._micaStops.length - 1)) * 100)}%`)
-      .join(", ");
-    tint = `linear-gradient(90deg, ${stops})`;
-  } else {
-    const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
-    const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
-    tint = `linear-gradient(180deg, ${c1}, ${c2})`;
-  }
-  const wallpaper = wall || "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
-  root.style.setProperty("--mica-bg", `${tint}, ${wallpaper}, var(--material-noise)`);
 }
 
-// 壁纸区块采样: 缩小到 cols×rows, 每列平均色 → 列色数组(原始采样色, 低饱和化在 refreshMicaBg 做)
-async function sampleMicaGrid(bgSrc, cols = 5, rows = 3) {
+const _MICA_PANELS = ".material-mica .sidebar, .material-mica .hero, .material-mica .stat-card, .material-mica .tab-content.active";
+
+// 无壁纸 fallback: 品牌两色渐变, 并清理 per-panel 内联
+function refreshMicaBg() {
+  const root = document.documentElement;
+  document.querySelectorAll(_MICA_PANELS).forEach(el => el.style.removeProperty("--surface-bg"));
+  const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+  const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
+  root.style.setProperty("--mica-bg",
+    `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
+}
+
+// 实时采样: 每个面板覆盖的壁纸区域 → 5 行行平均色 → 垂直渐变
+function refreshMicaLive() {
+  if (!_micaCanvas) { refreshMicaBg(); return; }
   try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = bgSrc;
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-    const cvs = document.createElement("canvas");
-    cvs.width = cols; cvs.height = rows;
-    const c = cvs.getContext("2d");
-    c.drawImage(img, 0, 0, cols, rows);
-    const d = c.getImageData(0, 0, cols, rows).data;
-    const colHex = [];
-    for (let x = 0; x < cols; x++) {
-      let r = 0, g = 0, b = 0;
-      for (let y = 0; y < rows; y++) {
-        const i = (y * cols + x) * 4;
-        r += d[i]; g += d[i + 1]; b += d[i + 2];
+    const iw = _micaCanvas.width, ih = _micaCanvas.height;
+    const imgData = _micaCanvas.getContext("2d").getImageData(0, 0, iw, ih).data;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // cover 映射: 壁纸铺满视口
+    const scale = Math.max(vw / iw, vh / ih);
+    const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
+    const surface = _micaSurfaceColor();
+    const c1 = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+    const c2 = document.documentElement.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
+    const ROWS = 5;
+
+    document.querySelectorAll(_MICA_PANELS).forEach(el => {
+      const rect = el.getBoundingClientRect();
+      const y1 = Math.max(0, rect.top), y2 = Math.min(vh, rect.bottom);
+      if (y2 - y1 < 4) { el.style.removeProperty("--surface-bg"); return; }  // 不可见
+      const stops = [];
+      for (let r = 0; r < ROWS; r++) {
+        const vy = y1 + ((r + 0.5) / ROWS) * (y2 - y1);   // 面板内行中心(视口坐标)
+        const iy = Math.round((vy - oy) / scale);         // → 壁纸 y
+        if (iy < 0 || iy >= ih) { stops.push(null); continue; }
+        let rr = 0, gg = 0, bb = 0, n = 0;
+        for (let sx = 0.125; sx < 1; sx += 0.25) {        // 横向 4 点平均
+          const ix = Math.round(sx * iw);
+          if (ix < 0 || ix >= iw) continue;
+          const i = (iy * iw + ix) * 4;
+          rr += imgData[i]; gg += imgData[i + 1]; bb += imgData[i + 2]; n++;
+        }
+        if (!n) { stops.push(null); continue; }
+        const hex = "#" + [Math.round(rr / n), Math.round(gg / n), Math.round(bb / n)]
+          .map(v => v.toString(16).padStart(2, "0")).join("");
+        stops.push(alphaComposite(hex, surface, 0.35));   // 低饱和混合
       }
-      const h = (v) => Math.round(v / rows).toString(16).padStart(2, "0");
-      colHex.push(`#${h(r)}${h(g)}${h(b)}`);
-    }
-    return colHex;
+      const grad = stops
+        .map((c, i) => `${c || (i < ROWS / 2 ? c1 : c2)} ${Math.round((i / (ROWS - 1)) * 100)}%`)
+        .join(", ");
+      el.style.setProperty("--surface-bg",
+        `linear-gradient(180deg, ${grad}), var(--material-noise)`);
+    });
   } catch (e) {
-    return null;
+    refreshMicaBg();
   }
 }
+
+// 壁纸加载 → 小尺寸 canvas(宽 120, 等比)
+function loadMicaWallpaper(bgSrc) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    try {
+      const w = 120;
+      const h = Math.max(2, Math.round((img.height / img.width) * w));
+      const cvs = document.createElement("canvas");
+      cvs.width = w; cvs.height = h;
+      cvs.getContext("2d").drawImage(img, 0, 0, w, h);
+      _micaCanvas = cvs;
+    } catch (e) { _micaCanvas = null; }
+    refreshMicaLive();
+  };
+  img.onerror = () => { _micaCanvas = null; refreshMicaBg(); };
+  img.src = bgSrc;
+}
+
+// 滚动/缩放时实时重采样(rAF 节流)
+window.addEventListener("scroll", () => {
+  if (_micaRaf) return;
+  _micaRaf = requestAnimationFrame(() => { _micaRaf = 0; refreshMicaLive(); });
+}, { passive: true });
+window.addEventListener("resize", () => {
+  if (_micaRaf) return;
+  _micaRaf = requestAnimationFrame(() => { _micaRaf = 0; refreshMicaLive(); });
+}, { passive: true });
 
 // ─── Dynamic Accent from Background Image ───
 // 照搬 denpa_echo: MCU sourceColorFromImage 需要 Image 元素，不能传 canvas
@@ -375,26 +420,20 @@ function applyUiConfig() {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
   }
-  // Mica 真实时: 壁纸层变量 + 区块采样(与当前背景模式无关, 配置了壁纸即生效)
+  // Mica 真实时采样(与当前背景模式无关, 配置了壁纸即采样)
   if (ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
-    root.style.setProperty("--mica-wallpaper", `url('${bgSrc}')`);
     if (state._micaSampledSrc !== bgSrc) {
       state._micaSampledSrc = bgSrc;
-      state._micaStops = null;
-      sampleMicaGrid(bgSrc).then(stops => {
-        if (stops && stops.length >= 2) {
-          state._micaStops = stops;
-          refreshMicaBg();
-        }
-      });
+      loadMicaWallpaper(bgSrc);
+    } else {
+      refreshMicaLive();
     }
   } else {
-    root.style.setProperty("--mica-wallpaper", "");
-    state._micaStops = null;
+    _micaCanvas = null;
     state._micaSampledSrc = "";
+    refreshMicaBg();
   }
-  refreshMicaBg();
 
   // Radius
   const r = Math.max(0, Math.min(40, Number(ui.corner_radius ?? 14)));
@@ -407,7 +446,7 @@ function applyUiConfig() {
   root.style.setProperty("--material-opacity", ((ui.material_opacity ?? 45) / 100).toString());
   root.style.setProperty("--material-blur", `${ui.material_blur ?? 5}px`);
   root.style.setProperty("--bg-scrim", (ui.bg_scrim ?? 40) / 100);
-  refreshMicaBg();  // 透明度变化时重算 mica 背景(alpha 内联)
+  refreshMicaLive();  // 主题/透明度变化时重采样(实时采样色随表面色刷新)
 
   const appEl = document.getElementById("app");
   if (appEl) {
