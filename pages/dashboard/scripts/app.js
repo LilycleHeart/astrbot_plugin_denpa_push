@@ -231,7 +231,9 @@ function applyPalette(sourceHex, isDark) {
 }
 
 // Mica 背景: 三层 background(逗号分隔, 同层双 image 非法必须分开)——
-//   1. 品牌/壁纸主色染色渐变(固定强度, 不随 material_opacity)
+//   1. 品牌/壁纸主色染色渐变。Mica 是接近不透明的壁纸染色: 有壁纸时染色轻
+//      (壁纸图案提供内容), 无壁纸时必须接近不透明, 否则深色主题下深色染色
+//      42% 透明度叠深色背景 ≈ 全透明
 //   2. 壁纸图案(background-attachment: fixed 与 bg-layer 对齐, 色块析出); 无壁纸时透明占位
 //   3. 噪点纹理
 function refreshMicaBg() {
@@ -239,7 +241,9 @@ function refreshMicaBg() {
   const r1 = root.style.getPropertyValue("--mica-rgb-1").trim() || "248, 249, 250";
   const r2 = root.style.getPropertyValue("--mica-rgb-2").trim() || "240, 244, 248";
   const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
-  const tint = `linear-gradient(180deg, rgba(${r1}, 0.42), rgba(${r2}, 0.5))`;
+  const tint = wall
+    ? `linear-gradient(180deg, rgba(${r1}, 0.45), rgba(${r2}, 0.52))`
+    : `linear-gradient(180deg, rgba(${r1}, 0.9), rgba(${r2}, 0.94))`;
   const wallpaper = wall || "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
   root.style.setProperty("--mica-bg",
     `${tint}, ${wallpaper}, var(--material-noise)`);
