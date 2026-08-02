@@ -271,7 +271,10 @@ function refreshMicaBg() {
 function buildGridSvg(colors, cols, rows) {
   const cell = 10;
   const blur = 8;   // 色块柔化半径: 区块融合成平滑渐变(Mica 云母质感, 非马赛克)
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${cols * cell}" height="${rows * cell}" viewBox="0 0 ${cols * cell} ${rows * cell}" preserveAspectRatio="xMidYMid slice">`;
+  const w = cols * cell, h = rows * cell;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">`;
+  // 不透明底色: 模糊扩展到 viewBox 外被裁剪, 无底色时边缘会透出透明
+  s += `<rect width="${w}" height="${h}" fill="${colors[0] || "#000000"}"/>`;
   if (blur > 0) {
     s += `<defs><filter id="b" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs><g filter="url(#b)">`;
   }
