@@ -266,25 +266,26 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 生成方格 SVG: cols×rows 个色块 + feGaussianBlur 柔化。
-// 采样是网格(实时二维), 渲染柔和过渡(Mica 观感, 非硬边马赛克)
-function buildGridSvg(colors, cols, rows) {
-  const cell = 10;
-  const blur = 8;   // 色块柔化半径: 区块融合成平滑渐变(Mica 云母质感, 非马赛克)
-  const w = cols * cell, h = rows * cell;
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">`;
-  // 不透明底色: 模糊扩展到 viewBox 外被裁剪, 无底色时边缘会透出透明
-  s += `<rect width="${w}" height="${h}" fill="${colors[0] || "#000000"}"/>`;
-  if (blur > 0) {
-    s += `<defs><filter id="b" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs><g filter="url(#b)">`;
+// 生成低分辨率网格图: 12×9 像素 canvas 填入采样色 → PNG data URL。
+// 浏览器放大时双线性插值 → 天然平滑柔和(Mica 观感), 无需 SVG/blur 滤镜,
+// 每帧只编码几百字节小图, 延迟极低
+let _micaGridCanvas = null;
+function buildGridUrl(colors, cols, rows) {
+  if (!_micaGridCanvas) {
+    _micaGridCanvas = document.createElement("canvas");
+    _micaGridCanvas.width = cols;
+    _micaGridCanvas.height = rows;
   }
+  const c = _micaGridCanvas.getContext("2d");
+  const img = c.createImageData(cols, rows);
   for (let i = 0; i < colors.length; i++) {
-    const x = (i % cols) * cell, y = Math.floor(i / cols) * cell;
-    s += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${colors[i]}"/>`;
+    img.data[i * 4] = colors[i][0];
+    img.data[i * 4 + 1] = colors[i][1];
+    img.data[i * 4 + 2] = colors[i][2];
+    img.data[i * 4 + 3] = 255;
   }
-  if (blur > 0) s += "</g>";
-  s += "</svg>";
-  return `url("data:image/svg+xml,${encodeURIComponent(s)}")`;
+  c.putImageData(img, 0, 0);
+  return _micaGridCanvas.toDataURL();
 }
 
 // 实时采样: 面板覆盖的壁纸区域 → cols×rows 方格, 每格中心点取色 → 马赛克背景
@@ -298,7 +299,6 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const fallback = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
     const GRID_COLS = 12, GRID_ROWS = 9;   // 区块采样密度(越细, 柔化后越平滑)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
@@ -313,14 +313,16 @@ function refreshMicaLive() {
           const vy = y1 + ((gy + 0.5) / GRID_ROWS) * (y2 - y1);          // 格中心(视口 y)
           const ix = Math.round((vx - ox) / scale);                      // → 壁纸坐标
           const iy = Math.round((vy - oy) / scale);
-          if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) { colors.push(fallback); continue; }
+          if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) { colors.push([0, 0, 0]); continue; }
           const i = (iy * iw + ix) * 4;
           const hex = "#" + [imgData[i], imgData[i + 1], imgData[i + 2]]
             .map(v => v.toString(16).padStart(2, "0")).join("");
-          colors.push(alphaComposite(hex, surface, 0.35));               // 低饱和混合
+          const mixed = alphaComposite(hex, surface, 0.35);               // 低饱和混合
+          const parts = rgbStr(mixed).split(",").map(s => parseInt(s.trim(), 10));
+          colors.push([parts[0], parts[1], parts[2]]);
         }
       }
-      const gridUrl = buildGridSvg(colors, GRID_COLS, GRID_ROWS);
+      const gridUrl = buildGridUrl(colors, GRID_COLS, GRID_ROWS);
       // 值未变化时跳过(避免滚动中无谓重绘)
       if (el.style.getPropertyValue("--mica-grid") === gridUrl) return;
       el.style.setProperty("--mica-grid", gridUrl);
@@ -380,7 +382,7 @@ let _micaLayoutTimer = 0;
     _micaLayoutTimer = setTimeout(() => {
       _micaLayoutTimer = 0;
       refreshMicaLive();
-    }, 150);
+    }, 100);
   });
   observer.observe(appEl, { attributes: true, childList: true, subtree: true, attributeFilter: ["class"] });
 })();

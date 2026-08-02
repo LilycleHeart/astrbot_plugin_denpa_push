@@ -544,10 +544,10 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* 方格采样背景: JS 实时生成马赛克 SVG 写入 --mica-grid(center/cover, slice 保方形) */
+  /* 低分辨率采样图: 100% 拉伸铺满, 双线性插值平滑(Mica 柔和渐变) */
   background:
     var(--mica-grid, linear-gradient(180deg, var(--mica-tint-1), var(--mica-tint-2)))
-      center / cover,
+      center / 100% 100% no-repeat,
     var(--material-noise);
 }
 
