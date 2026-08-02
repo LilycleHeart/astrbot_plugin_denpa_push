@@ -349,8 +349,7 @@ function loadMicaWallpaper(bgSrc) {
   img.src = bgSrc;
 }
 
-// 滚动/缩放实时重采样: rAF 循环检测 scrollY / 窗口尺寸变化即采样。
-// 不依赖 scroll 事件(在部分环境不可靠, 如 headless 虚拟时间模式)
+// 滚动/缩放实时重采样: rAF 循环检测 scrollY / 窗口尺寸变化即采样
 let _micaLastY = -1, _micaLastW = -1, _micaLastH = -1;
 (function micaWatch() {
   requestAnimationFrame(() => {
@@ -363,6 +362,31 @@ let _micaLastY = -1, _micaLastW = -1, _micaLastH = -1;
     micaWatch();
   });
 })();
+
+// 布局变化(切 tab / 折叠侧边栏 / 卡片增减等)时重采样:
+// MutationObserver 监听 #app 的 class 与子节点变化, 防抖后刷新映射。
+// 面板自身的 style 写入(采样结果)被忽略, 避免自我触发死循环
+let _micaLayoutTimer = 0;
+(function micaLayoutWatch() {
+  const appEl = document.getElementById("app");
+  if (!appEl) return;
+  const observer = new MutationObserver(muts => {
+    const relevant = muts.some(m => {
+      if (m.type === "attributes") return m.attributeName !== "style";  // class 等布局属性
+      return m.type === "childList";
+    });
+    if (!relevant) return;
+    if (_micaLayoutTimer) return;
+    _micaLayoutTimer = setTimeout(() => {
+      _micaLayoutTimer = 0;
+      refreshMicaLive();
+    }, 150);
+  });
+  observer.observe(appEl, { attributes: true, childList: true, subtree: true, attributeFilter: ["class"] });
+})();
+
+// 初始兜底: DOM 稳定后强制采样一次(不依赖滚动/布局变化)
+setTimeout(refreshMicaLive, 800);
 
 // ─── Dynamic Accent from Background Image ───
 // 照搬 denpa_echo: MCU sourceColorFromImage 需要 Image 元素，不能传 canvas
