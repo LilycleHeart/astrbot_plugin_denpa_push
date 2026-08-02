@@ -266,9 +266,37 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 生成低分辨率网格图: 像素 canvas 填入采样色 → PNG data URL。
-// 浏览器放大时双线性插值 → 天然平滑柔和(Mica 观感), 无需 SVG/blur 滤镜,
-// 每帧只编码小图, 延迟极低
+// 5×5 高斯模糊(数学高斯, 与 feGaussianBlur 同算法, 细腻平滑; 权重和 273)
+function _gaussianBlur5(ctx, w, h) {
+  const src = ctx.getImageData(0, 0, w, h).data;
+  const out = new Uint8ClampedArray(src.length);
+  const G = [1, 4, 7, 4, 1, 4, 16, 26, 16, 4, 7, 26, 41, 26, 7, 4, 16, 26, 16, 4, 1, 4, 7, 4, 1];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let r = 0, g = 0, b = 0;
+      for (let ky = -2; ky <= 2; ky++) {
+        const yy = Math.min(h - 1, Math.max(0, y + ky));
+        for (let kx = -2; kx <= 2; kx++) {
+          const xx = Math.min(w - 1, Math.max(0, x + kx));
+          const idx = (yy * w + xx) * 4;
+          const wgt = G[(ky + 2) * 5 + kx + 2];
+          r += src.data[idx] * wgt;
+          g += src.data[idx + 1] * wgt;
+          b += src.data[idx + 2] * wgt;
+        }
+      }
+      const o = (y * w + x) * 4;
+      out[o] = r / 273;
+      out[o + 1] = g / 273;
+      out[o + 2] = b / 273;
+      out[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(new ImageData(out, w, h), 0, 0);
+}
+
+// 生成低分辨率网格图: 像素 canvas 填入采样色 → 5×5 高斯模糊 → PNG data URL。
+// 浏览器放大时双线性插值 → 天然平滑柔和(Mica 观感), 延迟低
 let _micaGridCanvas = null;
 function buildGridUrl(colors, cols, rows) {
   if (!_micaGridCanvas) _micaGridCanvas = document.createElement("canvas");
@@ -284,10 +312,8 @@ function buildGridUrl(colors, cols, rows) {
     img.data[i * 4 + 3] = 255;
   }
   c.putImageData(img, 0, 0);
-  // 格间边界融合: canvas 原生高斯模糊(0.5px ≈ 半格), 消除马赛克块状感, 保持区块可辨与柔和过渡
-  c.filter = "blur(0.5px)";
-  c.drawImage(_micaGridCanvas, 0, 0);
-  c.filter = "none";
+  // 数学高斯模糊融合格间边界(细腻平滑, 替代 canvas filter)
+  _gaussianBlur5(c, cols, rows);
   // 必须包 url(): 否则 data: URI 不是合法 background-image 值, 背景声明整体失效
   return `url("${_micaGridCanvas.toDataURL()}")`;
 }
