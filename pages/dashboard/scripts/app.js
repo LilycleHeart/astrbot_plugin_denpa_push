@@ -299,18 +299,22 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const GRID_COLS = 48, GRID_ROWS = 36;   // 区块采样密度(低分辨率图, 放大插值平滑细腻)
+    const CELL = 16;   // 每格目标物理尺寸(px): 区块密度随面板尺寸动态, 分辨率变化不改变细腻度
+    const MAX_COLS = 120, MAX_ROWS = 80;   // 上限(防超大面板过重)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
       const y1 = Math.max(0, rect.top), y2 = Math.min(vh, rect.bottom);
       // 不可见: 保留旧采样值(不更新也不清理, 避免滚出/滚入视口边缘时背景反复切换闪烁)
       if (y2 - y1 < 4) return;
+      // 动态网格: 每格固定物理尺寸, 面板越大区块越多(细腻度恒定)
+      const cols = Math.min(MAX_COLS, Math.max(8, Math.round(rect.width / CELL)));
+      const rows = Math.min(MAX_ROWS, Math.max(6, Math.round((y2 - y1) / CELL)));
       const colors = [];
-      for (let gy = 0; gy < GRID_ROWS; gy++) {
-        for (let gx = 0; gx < GRID_COLS; gx++) {
-          const vx = rect.left + ((gx + 0.5) / GRID_COLS) * rect.width;  // 格中心(视口 x)
-          const vy = y1 + ((gy + 0.5) / GRID_ROWS) * (y2 - y1);          // 格中心(视口 y)
+      for (let gy = 0; gy < rows; gy++) {
+        for (let gx = 0; gx < cols; gx++) {
+          const vx = rect.left + ((gx + 0.5) / cols) * rect.width;  // 格中心(视口 x)
+          const vy = y1 + ((gy + 0.5) / rows) * (y2 - y1);          // 格中心(视口 y)
           const ix = Math.round((vx - ox) / scale);                      // → 壁纸坐标
           const iy = Math.round((vy - oy) / scale);
           if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) { colors.push([0, 0, 0]); continue; }
@@ -322,7 +326,7 @@ function refreshMicaLive() {
           colors.push([parts[0], parts[1], parts[2]]);
         }
       }
-      const gridUrl = buildGridUrl(colors, GRID_COLS, GRID_ROWS);
+      const gridUrl = buildGridUrl(colors, cols, rows);
       // 值未变化时跳过(避免滚动中无谓重绘)
       if (el.style.getPropertyValue("--mica-grid") === gridUrl) return;
       el.style.setProperty("--mica-grid", gridUrl);
