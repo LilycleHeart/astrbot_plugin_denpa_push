@@ -247,14 +247,19 @@ function _micaSurfaceColor() {
 
 const _MICA_PANELS = ".material-mica .sidebar, .material-mica .hero, .material-mica .stat-card, .material-mica .tab-content.active";
 
-// 无壁纸 fallback: 品牌两色渐变, 并清理 per-panel 内联
-function refreshMicaBg() {
-  const root = document.documentElement;
-  document.querySelectorAll(_MICA_PANELS).forEach(el => {
+// 清理所有面板的 mica 内联采样变量(切离 mica / 无壁纸时调用)
+function clearMicaInline() {
+  document.querySelectorAll(".sidebar, .hero, .stat-card, .tab-content.active").forEach(el => {
     el.style.removeProperty("--surface-bg");
     el.style.removeProperty("--surface-bg-low");
     el.style.removeProperty("--surface-bg-high");
   });
+}
+
+// 无壁纸 fallback: 品牌两色渐变, 并清理 per-panel 内联
+function refreshMicaBg() {
+  clearMicaInline();
+  const root = document.documentElement;
   const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
   const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
   root.style.setProperty("--mica-bg",
@@ -472,6 +477,13 @@ function applyUiConfig() {
     appEl.classList.toggle("bg-image-active", !!(ui.background_mode === "image" && ui.background_image));
     root.style.setProperty("--glow-strength", ((ui.glow_intensity ?? 15) / 100).toString());
     root.style.setProperty("--shadow-strength", ((ui.shadow_intensity ?? 60) / 100).toString());
+  }
+  // 材质切换收尾: mica 模式立即采样所有面板; 切离 mica 清理内联采样残留
+  // (否则 tab-content 的 --surface-bg 残留 mica 色带, 切回 acrylic 不生效)
+  if (ui.material_type === "mica") {
+    refreshMicaLive();
+  } else {
+    clearMicaInline();
   }
 
   syncSettingsInputs();
