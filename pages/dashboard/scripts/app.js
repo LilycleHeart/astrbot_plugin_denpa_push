@@ -220,6 +220,8 @@ function applyPalette(sourceHex, isDark) {
   set("--color-warning-bg", st.warning.bg);
   set("--color-error-fg", p.errorFg);
   set("--color-error-bg", p.errorBg);
+  // 通知依赖 --color-brand 的组件(hero canvas 波形等)刷新缓存
+  window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -624,6 +626,10 @@ class EcgWaveform {
     this.rhythm = new _RhythmEngine(this.intensity);
     this._cachedBrand = null;
     this._lastTheme = null;
+    // 主题色更新(静态自定义色 / 动态取色)时失效品牌色缓存, 下一帧读取新色
+    window.addEventListener("denpa:palette-changed", () => {
+      this._cachedBrand = null;
+    });
     this._lastTime = 0;
     this._visible = true;       // IntersectionObserver 控制
     this._pageVisible = true;   // visibilitychange 控制 (标签页前台/后台)
@@ -1524,12 +1530,11 @@ function buildHistoryCard(item) {
   const isManual = item.source === "manual";
   const isDark = currentIsDark();
 
-  // 暗色主题下重新生成 MD3 配色，亮色用后端预计算或前端兜底
+  // 按当前主题重新生成 MD3 配色(暗/亮), 避免后端预计算配色与主题不符
+  // (后端预计算的 rawPal 可能是暗色配色, 亮色主题下直接使用会保持暗色)
   let pal = rawPal;
-  if (isDark) {
-    const darkPal = _deriveCardPalette(seed, true);
-    if (darkPal) pal = darkPal;
-  }
+  const themedPal = _deriveCardPalette(seed, isDark);
+  if (themedPal) pal = themedPal;
 
   // Build CSS custom properties from palette
   const cssVars = [
