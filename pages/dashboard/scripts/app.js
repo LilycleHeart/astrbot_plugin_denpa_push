@@ -292,7 +292,10 @@ function _gaussianBlur5(ctx, w, h) {
       out[o + 3] = 255;
     }
   }
-  ctx.putImageData(new ImageData(out, w, h), 0, 0);
+  // 用 createImageData(兼容性优于 new ImageData 构造)
+  const outImg = ctx.createImageData(w, h);
+  outImg.data.set(out);
+  ctx.putImageData(outImg, 0, 0);
 }
 
 // 生成低分辨率网格图: 像素 canvas 填入采样色 → 5×5 高斯模糊 → PNG data URL。
@@ -329,7 +332,9 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const CELL = 8;   // 每格目标物理尺寸(px): 越细块状感越弱, 分辨率变化不改变细腻度
+    // surface 混合色预转整数(避免采样循环内字符串操作)
+    const sp = rgbStr(surface).split(",").map(s => parseInt(s.trim(), 10));
+    const CELL = 10;   // 每格目标物理尺寸(px): 越细块状感越弱, 分辨率变化不改变细腻度
     const MAX_COLS = 120, MAX_ROWS = 80;   // 上限(防超大面板过重)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
@@ -349,11 +354,12 @@ function refreshMicaLive() {
           const iy = Math.round((vy - oy) / scale);
           if (ix < 0 || ix >= iw || iy < 0 || iy >= ih) { colors.push([0, 0, 0]); continue; }
           const i = (iy * iw + ix) * 4;
-          const hex = "#" + [imgData[i], imgData[i + 1], imgData[i + 2]]
-            .map(v => v.toString(16).padStart(2, "0")).join("");
-          const mixed = alphaComposite(hex, surface, 0.35);               // 低饱和混合
-          const parts = rgbStr(mixed).split(",").map(s => parseInt(s.trim(), 10));
-          colors.push([parts[0], parts[1], parts[2]]);
+          // 纯整数低饱和混合(35% surface + 65% 采样色), 无字符串开销
+          colors.push([
+            (imgData[i] * 0.65 + sp[0] * 0.35) | 0,
+            (imgData[i + 1] * 0.65 + sp[1] * 0.35) | 0,
+            (imgData[i + 2] * 0.65 + sp[2] * 0.35) | 0
+          ]);
         }
       }
       const gridUrl = buildGridUrl(colors, cols, rows);
@@ -1473,7 +1479,13 @@ function _applyMasonry() {
   // Enable smooth reflow: existing cards glide to their new position.
   // Newly inserted cards (.tl-entry-new) are excluded — they animate in
   // with their own entrance animation instead (see CSS .tl-reflow rule).
-  container.classList.add("tl-reflow");
+  // Freshly built DOM is suppressed via .tl-no-transition (set by
+  // _buildAndLayoutHistory) so first layout doesn't slide cards from (0,0).
+  if (container.classList.contains("tl-no-transition")) {
+    container.classList.remove("tl-reflow");
+  } else {
+    container.classList.add("tl-reflow");
+  }
 
   // Pause entrance animations while measuring so offsetHeight is stable.
   // Unlike `animation: none`, pausing then resuming does NOT restart the
@@ -2006,12 +2018,16 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
   _bindMasonryResize();
 
   // Apply masonry synchronously, then reveal after a paint frame
+  // Suppress reflow transitions on this first pass: freshly built cards have
+  // no previous top/left, so transitions would slide them in from (0,0).
+  tlCt.classList.add("tl-no-transition");
   _applyMasonry();
   _watchMasonryImages(tlCt);
 
   // Reveal on next frame — masonry positions are already set
   requestAnimationFrame(() => {
     // Re-measure once more (fonts may have shifted heights)
+    tlCt.classList.remove("tl-no-transition");
     _applyMasonry();
     tlCt.classList.remove("tl-switching");
     _updateTimelineBadge();
@@ -2055,9 +2071,14 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
     pendingCount++;
     const card = buildHistoryCard(item);
     card.classList.add("tl-entry-new");
-    // Same as above: after the slide-in finishes, the card joins the normal
-    // reflow transition pool for future updates
-    card.addEventListener("animationend", () => card.classList.remove("tl-entry-new"), { once: true });
+    // Once the slide-in finishes, drop the "new" marker so the card joins
+    // the normal reflow transition pool. Also pin `animation: none` —
+    // otherwise removing the class changes animation-name back to the
+    // default tl-entry-in, which would restart an entrance animation.
+    card.addEventListener("animationend", () => {
+      card.style.animation = "none";
+      card.classList.remove("tl-entry-new");
+    }, { once: true });
     elementsToInsert.push(card);
   });
   if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
