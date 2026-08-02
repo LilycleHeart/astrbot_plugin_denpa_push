@@ -266,40 +266,9 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 5×5 高斯模糊(数学高斯, 与 feGaussianBlur 同算法, 细腻平滑; 权重和 273)
-function _gaussianBlur5(ctx, w, h) {
-  const src = ctx.getImageData(0, 0, w, h).data;
-  const out = new Uint8ClampedArray(src.length);
-  const G = [1, 4, 7, 4, 1, 4, 16, 26, 16, 4, 7, 26, 41, 26, 7, 4, 16, 26, 16, 4, 1, 4, 7, 4, 1];
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let r = 0, g = 0, b = 0;
-      for (let ky = -2; ky <= 2; ky++) {
-        const yy = Math.min(h - 1, Math.max(0, y + ky));
-        for (let kx = -2; kx <= 2; kx++) {
-          const xx = Math.min(w - 1, Math.max(0, x + kx));
-          const idx = (yy * w + xx) * 4;
-          const wgt = G[(ky + 2) * 5 + kx + 2];
-          r += src[idx] * wgt;
-          g += src[idx + 1] * wgt;
-          b += src[idx + 2] * wgt;
-        }
-      }
-      const o = (y * w + x) * 4;
-      out[o] = r / 273;
-      out[o + 1] = g / 273;
-      out[o + 2] = b / 273;
-      out[o + 3] = 255;
-    }
-  }
-  // 用 createImageData(兼容性优于 new ImageData 构造)
-  const outImg = ctx.createImageData(w, h);
-  outImg.data.set(out);
-  ctx.putImageData(outImg, 0, 0);
-}
-
-// 生成低分辨率网格图: 像素 canvas 填入采样色 → 5×5 高斯模糊 → PNG data URL。
-// 浏览器放大时双线性插值 → 天然平滑柔和(Mica 观感), 延迟低
+// 生成低分辨率网格图: 像素 canvas 填入采样色 → PNG data URL。
+// 浏览器放大时高质量双线性插值 → 区块柔和过渡(Mica 观感)。
+// 不做额外模糊: 区块保持可辨(CELL=16), 插值过渡平滑(非毛玻璃非马赛克), 零额外开销
 let _micaGridCanvas = null;
 function buildGridUrl(colors, cols, rows) {
   if (!_micaGridCanvas) _micaGridCanvas = document.createElement("canvas");
@@ -315,8 +284,6 @@ function buildGridUrl(colors, cols, rows) {
     img.data[i * 4 + 3] = 255;
   }
   c.putImageData(img, 0, 0);
-  // 数学高斯模糊融合格间边界(细腻平滑, 替代 canvas filter)
-  _gaussianBlur5(c, cols, rows);
   // 必须包 url(): 否则 data: URI 不是合法 background-image 值, 背景声明整体失效
   return `url("${_micaGridCanvas.toDataURL()}")`;
 }
@@ -334,7 +301,7 @@ function refreshMicaLive() {
     const surface = _micaSurfaceColor();
     // surface 混合色预转整数(避免采样循环内字符串操作)
     const sp = rgbStr(surface).split(",").map(s => parseInt(s.trim(), 10));
-    const CELL = 10;   // 每格目标物理尺寸(px): 越细块状感越弱, 分辨率变化不改变细腻度
+    const CELL = 16;   // 每格目标物理尺寸(px): 区块可辨(非毛玻璃), 分辨率变化不改变细腻度
     const MAX_COLS = 120, MAX_ROWS = 80;   // 上限(防超大面板过重)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
@@ -391,11 +358,13 @@ function loadMicaWallpaper(bgSrc) {
   img.src = bgSrc;
 }
 
-// 滚动/缩放实时重采样: rAF 循环检测 scrollY / 窗口尺寸变化即采样
-let _micaLastY = -1, _micaLastW = -1, _micaLastH = -1;
+// 滚动/缩放实时重采样: rAF 循环检测 scrollY / 窗口尺寸变化即采样(30fps 节流, 减半计算)
+let _micaLastY = -1, _micaLastW = -1, _micaLastH = -1, _micaFrame = 0;
 (function micaWatch() {
   requestAnimationFrame(() => {
-    if (window.scrollY !== _micaLastY || window.innerWidth !== _micaLastW || window.innerHeight !== _micaLastH) {
+    _micaFrame++;
+    if (_micaFrame % 2 === 0 &&
+        (window.scrollY !== _micaLastY || window.innerWidth !== _micaLastW || window.innerHeight !== _micaLastH)) {
       _micaLastY = window.scrollY;
       _micaLastW = window.innerWidth;
       _micaLastH = window.innerHeight;
@@ -415,14 +384,14 @@ let _micaLayoutTimer = 0;
   const observer = new MutationObserver(muts => {
     const relevant = muts.some(m => {
       if (m.type === "attributes") return m.attributeName !== "style";  // class 等布局属性
-      return m.type === "childList";
+      return m.type === "childList" || m.type === "characterData";  // 节点/文本更新(状态、日志、卡片)
     });
     if (!relevant) return;
     if (_micaLayoutTimer) return;
     _micaLayoutTimer = setTimeout(() => {
       _micaLayoutTimer = 0;
       refreshMicaLive();
-    }, 100);
+    }, 60);
   });
   observer.observe(appEl, { attributes: true, childList: true, characterData: true, subtree: true, attributeFilter: ["class"] });
 })();
