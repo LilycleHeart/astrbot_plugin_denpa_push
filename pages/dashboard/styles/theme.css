@@ -529,14 +529,20 @@ body {
 .acrylic-off .card { background: var(--color-bg-2); }
 .acrylic-off .stat-card { background: var(--color-bg-2); }
 
-/* ═══ 材质: Mica — 壁纸染色半透明面板 (Windows 11 Mica 风格) ═══
- * 面板 = 品牌/壁纸主色调双色渐变 + 噪点, 半透明且不模糊,
- * 背后壁纸/背景清晰透出; 完整 background 值由 JS 写入 --mica-bg */
+/* ═══ 材质: Mica — 不透明壁纸采样染色 (Windows 11 官方 Mica) ═══
+ * 面板 = 不透明渐变(壁纸/品牌主色低 alpha 叠表面色) + 噪点,
+ * 无图案透出、无模糊(官方: opaque, wallpaper sampled once, no blur);
+ * 失焦时 .mica-inactive 回退中性色 */
 .material-mica {
   --surface-bg: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-low: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-high: var(--mica-bg, var(--acrylic-bg));
   --surface-blur: none;
+}
+.material-mica.mica-inactive {
+  --surface-bg: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
+  --surface-bg-low: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
+  --surface-bg-high: linear-gradient(180deg, var(--color-app-bg), var(--color-bg-1)), var(--material-noise);
 }
 .material-mica .sidebar,
 .material-mica .hero,
@@ -544,10 +550,6 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  /* 三层背景对齐: 染色(自动) / 壁纸(fixed+cover 与 bg-layer 同屏对齐) / 噪点 */
-  background-attachment: scroll, fixed, scroll;
-  background-position: 0 0, center, 0 0;
-  background-size: auto, cover, auto;
 }
 
 .glow-off .card,

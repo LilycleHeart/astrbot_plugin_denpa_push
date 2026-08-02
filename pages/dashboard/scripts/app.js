@@ -230,23 +230,15 @@ function applyPalette(sourceHex, isDark) {
   window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
-// Mica 背景: 三层 background(逗号分隔, 同层双 image 非法必须分开)——
-//   1. 品牌/壁纸主色染色渐变。Mica 是接近不透明的壁纸染色: 有壁纸时染色轻
-//      (壁纸图案提供内容), 无壁纸时必须接近不透明, 否则深色主题下深色染色
-//      42% 透明度叠深色背景 ≈ 全透明
-//   2. 壁纸图案(background-attachment: fixed 与 bg-layer 对齐, 色块析出); 无壁纸时透明占位
-//   3. 噪点纹理
+// Mica 背景(官方定义: opaque 不透明材质, 壁纸仅采样染色, 图案不透出、不模糊)
+// 两层 background: ① 不透明壁纸采样色渐变(micaA/micaB = 主色低 alpha 叠表面色,
+// 已是具体不透明色值) ② 噪点纹理; 失焦时由 mica-inactive 类回退中性色
 function refreshMicaBg() {
   const root = document.documentElement;
-  const r1 = root.style.getPropertyValue("--mica-rgb-1").trim() || "248, 249, 250";
-  const r2 = root.style.getPropertyValue("--mica-rgb-2").trim() || "240, 244, 248";
-  const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
-  const tint = wall
-    ? `linear-gradient(180deg, rgba(${r1}, 0.45), rgba(${r2}, 0.52))`
-    : `linear-gradient(180deg, rgba(${r1}, 0.9), rgba(${r2}, 0.94))`;
-  const wallpaper = wall || "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
+  const c1 = root.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
+  const c2 = root.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
   root.style.setProperty("--mica-bg",
-    `${tint}, ${wallpaper}, var(--material-noise)`);
+    `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -335,10 +327,6 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
-    // Mica 面板背景与 bg-layer 同源同对齐(fixed), 壁纸色块在面板内可见
-    root.style.setProperty("--mica-wallpaper", `url('${bgSrc}')`);
-  } else {
-    root.style.setProperty("--mica-wallpaper", "");
   }
   refreshMicaBg();
 
@@ -2310,6 +2298,14 @@ function liveApplySettings() {
     clearTimeout(_parallaxHoldTimer);
   }
 }
+
+// Mica 失焦回退(官方: inactive 时回落中性色, 相当于 SolidBackgroundFillColorBase)
+(function initMicaFocusFallback() {
+  const appEl = document.getElementById("app");
+  if (!appEl) return;
+  window.addEventListener("blur", () => appEl.classList.add("mica-inactive"));
+  window.addEventListener("focus", () => appEl.classList.remove("mica-inactive"));
+})();
 
 // ─── ECG Logo: hover 加速绘制脉冲 ───
 (function initEcgLogoHover() {
