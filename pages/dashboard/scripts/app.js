@@ -230,16 +230,19 @@ function applyPalette(sourceHex, isDark) {
   window.dispatchEvent(new CustomEvent("denpa:palette-changed"));
 }
 
-// Mica 背景: JS 生成完整 background 值(alpha 内联数字)。
-// 注意: 渐变与噪点必须用逗号分隔成两个 bg-layer(同一层两个 image 是非法的,
-// 会导致整条 background 声明失效 → 面板全透明); 原 acrylic 是 color+image 同层所以没这个问题
+// Mica 背景: 三层 background(逗号分隔, 同层双 image 非法必须分开)——
+//   1. 品牌/壁纸主色染色渐变(固定强度, 不随 material_opacity)
+//   2. 壁纸图案(background-attachment: fixed 与 bg-layer 对齐, 色块析出); 无壁纸时透明占位
+//   3. 噪点纹理
 function refreshMicaBg() {
   const root = document.documentElement;
-  const op = ((state.uiConfig.material_opacity ?? 45) / 100).toFixed(2);
   const r1 = root.style.getPropertyValue("--mica-rgb-1").trim() || "248, 249, 250";
   const r2 = root.style.getPropertyValue("--mica-rgb-2").trim() || "240, 244, 248";
+  const wall = root.style.getPropertyValue("--mica-wallpaper").trim();
+  const tint = `linear-gradient(180deg, rgba(${r1}, 0.42), rgba(${r2}, 0.5))`;
+  const wallpaper = wall || "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
   root.style.setProperty("--mica-bg",
-    `linear-gradient(180deg, rgba(${r1}, ${op}), rgba(${r2}, ${op})), var(--material-noise)`);
+    `${tint}, ${wallpaper}, var(--material-noise)`);
 }
 
 // ─── Dynamic Accent from Background Image ───
@@ -328,7 +331,12 @@ function applyUiConfig() {
   } else if (ui.background_mode === "image" && ui.background_image) {
     const bgSrc = ui.background_image.startsWith("data:") ? ui.background_image : `./bg?t=${Date.now()}`;
     if (bgLayer) bgLayer.style.backgroundImage = `url('${bgSrc}')`;
+    // Mica 面板背景与 bg-layer 同源同对齐(fixed), 壁纸色块在面板内可见
+    root.style.setProperty("--mica-wallpaper", `url('${bgSrc}')`);
+  } else {
+    root.style.setProperty("--mica-wallpaper", "");
   }
+  refreshMicaBg();
 
   // Radius
   const r = Math.max(0, Math.min(40, Number(ui.corner_radius ?? 14)));

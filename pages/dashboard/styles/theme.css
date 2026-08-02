@@ -544,6 +544,10 @@ body {
 .material-mica .tab-content.active {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
+  /* 三层背景对齐: 染色(自动) / 壁纸(fixed+cover 与 bg-layer 同屏对齐) / 噪点 */
+  background-attachment: scroll, fixed, scroll;
+  background-position: 0 0, center, 0 0;
+  background-size: auto, cover, auto;
 }
 
 .glow-off .card,
