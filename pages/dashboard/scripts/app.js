@@ -299,7 +299,7 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const GRID_COLS = 12, GRID_ROWS = 9;   // 区块采样密度(越细, 柔化后越平滑)
+    const GRID_COLS = 48, GRID_ROWS = 36;   // 区块采样密度(低分辨率图, 放大插值平滑细腻)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
