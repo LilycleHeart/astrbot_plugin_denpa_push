@@ -279,26 +279,22 @@ function refreshMicaLive() {
     const surface = _micaSurfaceColor();
     const c1 = document.documentElement.style.getPropertyValue("--mica-tint-1").trim() || "#f8f9fa";
     const c2 = document.documentElement.style.getPropertyValue("--mica-tint-2").trim() || "#f0f4f8";
-    const ROWS = 5;
+    const ROWS = 12;   // 区块采样行数(更细, 色带平滑)
+    const COLS = 8;    // 每行横向采样点数
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
       const rect = el.getBoundingClientRect();
       const y1 = Math.max(0, rect.top), y2 = Math.min(vh, rect.bottom);
-      if (y2 - y1 < 4) {
-        // 不可见: 清理内联
-        el.style.removeProperty("--surface-bg");
-        el.style.removeProperty("--surface-bg-low");
-        el.style.removeProperty("--surface-bg-high");
-        return;
-      }
+      // 不可见: 保留旧采样值(不更新也不清理, 避免滚出/滚入视口边缘时背景反复切换闪烁)
+      if (y2 - y1 < 4) return;
       const stops = [];
       for (let r = 0; r < ROWS; r++) {
         const vy = y1 + ((r + 0.5) / ROWS) * (y2 - y1);   // 面板内行中心(视口坐标)
         const iy = Math.round((vy - oy) / scale);         // → 壁纸 y
         if (iy < 0 || iy >= ih) { stops.push(null); continue; }
         let rr = 0, gg = 0, bb = 0, n = 0;
-        for (let sx = 0.125; sx < 1; sx += 0.25) {        // 横向 4 点平均
-          const ix = Math.round(sx * iw);
+        for (let k = 0; k < COLS; k++) {                  // 横向多点平均
+          const ix = Math.round(((k + 0.5) / COLS) * iw);
           if (ix < 0 || ix >= iw) continue;
           const i = (iy * iw + ix) * 4;
           rr += imgData[i]; gg += imgData[i + 1]; bb += imgData[i + 2]; n++;
@@ -312,6 +308,8 @@ function refreshMicaLive() {
         .map((c, i) => `${c || (i < ROWS / 2 ? c1 : c2)} ${Math.round((i / (ROWS - 1)) * 100)}%`)
         .join(", ");
       const bgVal = `linear-gradient(180deg, ${grad}), var(--material-noise)`;
+      // 值未变化时跳过(避免滚动中无谓重绘)
+      if (el.style.getPropertyValue("--surface-bg") === bgVal) return;
       // sidebar/hero 用 --surface-bg-low, 其余面板用 --surface-bg: 三个都设
       el.style.setProperty("--surface-bg", bgVal);
       el.style.setProperty("--surface-bg-low", bgVal);
