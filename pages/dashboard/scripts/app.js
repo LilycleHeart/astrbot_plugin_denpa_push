@@ -266,16 +266,15 @@ function refreshMicaBg() {
     `linear-gradient(180deg, ${c1}, ${c2}), var(--material-noise)`);
 }
 
-// 生成低分辨率网格图: 12×9 像素 canvas 填入采样色 → PNG data URL。
+// 生成低分辨率网格图: 像素 canvas 填入采样色 → PNG data URL。
 // 浏览器放大时双线性插值 → 天然平滑柔和(Mica 观感), 无需 SVG/blur 滤镜,
-// 每帧只编码几百字节小图, 延迟极低
+// 每帧只编码小图, 延迟极低
 let _micaGridCanvas = null;
 function buildGridUrl(colors, cols, rows) {
-  if (!_micaGridCanvas) {
-    _micaGridCanvas = document.createElement("canvas");
-    _micaGridCanvas.width = cols;
-    _micaGridCanvas.height = rows;
-  }
+  if (!_micaGridCanvas) _micaGridCanvas = document.createElement("canvas");
+  // 网格尺寸随面板动态变化: 重置 canvas 尺寸(赋值会清空画布, 随后全量写入)
+  if (_micaGridCanvas.width !== cols) _micaGridCanvas.width = cols;
+  if (_micaGridCanvas.height !== rows) _micaGridCanvas.height = rows;
   const c = _micaGridCanvas.getContext("2d");
   const img = c.createImageData(cols, rows);
   for (let i = 0; i < colors.length; i++) {
@@ -285,7 +284,8 @@ function buildGridUrl(colors, cols, rows) {
     img.data[i * 4 + 3] = 255;
   }
   c.putImageData(img, 0, 0);
-  return _micaGridCanvas.toDataURL();
+  // 必须包 url(): 否则 data: URI 不是合法 background-image 值, 背景声明整体失效
+  return `url("${_micaGridCanvas.toDataURL()}")`;
 }
 
 // 实时采样: 面板覆盖的壁纸区域 → cols×rows 方格, 每格中心点取色 → 马赛克背景
