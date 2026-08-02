@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 动态心电图图标 22px:暗线底迹 + 青色尾迹 + 白色亮点(SMIL 实现,img 嵌入也能动) -->
+<svg width="22px" height="22px" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- ECG 暗线 -->
+  <polyline fill="none" stroke="#073540" stroke-width="1.4"
+    stroke-linecap="round" stroke-linejoin="round"
+    points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
+
+  <!-- 青色长尾 -->
+  <polyline fill="none" stroke="#00eaff" stroke-width="1.8"
+    stroke-linecap="round" stroke-linejoin="round"
+    stroke-dasharray="55 30"
+    points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11">
+    <animate attributeName="stroke-dashoffset" from="85" to="0"
+      dur="1.6s" repeatCount="indefinite" calcMode="linear"/>
+  </polyline>
+
+  <!-- 白色亮点(提前相位) -->
+  <polyline fill="none" stroke="#ffffff" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"
+    stroke-dasharray="4 81"
+    style="filter:drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px #00eaff)"
+    points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11">
+    <animate attributeName="stroke-dashoffset" from="35" to="-50"
+      dur="1.6s" repeatCount="indefinite" calcMode="linear"/>
+  </polyline>
+
+</svg>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<style>
+
+body{
+    margin:0;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:#07131d;
+}
+
+
+.logo{
+    width:22px;
+    height:22px;
+}
+
+
+/* 暗色 ECG */
+.base{
+    fill:none;
+    stroke:#073540;
+    stroke-width:1.4;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+
+
+/* 后方青色尾迹 */
+.tail{
+    fill:none;
+    stroke:#00eaff;
+    stroke-width:1.8;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+
+    stroke-dasharray:55 30;
+
+    animation:tailMove 1.6s linear infinite;
+}
+
+
+/* 前方白色亮点 */
+.head{
+    fill:none;
+    stroke:#ffffff;
+    stroke-width:2;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+
+    stroke-dasharray:4 81;
+
+    /* 提前相位 */
+    animation:headMove 1.6s linear infinite;
+
+    filter:
+    drop-shadow(0 0 2px #ffffff)
+    drop-shadow(0 0 4px #00eaff);
+}
+
+
+/* 尾迹 */
+@keyframes tailMove{
+
+    from{
+        stroke-dashoffset:85;
+    }
+
+    to{
+        stroke-dashoffset:0;
+    }
+
+}
+
+
+/* 亮点提前 */
+@keyframes headMove{
+
+    from{
+        stroke-dashoffset:35;
+    }
+
+    to{
+        stroke-dashoffset:-50;
+    }
+
+}
+
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<svg class="logo" viewBox="0 0 22 22">
+
+
+<!-- ECG底线 -->
+<polyline
+class="base"
+points="
+1,11
+6,11
+8.5,11
+10.5,3.5
+12.5,18
+14.5,11
+21,11
+"/>
+
+
+<!-- 长尾 -->
+<polyline
+class="tail"
+points="
+1,11
+6,11
+8.5,11
+10.5,3.5
+12.5,18
+14.5,11
+21,11
+"/>
+
+
+<!-- 前端亮点 -->
+<polyline
+class="head"
+points="
+1,11
+6,11
+8.5,11
+10.5,3.5
+12.5,18
+14.5,11
+21,11
+"/>
+
+
+</svg>
+
+
+</body>
+</html>
