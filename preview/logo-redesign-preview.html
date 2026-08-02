@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <title>ECG Logo Redesign Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --color-brand: #1d9bf0;
+      --color-brand-hover: #1a8cd8;
+      --color-fg-1: #e8eaed;
+      --color-fg-2: #9aa0a6;
+      --color-bg-1: #0c0e13;
+      --color-bg-2: #151820;
+      --color-bg-3: #1e2230;
+      --color-stroke-2: #2e3240;
+      --font-family: "MiSans", "Space Grotesk", system-ui, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-family);
+      background: var(--color-bg-1);
+      color: var(--color-fg-1);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: var(--color-fg-2);
+      font-size: 14px;
+      margin-bottom: 48px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      max-width: 960px;
+      width: 100%;
+    }
+    .option {
+      background: var(--color-bg-2);
+      border: 1px solid var(--color-stroke-2);
+      border-radius: 16px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .option-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-brand);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .option-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .option-desc {
+      font-size: 13px;
+      color: var(--color-fg-2);
+      text-align: center;
+      line-height: 1.6;
+    }
+    .logo-stage {
+      width: 100%;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-bg-3);
+      border-radius: 12px;
+      position: relative;
+    }
+    .logo-container {
+      transform: scale(4);
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-container svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+      overflow: visible;
+    }
+    .meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .meta-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(29, 155, 240, 0.12);
+      color: var(--color-brand);
+    }
+
+    /* ═══════════════════════════════════════════════════
+       Option A: 单脉冲 · 极简绘制
+       路径: 干净基线 + 两个尖峰, 无 PQRST 小波动
+       ═══════════════════════════════════════════════════ */
+    .opt-a-svg { overflow: visible; }
+
+    .opt-a-ghost {
+      fill: none;
+      stroke: var(--color-brand-hover);
+      stroke-width: 1.1;
+      opacity: 0.18;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .opt-a-draw {
+      fill: none;
+      stroke: var(--color-brand);
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 100 100;
+      stroke-dashoffset: 100;
+      opacity: 0;
+      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-brand) 60%, transparent));
+      animation: a-draw 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .opt-a-tip {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1.2 98.8;
+      stroke-dashoffset: 0;
+      opacity: 0;
+      filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px var(--color-brand));
+      animation: a-tip 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes a-draw {
+      0%   { stroke-dashoffset: 100; opacity: 0; }
+      5%   { stroke-dashoffset: 100; opacity: 1; }
+      55%  { stroke-dashoffset: 0;   opacity: 1; }
+      75%  { stroke-dashoffset: 0;   opacity: 1; }
+      100% { stroke-dashoffset: 0;   opacity: 0; }
+    }
+
+    @keyframes a-tip {
+      0%   { stroke-dashoffset: 0;  opacity: 0; }
+      5%   { stroke-dashoffset: 0;  opacity: 1; }
+      55%  { stroke-dashoffset: 100; opacity: 1; }
+      56%  { stroke-dashoffset: 100; opacity: 0; }
+      100% { stroke-dashoffset: 0;  opacity: 0; }
+    }
+
+
+    /* ═══════════════════════════════════════════════════
+       Option B: 呼吸信号 · 永续流动
+       路径: 干净基线 + 两个尖峰
+       ═══════════════════════════════════════════════════ */
+    .opt-b-svg { overflow: visible; }
+
+    .opt-b-ghost {
+      fill: none;
+      stroke: var(--color-brand-hover);
+      stroke-width: 1.1;
+      opacity: 0.15;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .opt-b-flow {
+      fill: none;
+      stroke: var(--color-brand);
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 18 82;
+      stroke-dashoffset: 100;
+      opacity: 0.85;
+      filter: drop-shadow(0 0 2px color-mix(in srgb, var(--color-brand) 50%, transparent));
+      animation: b-flow 3s linear infinite;
+    }
+
+    .opt-b-glow {
+      fill: none;
+      stroke: var(--color-brand);
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0;
+      animation: b-glow 1.6s ease-in-out infinite;
+    }
+
+    .opt-b-pulse {
+      fill: #ffffff;
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: b-pulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes b-flow {
+      0%   { stroke-dashoffset: 100; }
+      100% { stroke-dashoffset: 0; }
+    }
+
+    @keyframes b-glow {
+      0%, 100% { opacity: 0; stroke-width: 2.5; }
+      50%      { opacity: 0.35; stroke-width: 3.8; }
+    }
+
+    @keyframes b-pulse {
+      0%, 100% { opacity: 0; transform: scale(0.5); }
+      35%      { opacity: 0; transform: scale(0.5); }
+      45%      { opacity: 1; transform: scale(1.2); }
+      55%      { opacity: 0.6; transform: scale(1); }
+      65%      { opacity: 0; transform: scale(0.8); }
+    }
+
+
+    /* ═══════════════════════════════════════════════════
+       Option C: 监视器屏幕 · 扫描线
+       路径: 干净基线 + 两个尖峰
+       ═══════════════════════════════════════════════════ */
+    .opt-c-svg { overflow: visible; }
+
+    .opt-c-ghost {
+      fill: none;
+      stroke: var(--color-brand-hover);
+      stroke-width: 1.1;
+      opacity: 0.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .opt-c-lit {
+      fill: none;
+      stroke: var(--color-brand);
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-brand) 50%, transparent));
+    }
+
+    .opt-c-scan-line {
+      stroke: #ffffff;
+      stroke-width: 0.6;
+      opacity: 0.7;
+      filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px var(--color-brand));
+      animation: c-scan 2.4s linear infinite;
+    }
+
+    .opt-c-scan-glow {
+      animation: c-scan 2.4s linear infinite;
+    }
+
+    @keyframes c-scan {
+      0%   { transform: translateX(-2px); }
+      100% { transform: translateX(24px); }
+    }
+
+    .opt-c-tip {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1 99;
+      opacity: 0.9;
+      filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px var(--color-brand));
+      animation: c-tip 2.4s linear infinite;
+    }
+
+    @keyframes c-tip {
+      0%   { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -100; }
+    }
+  </style>
+</head>
+<body>
+  <h1>ECG Logo Redesign</h1>
+  <p class="subtitle">简化波形 — 干净基线 + 两个尖峰, 去掉 PQRST 小波动</p>
+
+  <div class="grid">
+    <!-- ══ Option A ═══ -->
+    <div class="option">
+      <span class="option-label">方案 A</span>
+      <span class="option-title">单脉冲 · 极简绘制</span>
+      <div class="logo-stage">
+        <div class="logo-container">
+          <svg class="opt-a-svg" viewBox="0 0 32 24" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="a-fade-grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#ffffff"/>
+                <stop offset="0.72" stop-color="#ffffff"/>
+                <stop offset="1" stop-color="#000000"/>
+              </linearGradient>
+              <mask id="a-fade-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="24">
+                <rect width="32" height="24" fill="url(#a-fade-grad)"/>
+              </mask>
+              <!-- 简化路径: 干净基线 + 两个尖峰, 无小波动 -->
+              <path id="a-ecg-path" pathLength="100" d="
+                M 1,18 
+                L 6,18 
+                L 8,18 
+                L 10,4 
+                L 12,18 
+                L 14,18 
+                L 18,18 
+                L 20,18 
+                L 22,4 
+                L 24,18 
+                L 26,18 
+                L 31,18
+              "/>
+            </defs>
+            <use class="opt-a-ghost" href="#a-ecg-path"/>
+            <g mask="url(#a-fade-mask)">
+              <use class="opt-a-draw" href="#a-ecg-path"/>
+            </g>
+            <use class="opt-a-tip" href="#a-ecg-path"/>
+          </svg>
+        </div>
+      </div>
+      <p class="option-desc">仅 3 层动画<br/>基线幽灵 + 渐变绘制 + 笔尖光点<br/>连续绘制循环,无静止停顿</p>
+      <div class="meta">
+        <span class="meta-tag">3 层动画</span>
+        <span class="meta-tag">1 filter</span>
+        <span class="meta-tag">2.8s 周期</span>
+      </div>
+    </div>
+
+    <!-- ═══ Option B ══ -->
+    <div class="option">
+      <span class="option-label">方案 B</span>
+      <span class="option-title">呼吸信号 · 永续流动</span>
+      <div class="logo-stage">
+        <div class="logo-container">
+          <svg class="opt-b-svg" viewBox="0 0 32 24" xmlns="http://www.w3.org/2000/svg">
+            <path id="b-ecg-path" pathLength="100" d="
+              M 1,18 
+              L 6,18 
+              L 8,18 
+              L 10,4 
+              L 12,18 
+              L 14,18 
+              L 18,18 
+              L 20,18 
+              L 22,4 
+              L 24,18 
+              L 26,18 
+              L 31,18
+            "/>
+            <use class="opt-b-ghost" href="#b-ecg-path"/>
+            <use class="opt-b-glow" href="#b-ecg-path"/>
+            <use class="opt-b-flow" href="#b-ecg-path"/>
+            <circle class="opt-b-pulse" cx="10" cy="4" r="1.2"/>
+            <circle class="opt-b-pulse" cx="22" cy="4" r="1.2" style="animation-delay: 0.8s"/>
+          </svg>
+        </div>
+      </div>
+      <p class="option-desc">虚线流动永不停歇<br/>呼吸辉光同步脉动<br/>R 波位置心跳光点</p>
+      <div class="meta">
+        <span class="meta-tag">4 层动画</span>
+        <span class="meta-tag">1 filter</span>
+        <span class="meta-tag">3s 周期</span>
+      </div>
+    </div>
+
+    <!-- ═══ Option C ══ -->
+    <div class="option">
+      <span class="option-label">方案 C</span>
+      <span class="option-title">监视器屏幕 · 扫描线</span>
+      <div class="logo-stage">
+        <div class="logo-container">
+          <svg class="opt-c-svg" viewBox="0 0 32 24" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="c-scan-grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="var(--color-brand)" stop-opacity="0"/>
+                <stop offset="0.5" stop-color="var(--color-brand)" stop-opacity="0.12"/>
+                <stop offset="1" stop-color="var(--color-brand)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path id="c-ecg-path" pathLength="100" d="
+              M 1,18 
+              L 6,18 
+              L 8,18 
+              L 10,4 
+              L 12,18 
+              L 14,18 
+              L 18,18 
+              L 20,18 
+              L 22,4 
+              L 24,18 
+              L 26,18 
+              L 31,18
+            "/>
+            <use class="opt-c-ghost" href="#c-ecg-path"/>
+            <use class="opt-c-lit" href="#c-ecg-path" style="opacity:0.7"/>
+            <rect class="opt-c-scan-glow" x="-4" y="2" width="8" height="18" fill="url(#c-scan-grad)" rx="2"/>
+            <line class="opt-c-scan-line" x1="0" y1="3" x2="0" y2="19"/>
+            <use class="opt-c-tip" href="#c-ecg-path"/>
+          </svg>
+        </div>
+      </div>
+      <p class="option-desc">波形常驻如监护仪<br/>扫描线从左到右扫过<br/>最克制、最干净的方案</p>
+      <div class="meta">
+        <span class="meta-tag">3 层动画</span>
+        <span class="meta-tag">1 filter</span>
+        <span class="meta-tag">2.4s 周期</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -2273,17 +2273,14 @@ function liveApplySettings() {
 (function initEcgLogoHover() {
   const logo = document.querySelector(".sidebar-logo");
   if (!logo) return;
-  const animated = logo.querySelectorAll(".ecg-draw, .ecg-halo, .ecg-echo");
-  const pulsed = logo.querySelectorAll(".ecg-tip, .ecg-beat, .ecg-ripple");
-  const normalDur = "3.4s";
-  const fastDur = "1.2s";
+  const animated = logo.querySelectorAll(".ecg-tail, .ecg-head");
+  const normalDur = "1.6s";
+  const fastDur = "0.7s";
   logo.addEventListener("mouseenter", () => {
     animated.forEach(el => el.style.animationDuration = fastDur);
-    pulsed.forEach(el => el.style.animationDuration = fastDur);
   });
   logo.addEventListener("mouseleave", () => {
     animated.forEach(el => el.style.animationDuration = normalDur);
-    pulsed.forEach(el => el.style.animationDuration = normalDur);
   });
 })();
 

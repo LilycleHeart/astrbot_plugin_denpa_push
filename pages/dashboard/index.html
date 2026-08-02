@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260802e" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260802n" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260802e" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260803a" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260803a" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260803a" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -21,26 +21,13 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-logo" aria-hidden="true">
-            <svg class="ecg-logo-svg" viewBox="0 0 40 28" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="ecg-grad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="var(--color-brand)"/>
-                  <stop offset="0.62" stop-color="var(--color-brand-hover)"/>
-                  <stop offset="1" stop-color="color-mix(in srgb, var(--color-brand) 45%, white)"/>
-                </linearGradient>
-                <radialGradient id="ecg-ripple-grad">
-                  <stop offset="0" stop-color="color-mix(in srgb, var(--color-brand) 70%, white)" stop-opacity="0.9"/>
-                  <stop offset="1" stop-color="var(--color-brand)" stop-opacity="0"/>
-                </radialGradient>
-                <path id="ecg-path" pathLength="100" d="M 2,16 L 6,16 Q 7,12.5 9,14 L 9.6,16 L 10,17.5 L 10.6,6 L 11.4,17.5 L 12,16 Q 13.5,8.5 17,8.5 Q 20.5,8.5 22,16 L 24,16 L 38,16"/>
-              </defs>
-              <use class="ecg-ghost" href="#ecg-path"/>
-              <use class="ecg-halo" href="#ecg-path"/>
-              <use class="ecg-echo" href="#ecg-path"/>
-              <use class="ecg-draw" href="#ecg-path"/>
-              <use class="ecg-tip" href="#ecg-path"/>
-              <circle class="ecg-ripple" cx="10.6" cy="6" r="1.4"/>
-              <circle class="ecg-beat" cx="10.6" cy="6" r="1.15"/>
+            <svg class="ecg-logo-svg" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+              <!-- ECG 暗线 -->
+              <polyline class="ecg-base" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
+              <!-- 青色长尾 -->
+              <polyline class="ecg-tail" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
+              <!-- 白色亮点 -->
+              <polyline class="ecg-head" fill="none" points="1,11 6,11 8.5,11 10.5,3.5 12.5,18 14.5,11 21,11"/>
             </svg>
           </span>
           <span class="sidebar-title">DenpaPush</span>

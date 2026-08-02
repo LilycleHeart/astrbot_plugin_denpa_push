@@ -214,9 +214,9 @@ body {
   margin-bottom: var(--space-xs);
 }
 .sidebar-logo {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -228,163 +228,72 @@ body {
 .sidebar-logo:hover {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-brand) 60%, transparent));
 }
-.sidebar-logo svg { width: 28px; height: 28px; display: block; overflow: visible; }
+.sidebar-logo svg { width: 22px; height: 22px; display: block; overflow: visible; }
 
-/* ═══ ECG Logo v2 — 双层渐变波形 · 彗尾笔尖 · R 波扩散脉冲 ═══ */
+/* ═══ ECG Logo — 暗线底迹 · 青色尾迹 · 白色亮点 ═══ */
 .ecg-logo-svg {
   overflow: visible;
 }
 
-/* 基线暗影 — 监护仪屏幕底色, 常驻波形轮廓 */
-.ecg-ghost {
+/* ECG 暗线 — 常驻波形轮廓(低透明度主题色, 动态取色) */
+.ecg-base {
   fill: none;
   stroke: var(--color-brand-hover);
-  stroke-width: 1.1;
+  stroke-width: 1.4;
   opacity: 0.22;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* 光晕底座 — 粗描边低透明, 与主波同步绘制, 撑起波形体积光 */
-.ecg-halo {
+/* 青色长尾 — 循环扫过整条波形(主题主色) */
+.ecg-tail {
   fill: none;
   stroke: var(--color-brand);
-  stroke-width: 3.4;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 100 100;
-  stroke-dashoffset: 100;
-  opacity: 0;
-  animation: ecg-draw-cycle 3.4s linear infinite;
+  stroke-dasharray: 55 30;
+  animation: ecg-tail-move 1.6s linear infinite;
 }
 
-/* 彗尾残影 — 落后主波 8 单位, 白色微光拖在笔尖之后 */
-.ecg-echo {
+/* 白色亮点 — 提前相位, 位于尾迹前沿(brand 对比色 + 主题辉光) */
+.ecg-head {
   fill: none;
-  stroke: #ffffff;
-  stroke-width: 1.1;
+  stroke: var(--color-brand-on);
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 100 100;
-  stroke-dashoffset: 108;
-  opacity: 0;
-  filter: drop-shadow(0 0 2px var(--color-brand));
-  animation: ecg-echo-cycle 3.4s linear infinite;
+  stroke-dasharray: 4 81;
+  animation: ecg-head-move 1.6s linear infinite;
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--color-brand));
 }
 
-/* 绘制前沿 — 渐变波形从左到右实时画出, 保持后淡出 (路径 100 单位) */
-.ecg-draw {
-  fill: none;
-  stroke: url(#ecg-grad);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 100 100;
-  stroke-dashoffset: 100;
-  opacity: 0;
-  filter: drop-shadow(0 0 2px var(--color-brand)) drop-shadow(0 0 6px color-mix(in srgb, var(--color-brand) 70%, transparent));
-  animation: ecg-draw-cycle 3.4s linear infinite;
+/* 尾迹: 从最右端(不可见)扫回起点, 循环 */
+@keyframes ecg-tail-move {
+  from { stroke-dashoffset: 85; }
+  to   { stroke-dashoffset: 0; }
 }
 
-/* 笔尖亮点 — 白色光点, 始终位于绘制前沿 */
-.ecg-tip {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1.5 98.5;
-  stroke-dashoffset: 0;
-  opacity: 0;
-  filter: drop-shadow(0 0 1.5px var(--color-brand)) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px var(--color-brand));
-  animation: ecg-tip-cycle 3.4s linear infinite;
-}
-
-/* 节拍闪光 — 笔尖掠过 R 波尖峰时的心跳双闪 */
-.ecg-beat {
-  fill: #ffffff;
-  opacity: 0;
-  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 5px var(--color-brand));
-  animation: ecg-beat-cycle 3.4s linear infinite;
-}
-
-/* R 波扩散环 — 双闪瞬间从尖峰向外扩散的径向脉冲 */
-.ecg-ripple {
-  fill: url(#ecg-ripple-grad);
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ecg-ripple-cycle 3.4s linear infinite;
-}
-
-/* 绘制主循环: 停顿 → 画出 → 保持 → 淡出 */
-@keyframes ecg-draw-cycle {
-  0%, 22.9%  { stroke-dashoffset: 100; opacity: 0; }
-  23%        { stroke-dashoffset: 100; opacity: 1; }
-  50%        { stroke-dashoffset: 0;   opacity: 1; }
-  77%        { stroke-dashoffset: 0;   opacity: 1; }
-  100%       { stroke-dashoffset: 0;   opacity: 0; }
-}
-
-/* 彗尾与主波同节奏, offset 恒定领先 8 单位形成拖尾 */
-@keyframes ecg-echo-cycle {
-  0%, 22.9%  { stroke-dashoffset: 108; opacity: 0; }
-  23%        { stroke-dashoffset: 108; opacity: 0.55; }
-  50%        { stroke-dashoffset: 8;   opacity: 0.55; }
-  77%        { stroke-dashoffset: 8;   opacity: 0.45; }
-  100%       { stroke-dashoffset: 8;   opacity: 0; }
-}
-
-/* 笔尖与绘制前沿同步, 画完后立刻熄灭 */
-@keyframes ecg-tip-cycle {
-  0%, 22.9%  { stroke-dashoffset: 0; opacity: 0; }
-  23%        { stroke-dashoffset: 0; opacity: 1; }
-  50%        { stroke-dashoffset: 100; opacity: 1; }
-  50.5%      { stroke-dashoffset: 100; opacity: 0; }
-  100%       { stroke-dashoffset: 0; opacity: 0; }
-}
-
-/* R 波尖峰心跳闪光 — 双闪节奏 */
-@keyframes ecg-beat-cycle {
-  0%    { opacity: 0; }
-  27%   { opacity: 0; }
-  27.6% { opacity: 1; }
-  29%   { opacity: 0.3; }
-  30%   { opacity: 1; }
-  31%   { opacity: 0; }
-  100%  { opacity: 0; }
-}
-
-/* R 波扩散环 — 与首次闪光同步起爆, 1.5 秒内扩散淡出 */
-@keyframes ecg-ripple-cycle {
-  0%, 26.8% { transform: scale(0.35); opacity: 0; }
-  27.2%     { transform: scale(0.35); opacity: 0.85; }
-  42%       { transform: scale(4.6);  opacity: 0; }
-  100%      { transform: scale(0.35); opacity: 0; }
+/* 亮点: 领先尾迹出现并超前消失 */
+@keyframes ecg-head-move {
+  from { stroke-dashoffset: 35; }
+  to   { stroke-dashoffset: -50; }
 }
 
 /* Hover 加速由 JS 控制 animation-duration */
 
 @media (prefers-reduced-motion: reduce) {
-  .ecg-draw,
-  .ecg-halo {
+  .ecg-tail,
+  .ecg-head {
     animation: none;
-    opacity: 0.9;
+  }
+  .ecg-tail {
     stroke-dashoffset: 0;
+    opacity: 0.85;
   }
-  .ecg-echo {
-    animation: none;
-    opacity: 0.4;
-    stroke-dashoffset: 8;
-  }
-  .ecg-tip,
-  .ecg-beat,
-  .ecg-ripple {
-    display: none;
-  }
-  .ecg-ghost { opacity: 0.25; }
+  .ecg-head { display: none; }
+  .ecg-base { opacity: 0.9; }
 }
-
 .sidebar-title {
   font-family: var(--font-family-display);
   font-weight: var(--font-weight-bold);
