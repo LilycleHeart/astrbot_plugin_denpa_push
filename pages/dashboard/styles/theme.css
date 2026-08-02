@@ -256,10 +256,10 @@ body {
   animation: ecg-tail-move 1.6s linear infinite;
 }
 
-/* 白色亮点 — 提前相位, 位于尾迹前沿(brand 对比色 + 主题辉光) */
+/* 白色亮点 — 提前相位, 位于尾迹前沿(纯白 + 主题辉光) */
 .ecg-head {
   fill: none;
-  stroke: var(--color-brand-on);
+  stroke: #ffffff;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
