@@ -2003,66 +2003,76 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
   });
 }
 
+// "08月03日" → 803,增量插入时用于保持日期条的时间降序(跨年场景不精确,可接受)
+function _dateStrToNum(s) {
+  const m = /^(\d{2})月(\d{2})日$/.exec(s || "");
+  return m ? Number(m[1]) * 100 + Number(m[2]) : 0;
+}
+
 function _insertNewCards(tlCt, newItems, allFilteredItems) {
-  // Build new card elements + date separators if needed
-  // Insert at the TOP of the container (before existing children)
-  const frag = document.createDocumentFragment();
-  const existingDates = new Set(
-    Array.from(tlCt.querySelectorAll(".tl-date-sep-text")).map(el => el.textContent)
-  );
-
-  // Group new items by date, in order
-  let lastDate = "";
-  let pendingDateSep = null;
-  let pendingCount = 0;
-  const elementsToInsert = [];
-
+  // Group new items by date, keeping their time-descending order.
+  // Each group is inserted right after its date separator (creating a new
+  // separator when the date doesn't exist yet, placed before the first
+  // older separator) — instead of dumping everything at the very top,
+  // which scrambled the date-grouping order.
+  const groups = [];
   newItems.forEach(item => {
     const { dateStr } = _extractTimeDate(item);
-    if (dateStr !== lastDate) {
-      if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
-      lastDate = dateStr;
-      pendingCount = 0;
-
-      if (!existingDates.has(dateStr)) {
-        const grp = document.createElement("div");
-        grp.className = "tl-date-sep tl-sep-new";
-        grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
-        // Drop the "new" marker once its entrance animation finishes so
-        // later reflows animate this separator smoothly too
-        grp.addEventListener("animationend", () => grp.classList.remove("tl-sep-new"), { once: true });
-        pendingDateSep = grp;
-        elementsToInsert.push(grp);
-      } else {
-        pendingDateSep = null;
-      }
-    }
-    pendingCount++;
-    const card = buildHistoryCard(item);
-    card.classList.add("tl-entry-new");
-    // Once the slide-in finishes, drop the "new" marker so the card joins
-    // the normal reflow transition pool. Also pin `animation: none` —
-    // otherwise removing the class changes animation-name back to the
-    // default tl-entry-in, which would restart an entrance animation.
-    card.addEventListener("animationend", () => {
-      card.style.animation = "none";
-      card.classList.remove("tl-entry-new");
-    }, { once: true });
-    elementsToInsert.push(card);
+    const last = groups[groups.length - 1];
+    if (last && last.dateStr === dateStr) last.items.push(item);
+    else groups.push({ dateStr, items: [item] });
   });
-  if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
 
-  // Update date counts for existing date separators
+  groups.forEach(g => {
+    const frag = document.createDocumentFragment();
+    const existingSep = Array.from(tlCt.querySelectorAll(".tl-date-sep"))
+      .find(sep => sep.querySelector(".tl-date-sep-text")?.textContent === g.dateStr);
+
+    let sepEl = null;
+    if (!existingSep) {
+      sepEl = document.createElement("div");
+      sepEl.className = "tl-date-sep tl-sep-new";
+      sepEl.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${g.dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
+      // Drop the "new" marker once its entrance animation finishes so
+      // later reflows animate this separator smoothly too
+      sepEl.addEventListener("animationend", () => sepEl.classList.remove("tl-sep-new"), { once: true });
+      frag.appendChild(sepEl);
+    }
+
+    g.items.forEach(item => {
+      const card = buildHistoryCard(item);
+      card.classList.add("tl-entry-new");
+      // Once the slide-in finishes, drop the "new" marker so the card joins
+      // the normal reflow transition pool. Also pin `animation: none` —
+      // otherwise removing the class changes animation-name back to the
+      // default tl-entry-in, which would restart an entrance animation.
+      card.addEventListener("animationend", () => {
+        card.style.animation = "none";
+        card.classList.remove("tl-entry-new");
+      }, { once: true });
+      frag.appendChild(card);
+    });
+
+    if (existingSep) {
+      // Date already in the timeline: new (newer) cards go right after it
+      existingSep.after(frag);
+    } else {
+      // New date: insert before the first older separator, else append
+      const targetNum = _dateStrToNum(g.dateStr);
+      let anchor = null;
+      for (const sep of tlCt.querySelectorAll(".tl-date-sep")) {
+        if (sep !== sepEl && _dateStrToNum(sep.querySelector(".tl-date-sep-text")?.textContent) < targetNum) {
+          anchor = sep;
+          break;
+        }
+      }
+      if (anchor) anchor.before(frag);
+      else tlCt.appendChild(frag);
+    }
+  });
+
+  // Update date counts for all separators
   _updateDateCounts(tlCt, allFilteredItems);
-
-  // Insert all new elements at the top
-  const firstChild = tlCt.firstChild;
-  elementsToInsert.forEach(el => frag.appendChild(el));
-  if (firstChild) {
-    tlCt.insertBefore(frag, firstChild);
-  } else {
-    tlCt.appendChild(frag);
-  }
 }
 
 function _updateDateCounts(tlCt, allItems) {

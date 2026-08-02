@@ -7,3 +7,4 @@ build/
 
 # Reasonix 本地配置
 .reasonix/
+.e2e/
