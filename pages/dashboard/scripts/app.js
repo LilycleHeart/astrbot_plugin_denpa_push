@@ -284,6 +284,10 @@ function buildGridUrl(colors, cols, rows) {
     img.data[i * 4 + 3] = 255;
   }
   c.putImageData(img, 0, 0);
+  // 格间边界融合: canvas 原生高斯模糊(0.5px ≈ 半格), 消除马赛克块状感, 保持区块可辨与柔和过渡
+  c.filter = "blur(0.5px)";
+  c.drawImage(_micaGridCanvas, 0, 0);
+  c.filter = "none";
   // 必须包 url(): 否则 data: URI 不是合法 background-image 值, 背景声明整体失效
   return `url("${_micaGridCanvas.toDataURL()}")`;
 }
@@ -299,7 +303,7 @@ function refreshMicaLive() {
     const scale = Math.max(vw / iw, vh / ih);
     const ox = (vw - iw * scale) / 2, oy = (vh - ih * scale) / 2;
     const surface = _micaSurfaceColor();
-    const CELL = 16;   // 每格目标物理尺寸(px): 区块密度随面板尺寸动态, 分辨率变化不改变细腻度
+    const CELL = 8;   // 每格目标物理尺寸(px): 越细块状感越弱, 分辨率变化不改变细腻度
     const MAX_COLS = 120, MAX_ROWS = 80;   // 上限(防超大面板过重)
 
     document.querySelectorAll(_MICA_PANELS).forEach(el => {
@@ -1430,6 +1434,7 @@ function _applyMasonry() {
 
   if (numCols <= 1) {
     container.classList.remove("masonry-ready");
+    container.classList.remove("tl-reflow");
     items.forEach(it => { it.style.position=""; it.style.left=""; it.style.top=""; it.style.width=""; });
     container.style.height = "";
     return;
@@ -1439,9 +1444,16 @@ function _applyMasonry() {
   const colH = new Array(numCols).fill(0);
 
   container.classList.add("masonry-ready");
+  // Enable smooth reflow: existing cards glide to their new position.
+  // Newly inserted cards (.tl-entry-new) are excluded — they animate in
+  // with their own entrance animation instead (see CSS .tl-reflow rule).
+  container.classList.add("tl-reflow");
 
-  // Temporarily pause entry animations so offsetHeight reflects final layout
-  items.forEach(it => it.style.animation = "none");
+  // Pause entrance animations while measuring so offsetHeight is stable.
+  // Unlike `animation: none`, pausing then resuming does NOT restart the
+  // animation — the old approach replayed every card's entrance animation
+  // on each refresh, making the whole list flash.
+  items.forEach(it => it.style.animationPlayState = "paused");
 
   items.forEach(item => {
     if (item.classList.contains("tl-date-sep")) {
@@ -1463,9 +1475,8 @@ function _applyMasonry() {
 
   container.style.height = Math.max(...colH) + "px";
 
-  // Restore entry animations via reflow
-  void container.offsetWidth;
-  items.forEach(it => { it.style.animation = ""; });
+  // Resume entrance animations from where they were paused (no replay)
+  items.forEach(it => { it.style.animationPlayState = ""; });
 }
 
 function _scheduleMasonry() {
@@ -2006,6 +2017,9 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
         const grp = document.createElement("div");
         grp.className = "tl-date-sep tl-sep-new";
         grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
+        // Drop the "new" marker once its entrance animation finishes so
+        // later reflows animate this separator smoothly too
+        grp.addEventListener("animationend", () => grp.classList.remove("tl-sep-new"), { once: true });
         pendingDateSep = grp;
         elementsToInsert.push(grp);
       } else {
@@ -2015,6 +2029,9 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
     pendingCount++;
     const card = buildHistoryCard(item);
     card.classList.add("tl-entry-new");
+    // Same as above: after the slide-in finishes, the card joins the normal
+    // reflow transition pool for future updates
+    card.addEventListener("animationend", () => card.classList.remove("tl-entry-new"), { once: true });
     elementsToInsert.push(card);
   });
   if (pendingDateSep) pendingDateSep.querySelector(".tl-date-sep-count").textContent = `${pendingCount} 条`;
