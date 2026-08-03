@@ -132,6 +132,10 @@ class DenpaPushPlugin(Star):
     def _push_history_path(self):
         return os.path.join(os.path.dirname(self._data_path), "denpa_push_history.json")
 
+    @property
+    def _token_stats_path(self):
+        return os.path.join(os.path.dirname(self._data_path), "denpa_push_token_stats.json")
+
     def _load_push_history(self):
         try:
             if os.path.exists(self._push_history_path):
@@ -159,6 +163,30 @@ class DenpaPushPlugin(Star):
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to save push history: {e}")
 
+    def _load_token_stats(self):
+        """从磁盘加载累计 token 统计（跨重启累计）。"""
+        try:
+            if os.path.exists(self._token_stats_path):
+                with open(self._token_stats_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                stats = {
+                    k: int(data.get(k, 0) or 0)
+                    for k in ("prompt", "completion", "total", "calls")
+                }
+                if not stats.get("total"):
+                    stats["total"] = stats["prompt"] + stats["completion"]
+                self._token_stats.update(stats)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to load token stats: {e}")
+
+    def _save_token_stats(self):
+        try:
+            os.makedirs(os.path.dirname(self._token_stats_path), exist_ok=True)
+            with open(self._token_stats_path, "w", encoding="utf-8") as f:
+                json.dump(self._token_stats, f, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to save token stats: {e}")
+
     async def initialize(self):
         try:
             import twikit
@@ -168,6 +196,7 @@ class DenpaPushPlugin(Star):
         self._apply_twitter_credentials()
         self._load_data()
         self._load_push_history()
+        self._load_token_stats()
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
@@ -184,6 +213,7 @@ class DenpaPushPlugin(Star):
 
     async def terminate(self):
         self._running = False
+        self._save_token_stats()
         if self.monitor_task:
             self.monitor_task.cancel()
             self.monitor_task = None
@@ -261,6 +291,37 @@ class DenpaPushPlugin(Star):
         })
         self._save_push_history()
 
+    def _data_cache_size_bytes(self) -> int:
+        """统计插件在数据目录下持久化文件的总大小（字节）。
+
+        涵盖: 订阅数据、推送历史缓存、UI 配置（含背景图）、
+        token 累计统计、backgrounds 临时目录与 debug_render 调试目录。
+        data/config 下其他插件的文件不会被计入。
+        """
+        data_dir = os.path.dirname(self._data_path)
+        total = 0
+        try:
+            if not os.path.isdir(data_dir):
+                return 0
+            for name in os.listdir(data_dir):
+                if name.startswith(("denpa_", "astrbot_plugin_denpa")) or name in (
+                    "backgrounds",
+                    "debug_render",
+                ):
+                    path = os.path.join(data_dir, name)
+                    if os.path.isfile(path):
+                        total += os.path.getsize(path)
+                    elif os.path.isdir(path):
+                        for root, _dirs, files in os.walk(path):
+                            for f in files:
+                                try:
+                                    total += os.path.getsize(os.path.join(root, f))
+                                except OSError:
+                                    pass
+        except OSError as e:
+            logger.warning(f"[DenpaPush] Failed to measure data cache size: {e}")
+        return total
+
     async def _api_dashboard_status(self):
         """Dashboard 总览状态。"""
         from astrbot.api.web import request, json_response
@@ -298,6 +359,7 @@ class DenpaPushPlugin(Star):
             "gif_encoder": self.config.get("gif_encoder", "auto"),
             "proxy": self.config.get("proxy", ""),
             "token_stats": dict(self._token_stats),
+            "cache_size_bytes": self._data_cache_size_bytes(),
         })
 
     async def _api_dashboard_subscriptions(self):
@@ -1941,6 +2003,7 @@ class DenpaPushPlugin(Star):
             self._token_stats["completion"] += completion_t
             self._token_stats["total"] += total_t
             self._token_stats["calls"] += 1
+            self._save_token_stats()
         except Exception as e:
             logger.warning(f"[DenpaPush] token usage parse failed: {e}, usage={usage!r}")
 

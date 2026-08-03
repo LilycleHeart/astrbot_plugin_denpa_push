@@ -3,11 +3,14 @@
 ## v2.0.0 (2026-08-03)
 
 ### Features
+- **Cumulative token consumption**: Token stats now persist across restarts (`denpa_push_token_stats.json`) instead of resetting each run; overview subtitle updated accordingly
+- **Overview cache size**: Status overview now shows the total on-disk size of the plugin's persistent data files (subscriptions, push-history cache, UI config/backgrounds, debug_render)
 - **Sidebar ECG Logo — three-line sweep style**: Final redesign with dark base trace + theme-colored comet tail + white leading tip with glow, drawn in native 22×22 viewBox
 - **Activity-driven logo speed**: Logo animation switches between three gears by daily push count (0 → 2.4s slow / 10 → 1.6s normal / 20 → 0.8s fast), with hover acceleration
 - **Dynamic color integration**: Logo colors now follow the plugin's Material 3 dynamic palette (wallpaper accent extraction / custom brand color), auto-adapting to light & dark themes
 - **ECG waveform generator** (`ecg-generator.js`): Gaussian pulse synthesis of physiological PQRST waveforms — PR / QRS / ST / QT intervals verified within normal ranges (75bpm), asymmetric T wave, baseline drift; parameterized SVG path & animated icon output; Node CLI + browser dual mode
 - **Hero ECG waveform**: Waveform diversity with 15s rotation, speed/intensity driven by today's push count (capped at 20), rendering performance optimization
+- **Hero ECG waveform — auto/manual mode**: Settings panel toggle between auto (waveform speed & complexity driven by today's push count) and manual (custom speed 20–120% + complexity 0–10 sliders); manual controls collapse/hide with animation in auto mode
 - **Parallax wallpaper interactions**: Click / long-press / drag-select three-state interactions, configurable parallax mode, responsive sidebar
 - **MD3 card rendering**: Layered card layout with full palette roles, per-avatar accent extraction, light/dark auto switching
 

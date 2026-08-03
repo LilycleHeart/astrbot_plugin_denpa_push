@@ -221,10 +221,21 @@
 .input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .input[type="number"]::-webkit-inner-spin-button,
 .input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-/* 原生 color 输入：保留色块 */
+/* 原生 color 输入：色块铺满容器(边缘锐利, 无内边距留白) */
 input[type="color"].input {
-  padding: 4px;
+  padding: 0;
   cursor: pointer;
+}
+input[type="color"].input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"].input::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-medium) - 1px);
+}
+input[type="color"].input::-moz-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-medium) - 1px);
 }
 .select {
   appearance: none;
@@ -492,6 +503,14 @@ input[type="color"].input {
 @keyframes tl-entry-in {
   from { opacity: 0; transform: translateY(14px) scale(0.985); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 隐藏时间线中预渲染的卡片/日期条(首次加载、在其它页签刷新):
+   display:none 下入场动画无法运行, 会停在 opacity:0, 首次打开时间线时卡片不可见。
+   这两个类由 app.js 在检测到时间线面板隐藏时加上, 禁用入场动画, 打开即显示。 */
+.tl-entry.tl-entry-instant,
+.tl-date-sep.tl-sep-instant {
+  animation: none;
 }
 
 /* 增量新增卡片：从顶部滑入 + 放大淡入 */

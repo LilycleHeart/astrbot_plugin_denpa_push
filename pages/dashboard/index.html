@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260804d" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260804d" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260804d" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260804e" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260804e" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260804e" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -131,11 +131,18 @@
               </div>
             </div>
 
+            <div class="grid grid-4 mt-m">
+              <div class="stat-card">
+                <span class="stat-label">缓存数据</span>
+                <span class="stat-value-sm" id="stat-cache">—</span>
+              </div>
+            </div>
+
             <div class="card mt-m">
               <div class="card-header">
                 <div>
                   <h2 class="card-title">Token 消耗</h2>
-                  <p class="card-subtitle">AI 翻译 API 调用统计（本次运行期间累计）</p>
+                  <p class="card-subtitle">AI 翻译 API 调用统计（跨重启累计）</p>
                 </div>
               </div>
               <div class="grid grid-4">
@@ -439,21 +446,21 @@
                 <div class="form-row">
                   <label class="form-label">主题色</label>
                   <div class="flex gap-s">
-                    <input type="color" class="input" id="ui-brand-color-picker" value="#1d9bf0" style="width:60px;padding:4px" />
+                    <input type="color" class="input" id="ui-brand-color-picker" value="#1d9bf0" style="width:60px" />
                     <input class="input" id="ui-brand-color" value="#1d9bf0" />
                   </div>
                 </div>
                 <div class="form-row">
                   <label class="form-label">自定义亮色背景</label>
                   <div class="flex gap-s">
-                    <input type="color" class="input" id="ui-custom-bg-picker" value="#F5F6F8" style="width:60px;padding:4px" />
+                    <input type="color" class="input" id="ui-custom-bg-picker" value="#F5F6F8" style="width:60px" />
                     <input class="input" id="ui-custom-bg" value="#F5F6F8" />
                   </div>
                 </div>
                 <div class="form-row">
                   <label class="form-label">自定义暗色背景</label>
                   <div class="flex gap-s">
-                    <input type="color" class="input" id="ui-custom-bg-dark-picker" value="#0C0E13" style="width:60px;padding:4px" />
+                    <input type="color" class="input" id="ui-custom-bg-dark-picker" value="#0C0E13" style="width:60px" />
                     <input class="input" id="ui-custom-bg-dark" value="#0C0E13" />
                   </div>
                 </div>
@@ -485,6 +492,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260804d"></script>
+    <script type="module" src="./scripts/app.js?v=20260804e"></script>
   </body>
 </html>

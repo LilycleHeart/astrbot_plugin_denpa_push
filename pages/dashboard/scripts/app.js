@@ -39,6 +39,9 @@ const state = {
     shadow_intensity: 60,
     bg_scrim: 40,
     parallax_mode: "click",
+    ecg_mode: "auto",       // ECG 波形: auto=随今日推送数 / manual=手动
+    ecg_speed: 60,          // 手动速度(% of 1.0, 20~120 → 0.2~1.2 px/帧)
+    ecg_complexity: 5,      // 手动复杂度(0~10)
   },
 };
 
@@ -344,6 +347,9 @@ function applyUiConfig() {
 
   syncSettingsInputs();
   updateBgPreview();
+
+  // ECG 波形模式应用(自动/手动) —— 轻量路径, 不打断波形流
+  if (ecg) applyEcgMode(false);
 }
 
 function syncSettingsInputs() {
@@ -370,6 +376,9 @@ function syncSettingsInputs() {
   set("ui-glow-on", ui.glow_enabled === false ? "false" : "true");
   set("ui-shadow-on", ui.shadow_enabled === false ? "false" : "true");
   set("ui-parallax-hover", ui.parallax_mode === "hover" ? "hover" : "click");
+  set("ui-ecg-mode", ui.ecg_mode || "auto");
+  set("ui-ecg-speed", ui.ecg_speed ?? 60);
+  set("ui-ecg-complexity", ui.ecg_complexity ?? 5);
 
   // Slider labels
   const label = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
@@ -379,6 +388,12 @@ function syncSettingsInputs() {
   label("ui-glow-val", `${ui.glow_intensity}%`);
   label("ui-shadow-val", `${ui.shadow_intensity}%`);
   label("ui-scrim-val", `${ui.bg_scrim}%`);
+  label("ui-ecg-speed-val", `${ui.ecg_speed ?? 60}%`);
+  label("ui-ecg-complexity-val", `${ui.ecg_complexity ?? 5}`);
+
+  // 手动模式下显示 ECG 调节项, 自动模式收起
+  const ecgBlock = document.getElementById("ecg-manual-block");
+  if (ecgBlock) ecgBlock.classList.toggle("collapsed", (ui.ecg_mode || "auto") !== "manual");
 }
 
 function updateBgPreview() {
@@ -413,6 +428,9 @@ function collectUiConfig() {
     glow_enabled: get("ui-glow-on") === "true",
     shadow_enabled: get("ui-shadow-on") === "true",
     parallax_mode: get("ui-parallax-hover") === "hover" ? "hover" : "click",
+    ecg_mode: get("ui-ecg-mode") === "manual" ? "manual" : "auto",
+    ecg_speed: Number(get("ui-ecg-speed")),
+    ecg_complexity: Number(get("ui-ecg-complexity")),
     background_image: state.uiConfig.background_image,
     background_accent: state.uiConfig.background_accent,
   };
@@ -704,8 +722,8 @@ class EcgWaveform {
       // 今日推送 20 条时到达 intensity 10（基于日均而非历史累计）
       this.intensity = n === 0 ? 0 : Math.min(10, Math.ceil(n / 2));
     }
-    const ampMap = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
-    const noiseMap = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
+    const ampMap = ECG_AMP_MAP;
+    const noiseMap = ECG_NOISE_MAP;
     this.ampScale = ampMap[this.intensity];
     this.noiseLevel = noiseMap[this.intensity];
     this.rhythm = new _RhythmEngine(this.intensity);
@@ -724,8 +742,8 @@ class EcgWaveform {
   setComplexity(c) {
     this.complexityOverride = c;
     this.intensity = Math.min(10, Math.max(0, c));
-    const ampMap = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
-    const noiseMap = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
+    const ampMap = ECG_AMP_MAP;
+    const noiseMap = ECG_NOISE_MAP;
     this.ampScale = ampMap[this.intensity];
     this.noiseLevel = noiseMap[this.intensity];
     this._applySpeed();
@@ -942,12 +960,46 @@ function _ecgColorMix(color, alpha) {
   return color;
 }
 
+// ─── ECG 自动/手动模式应用 ───
+const ECG_AMP_MAP = [0.03, 0.45, 0.65, 0.80, 0.90, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
+const ECG_NOISE_MAP = [0.0008, 0.0015, 0.002, 0.003, 0.005, 0.007, 0.009, 0.012, 0.016, 0.020, 0.025];
+
+/**
+ * 应用 ECG 自动/手动模式。
+ * @param {boolean} [heavy] 手动模式下是否全量应用(setComplexity 会重建节律并重置波形)。
+ *    模式切换时传 true; 滑条实时调节时传 false(仅更新速度/强度/噪声, 不打断波形流)。
+ */
+function applyEcgMode(heavy) {
+  if (!ecg) return;
+  const ui = state.uiConfig;
+  if (ui.ecg_mode === "manual") {
+    // 手动: 速度 = ecg_speed(%) → 0.2~1.2 px/帧(与自动映射区间一致)
+    ecg.setSpeed((Number(ui.ecg_speed) || 60) / 100);
+    const c = Math.min(10, Math.max(0, Number(ui.ecg_complexity) || 5));
+    if (heavy) {
+      ecg.setComplexity(c);
+    } else {
+      // 轻量: 仅调整强度/幅度/噪声, 保持当前波形流连续
+      ecg.complexityOverride = c;
+      ecg.intensity = c;
+      ecg.ampScale = ECG_AMP_MAP[c];
+      ecg.noiseLevel = ECG_NOISE_MAP[c];
+    }
+  } else if (ecg.speedOverride !== null || ecg.complexityOverride !== null) {
+    // 自动: 清除手动覆盖, 由今日推送数重新驱动速度与复杂度
+    ecg.speedOverride = null;
+    ecg.complexityOverride = null;
+    if (typeof ecg.pushCount === "number") ecg.setPushCount(ecg.pushCount);
+  }
+}
+
 // Timeline 侧边竖直时间线状态
 let _tlScrollBound = false;
 let _tlHoverBound = false;
 let _tlCurrentTime = "";
 let _tlCurrentDate = "";
 let _tlHoveringCard = null;
+
 
 // 视差效果状态
 let _parallaxRaf = 0;
@@ -1328,6 +1380,14 @@ function _watchMasonryImages(container) {
 }
 
 // ─── Render: Status ───
+function fmtBytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  const v = n / Math.pow(1024, i);
+  return `${i === 0 || v >= 100 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
 function renderStatus(data) {
   if (!data) return;
   const badge = document.getElementById("monitor-badge");
@@ -1353,6 +1413,9 @@ function renderStatus(data) {
   setIf("stat-token-completion", (ts.completion || 0).toLocaleString());
   setIf("stat-token-total", (ts.total || 0).toLocaleString());
   setIf("stat-token-calls", ts.calls || 0);
+
+  // 缓存数据（插件本地持久化文件总大小）
+  setIf("stat-cache", fmtBytes(data.cache_size_bytes || 0));
 
 
   if (ecg) {
@@ -1766,6 +1829,10 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
   }
   const frag = document.createDocumentFragment();
   const sliced = items.slice(0, 50);
+  // 时间线面板隐藏时(首次加载、在其它页签刷新), 入场动画无法运行会停在 opacity:0,
+  // 首次打开时间线时卡片不可见("切走再切回"才被 kickstart)。此时禁用入场动画,
+  // 卡片/日期条保持默认可见, 打开即显示(确定性修复)。
+  const instant = tlCt.clientWidth === 0;
   let lastDate = "";
   let dateCount = 0;
   let lastCountEl = null;
@@ -1777,12 +1844,15 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
       dateCount = 0;
       const grp = document.createElement("div");
       grp.className = "tl-date-sep";
+      if (instant) grp.classList.add("tl-sep-instant");
       grp.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
       frag.appendChild(grp);
       lastCountEl = grp.querySelector(".tl-date-sep-count");
     }
     dateCount++;
-    frag.appendChild(buildHistoryCard(item));
+    const card = buildHistoryCard(item);
+    if (instant) card.classList.add("tl-entry-instant");
+    frag.appendChild(card);
   });
   if (lastCountEl) lastCountEl.textContent = `${dateCount} 条`;
   tlCt.appendChild(frag);
@@ -1829,6 +1899,10 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
     else groups.push({ dateStr, items: [item] });
   });
 
+  // 时间线面板隐藏时插入(在其它页签时刷新), 入场动画同理会停在 opacity:0;
+  // 禁用入场动画, 打开时间线时立即可见
+  const instant = tlCt.clientWidth === 0;
+
   groups.forEach(g => {
     const frag = document.createDocumentFragment();
     const existingSep = Array.from(tlCt.querySelectorAll(".tl-date-sep"))
@@ -1838,6 +1912,7 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
     if (!existingSep) {
       sepEl = document.createElement("div");
       sepEl.className = "tl-date-sep tl-sep-new";
+      if (instant) sepEl.classList.add("tl-sep-instant");
       sepEl.innerHTML = `<div class="tl-date-sep-label"><span class="tl-date-sep-dot"></span><span class="tl-date-sep-text">${g.dateStr}</span></div><span class="tl-date-sep-count">0 条</span><div class="tl-date-sep-line"></div>`;
       // Drop the "new" marker once its entrance animation finishes so
       // later reflows animate this separator smoothly too
@@ -1848,6 +1923,7 @@ function _insertNewCards(tlCt, newItems, allFilteredItems) {
     g.items.forEach(item => {
       const card = buildHistoryCard(item);
       card.classList.add("tl-entry-new");
+      if (instant) card.classList.add("tl-entry-instant");
       // Once the slide-in finishes, drop the "new" marker so the card joins
       // the normal reflow transition pool. Also pin `animation: none` —
       // otherwise removing the class changes animation-name back to the
@@ -2021,6 +2097,7 @@ async function init() {
   syncThemeIcon();
 
   ecg = new EcgWaveform(document.getElementById("ecg-canvas"));
+  applyEcgMode(true);  // 应用已保存的自动/手动模式(全量)
 
   // Tab clicks
   document.querySelectorAll(".tab[data-tab]").forEach(tab => {
@@ -2183,6 +2260,8 @@ function bindSettingsEvents() {
     ["ui-glow", "ui-glow-val", "%"],
     ["ui-shadow", "ui-shadow-val", "%"],
     ["ui-scrim", "ui-scrim-val", "%"],
+    ["ui-ecg-speed", "ui-ecg-speed-val", "%"],
+    ["ui-ecg-complexity", "ui-ecg-complexity-val", ""],
   ];
   sliders.forEach(([id, labelId, suffix]) => {
     const el = document.getElementById(id);
@@ -2200,7 +2279,7 @@ function bindSettingsEvents() {
   });
 
   // Selects / checkboxes → live apply
-  ["ui-color-mode", "ui-bg-mode", "ui-material-type", "ui-font", "ui-acrylic-on", "ui-glow-on", "ui-shadow-on", "ui-parallax-hover"].forEach(id => {
+  ["ui-color-mode", "ui-bg-mode", "ui-material-type", "ui-font", "ui-acrylic-on", "ui-glow-on", "ui-shadow-on", "ui-parallax-hover", "ui-ecg-mode"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", liveApplySettings);
   });
@@ -2243,8 +2322,10 @@ function bindSettingsEvents() {
       glow_enabled: true, glow_intensity: 15, shadow_enabled: true,
       shadow_intensity: 60, bg_scrim: 40,
       parallax_mode: "click",
+      ecg_mode: "auto", ecg_speed: 60, ecg_complexity: 5,
     };
     applyUiConfig();
+    applyEcgMode(true);  // 恢复默认后立即全量应用
     toast("已恢复默认");
   });
 
@@ -2308,9 +2389,12 @@ function bindSettingsEvents() {
 
 function liveApplySettings() {
   const prevMode = state.uiConfig.parallax_mode;
+  const prevEcgMode = state.uiConfig.ecg_mode;
   const cfg = collectUiConfig();
   state.uiConfig = { ...state.uiConfig, ...cfg };
   applyUiConfig();
+  // ECG 模式切换(自动↔手动)时全量应用, 立即反映新参数
+  if (prevEcgMode !== cfg.ecg_mode) applyEcgMode(true);
   // 视差模式切换时清除残留 transform
   if (prevMode !== cfg.parallax_mode) {
     const container = document.getElementById("tracking-history");
