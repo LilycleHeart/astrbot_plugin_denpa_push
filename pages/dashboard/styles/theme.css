@@ -622,29 +622,6 @@ body {
   pointer-events: none;
 }
 
-/* 设置面板: 按功能分组, 选项与它的参数紧邻显示 */
-.settings-column {
-  max-width: 640px;
-}
-.settings-group {
-  margin-top: var(--space-l);
-  padding-top: var(--space-m);
-  border-top: 1px solid var(--color-stroke-2);
-}
-.settings-group-head {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-fg-3);
-  margin-bottom: var(--space-m);
-}
-.settings-group .form-row {
-  margin-bottom: var(--space-s);
-}
-.settings-group .collapse-block .form-row {
-  margin-top: 0;
-}
-
-
 .glow-off .card,
 .glow-off .sidebar,
 .glow-off .hero,
