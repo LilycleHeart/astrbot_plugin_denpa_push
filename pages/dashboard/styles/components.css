@@ -109,8 +109,7 @@
 .tab-content .input,
 .tab-content .select,
 .tab-content .textarea,
-.tab-content .pv-select-trigger,
-.tab-content .pv-select-menu {
+.tab-content .pv-select-trigger {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
   background: var(--color-bg-2);
