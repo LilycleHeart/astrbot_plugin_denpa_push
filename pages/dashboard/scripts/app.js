@@ -2486,6 +2486,7 @@ function pvInitSelects() {
           trigger.setAttribute("aria-expanded", "false");
           sync();
           sel.dispatchEvent(new Event("change", { bubbles: true }));
+          sel.dispatchEvent(new Event("input", { bubbles: true }));
         });
         menu.appendChild(li);
       });

@@ -104,27 +104,27 @@
   transform: none;
 }
 
-/* 玻璃面板内的控件本身不再做成 mini 玻璃卡, 改用实底平铺,
-   避免"玻璃上叠玻璃"读出第二层卡片 (复刻 denpa_echo, 无 !important) */
+/* 玻璃面板内的控件本身不再做成 mini 玻璃卡, 改用半透明 control-bg 平铺,
+   避免"玻璃上叠玻璃"读出第二层卡片; 与 denpa_echo 控件观感一致 */
 .tab-content .input,
 .tab-content .select,
 .tab-content .textarea,
 .tab-content .pv-select-trigger {
+  background: var(--control-bg);
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
-  background: var(--color-bg-2);
 }
 .tab-content .input:hover,
 .tab-content .select:hover,
 .tab-content .textarea:hover,
 .tab-content .pv-select-trigger:hover {
-  background-color: color-mix(in srgb, var(--color-brand) 8%, var(--color-bg-2));
+  background-color: color-mix(in srgb, var(--color-brand) 8%, var(--control-bg));
 }
 .tab-content .input:focus,
 .tab-content .select:focus,
 .tab-content .textarea:focus,
 .tab-content .pv-select-trigger:focus {
-  background-color: color-mix(in srgb, var(--color-brand) 12%, var(--color-bg-2));
+  background-color: color-mix(in srgb, var(--color-brand) 12%, var(--control-bg));
 }
 .stat-label {
   font-family: var(--font-family-mono);
