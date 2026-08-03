@@ -392,6 +392,9 @@ function syncSettingsInputs() {
   label("ui-ecg-complexity-val", `${ui.ecg_complexity ?? 5}`);
 
   syncConditionalBlocks();
+
+  // 自定义下拉(如有)同步显示当前选中项
+  pvSyncAllSelects();
 }
 
 // 设置面板: 按模式/开关条件收起对应的参数调节块(带展开收起动画)
@@ -1500,6 +1503,9 @@ function renderSubs(data) {
     if (sessions.includes(curVal)) addSessionSelect.value = curVal;
   }
 
+  // 自定义下拉(如有)同步选项/选中显示
+  pvSyncAllSelects();
+
   if (sessions.length === 0) {
     container.innerHTML = '<p style="color:var(--color-fg-3);font-size:13px;padding:12px 0">暂无订阅，使用下方输入框添加</p>';
     return;
@@ -2056,6 +2062,8 @@ async function loadPluginConfig() {
     set("cfg-gif_encoder", cfg.gif_encoder || "auto");
     set("cfg-text_translate_prompt", cfg.text_translate_prompt || "");
     set("cfg-image_translate_prompt", cfg.image_translate_prompt || "");
+    // 自定义下拉(如有)同步显示当前选中项
+    pvSyncAllSelects();
   } catch (e) {
     console.warn("[DenpaPush] load config error:", e);
   }
@@ -2266,6 +2274,8 @@ async function init() {
 
   // ─── Settings panel bindings ───
   bindSettingsEvents();
+  // 自定义主题下拉: 将所有 select.select 替换为 pv-select 组件(原生弹层→主题弹层)
+  pvInitSelects();
 
   // Initial load + polling
   refresh();
@@ -2377,6 +2387,7 @@ function bindSettingsEvents() {
       state.uiConfig.background_mode = "image";
       document.getElementById("bg-file-name").textContent = (resp && resp.filename) || file.name;
       document.getElementById("ui-bg-mode").value = "image";
+      pvSyncAllSelects();
       updateBgPreview();
       // 直接应用背景
       const body = document.body;
@@ -2426,6 +2437,92 @@ function liveApplySettings() {
     clearTimeout(_parallaxHoldTimer);
   }
 }
+
+// ─── 自定义主题下拉 (替代原生 select, 全令牌化, 消除与主题割裂) — 复刻 denpa_echo preview ───
+function pvInitSelects() {
+  document.querySelectorAll("select.select").forEach((sel) => {
+    if (sel.dataset.pvSel) return;
+    sel.dataset.pvSel = "1";
+    // 保留原 select 的内联尺寸(width/max-width), 避免包裹层布局跳动
+    const wrap = document.createElement("div");
+    wrap.className = "pv-select";
+    if (sel.style.width) wrap.style.width = sel.style.width;
+    if (sel.style.maxWidth) wrap.style.maxWidth = sel.style.maxWidth;
+    sel.style.display = "none";
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "pv-select-trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+    const label = document.createElement("span");
+    label.className = "pv-select-label";
+    const caret = document.createElement("span");
+    caret.className = "pv-select-caret";
+    caret.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>';
+    trigger.appendChild(label);
+    trigger.appendChild(caret);
+    const menu = document.createElement("div");
+    menu.className = "pv-select-menu";
+    menu.setAttribute("role", "listbox");
+    const sync = () => {
+      const cur = sel.value;
+      label.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "";
+      menu.innerHTML = "";
+      Array.from(sel.options).forEach((opt) => {
+        const li = document.createElement("div");
+        li.className = "pv-select-option";
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", opt.value === cur ? "true" : "false");
+        const t = document.createElement("span");
+        t.textContent = opt.textContent;
+        const ck = document.createElement("span");
+        ck.className = "pv-check";
+        ck.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+        li.appendChild(t);
+        li.appendChild(ck);
+        li.addEventListener("click", () => {
+          sel.value = opt.value;
+          wrap.classList.remove("open");
+          trigger.setAttribute("aria-expanded", "false");
+          sync();
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        menu.appendChild(li);
+      });
+    };
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = wrap.classList.toggle("open");
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) sync();
+    });
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    sel.parentNode.insertBefore(wrap, sel);
+    sync();
+  });
+}
+// 外部改值(加载配置/恢复默认/动态选项/上传背景)后, 同步所有自定义下拉的显示
+function pvSyncAllSelects() {
+  document.querySelectorAll("select.select").forEach((sel) => {
+    const wrap = sel.previousElementSibling;
+    if (wrap && wrap.classList.contains("pv-select")) {
+      const lbl = wrap.querySelector(".pv-select-label");
+      const cur = sel.value;
+      if (lbl) lbl.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : "";
+      wrap.querySelectorAll(".pv-select-option").forEach((li, i) => {
+        li.setAttribute("aria-selected", sel.options[i] && sel.options[i].value === cur ? "true" : "false");
+      });
+    }
+  });
+}
+// 点击页面其他区域关闭所有展开的自定义下拉
+document.addEventListener("click", () => {
+  document.querySelectorAll(".pv-select.open").forEach((w) => {
+    w.classList.remove("open");
+    w.querySelector(".pv-select-trigger").setAttribute("aria-expanded", "false");
+  });
+});
 
 // ─── ECG Logo: hover 加速绘制脉冲 ───
 (function initEcgLogoHover() {

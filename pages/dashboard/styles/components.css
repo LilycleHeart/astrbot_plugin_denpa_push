@@ -108,19 +108,23 @@
    避免"玻璃上叠玻璃"读出第二层卡片 (复刻 denpa_echo, 无 !important) */
 .tab-content .input,
 .tab-content .select,
-.tab-content .textarea {
+.tab-content .textarea,
+.tab-content .pv-select-trigger,
+.tab-content .pv-select-menu {
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
   background: var(--color-bg-2);
 }
 .tab-content .input:hover,
 .tab-content .select:hover,
-.tab-content .textarea:hover {
+.tab-content .textarea:hover,
+.tab-content .pv-select-trigger:hover {
   background-color: color-mix(in srgb, var(--color-brand) 8%, var(--color-bg-2));
 }
 .tab-content .input:focus,
 .tab-content .select:focus,
-.tab-content .textarea:focus {
+.tab-content .textarea:focus,
+.tab-content .pv-select-trigger:focus {
   background-color: color-mix(in srgb, var(--color-brand) 12%, var(--color-bg-2));
 }
 .stat-label {
@@ -239,16 +243,66 @@ input[type="color"].input::-moz-color-swatch {
 }
 .select {
   appearance: none;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23666'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  -webkit-appearance: none;
+  /* 品牌色箭头: CSS 渐变绘制, 跟随 --color-brand 动态变色(SVG data-URI 做不到) */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-brand) 50%),
+    linear-gradient(135deg, var(--color-brand) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 1px),
+    calc(100% - 12px) calc(50% - 1px);
+  background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 30px;
+  padding-right: var(--space-3xl);
+  cursor: pointer;
 }
+/* 原生下拉弹层: 无法透明, 但配色跟随主题 + 选中项品牌染色, 消除风格割裂 */
 .select option {
   background: var(--popup-bg);
   color: var(--popup-fg);
+  padding: 8px 12px;
 }
+.select option:checked {
+  background: color-mix(in srgb, var(--color-brand) 18%, var(--popup-bg));
+  color: var(--color-brand);
+  font-weight: 600;
+}
+.select option:disabled { color: var(--color-fg-4); }
+
+/* —— 自定义主题下拉 (替代原生 select, 全令牌化, 消除与主题割裂) — 复刻 denpa_echo preview —— */
+.pv-select { position: relative; width: 100%; }
+.pv-select-trigger {
+  width: 100%; height: 36px; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 0 var(--space-m); font: inherit; font-size: var(--font-size-body);
+  color: var(--color-fg-1); background: var(--surface-bg);
+  -webkit-backdrop-filter: var(--surface-blur); backdrop-filter: var(--surface-blur);
+  border: 1px solid var(--control-stroke); border-radius: var(--radius-medium); cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+}
+.pv-select-trigger:hover { border-color: var(--control-stroke-hover); }
+.pv-select-trigger:focus-visible,
+.pv-select.open .pv-select-trigger {
+  outline: none; border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand), var(--glow-brand);
+}
+.pv-select-caret { flex: 0 0 18px; width: 18px; height: 18px; color: var(--color-brand); transition: transform var(--motion-fast) var(--motion-ease); }
+.pv-select.open .pv-select-caret { transform: rotate(180deg); }
+.pv-select-menu {
+  position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--surface-bg); -webkit-backdrop-filter: var(--surface-blur); backdrop-filter: var(--surface-blur);
+  border: 1px solid var(--control-stroke); border-radius: var(--radius-medium);
+  padding: 6px; box-shadow: var(--shadow-8); display: none; max-height: 260px; overflow: auto;
+}
+.pv-select.open .pv-select-menu { display: block; }
+.pv-select-option {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-small);
+  font-size: var(--font-size-body); color: var(--color-fg-1); cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.pv-select-option:hover { background: var(--color-brand-weak); color: var(--color-brand); }
+.pv-select-option[aria-selected="true"] { background: color-mix(in srgb, var(--color-brand) 16%, transparent); color: var(--color-brand); font-weight: 600; }
+.pv-select-option .pv-check { margin-left: auto; flex: 0 0 16px; width: 16px; height: 16px; color: var(--color-brand); opacity: 0; }
+.pv-select-option[aria-selected="true"] .pv-check { opacity: 1; }
 .textarea {
   height: auto;
   padding: var(--space-s) var(--space-m);
