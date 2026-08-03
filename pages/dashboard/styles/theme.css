@@ -530,12 +530,15 @@ body {
 .acrylic-off .stat-card { background: var(--color-bg-2); }
 
 /* ═══ 材质: Mica — 平滑不透明壁纸染色 (Windows 11 官方 Mica) ═══
- * 面板 = backdrop-filter 实时模糊面板正后方的壁纸(按视口对齐, 滚动时随面板位置
- * 自然变化, 纯 GPU 合成), 叠加近不透明 MD3 表面色渐变 + 噪点:
- * 平滑无马赛克、边缘锐利、无 blur 边缘发虚。
- * 无 canvas 采样 / 无 data URL / 无 MutationObserver —— 纯 CSS。
- * 子组件(card/select/toast 等)继续沿用 acrylic 表面色(无模糊), 与既有观感一致。 */
+ * 大面板(sidebar/hero/tab-content) = backdrop-filter 实时模糊面板正后方的壁纸
+ * (按视口对齐, 滚动时随面板位置自然变化, 纯 GPU 合成), 叠加近不透明 MD3 表面色
+ * 渐变 + 噪点: 平滑无马赛克、边缘锐利、无 blur 边缘发虚。
+ * 内部元素(stat-card / badge / select 等)走 --mica-bg 实底表面色 —— 不参与模糊,
+ * 避免"卡套卡"的玻璃重影(旧版 stat-card 亦为不透明采样表面)。
+ * 无 canvas 采样 / 无 data URL / 无 MutationObserver —— 纯 CSS。 */
 .material-mica {
+  /* 实底表面: 供内部元素(--surface-bg 消费者)使用, 保持不透明(非玻璃) */
+  --mica-bg: linear-gradient(180deg, var(--mica-tint-1), var(--mica-tint-2)), var(--material-noise);
   --surface-bg: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-low: var(--mica-bg, var(--acrylic-bg));
   --surface-bg-high: var(--mica-bg, var(--acrylic-bg));
@@ -543,19 +546,14 @@ body {
 }
 .material-mica:not(.acrylic-off) .sidebar,
 .material-mica:not(.acrylic-off) .hero,
-.material-mica:not(.acrylic-off) .stat-card,
 .material-mica:not(.acrylic-off) .tab-content.active {
   -webkit-backdrop-filter: blur(var(--mica-blur, 20px)) saturate(1.1);
           backdrop-filter: blur(var(--mica-blur, 20px)) saturate(1.1);
-}
-.material-mica:not(.acrylic-off) .sidebar,
-.material-mica:not(.acrylic-off) .stat-card,
-.material-mica:not(.acrylic-off) .tab-content.active {
   background:
     var(--material-noise),
     linear-gradient(180deg,
-      color-mix(in srgb, var(--mica-tint-1) 86%, transparent),
-      color-mix(in srgb, var(--mica-tint-2) 91%, transparent));
+      color-mix(in srgb, var(--mica-tint-1) 90%, transparent),
+      color-mix(in srgb, var(--mica-tint-2) 93%, transparent));
 }
 /* hero 保留品牌径向高光, 再叠加 mica 表面 */
 .material-mica:not(.acrylic-off) .hero {
@@ -563,8 +561,19 @@ body {
     radial-gradient(120% 90% at 82% -10%, color-mix(in srgb, var(--color-brand) 9%, transparent), transparent 60%),
     var(--material-noise),
     linear-gradient(180deg,
-      color-mix(in srgb, var(--mica-tint-1) 86%, transparent),
-      color-mix(in srgb, var(--mica-tint-2) 91%, transparent));
+      color-mix(in srgb, var(--mica-tint-1) 90%, transparent),
+      color-mix(in srgb, var(--mica-tint-2) 93%, transparent));
+}
+/* 面板内卡片(stat-card): 实底表面(继承 --mica-bg), 明确无 backdrop-filter —— 不是玻璃;
+   叠加 --color-bg-4 抬升两档(暗色更亮/亮色略深), 深浅主题都清晰可辨 */
+.material-mica:not(.acrylic-off) .stat-card {
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  background:
+    var(--material-noise),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--mica-tint-1) 50%, var(--color-bg-4)),
+      color-mix(in srgb, var(--mica-tint-2) 50%, var(--color-bg-4)));
 }
 
 /* 设置面板: mica 模式下隐藏无关调节项块(不透明度/模糊强度), 带展开收起动画 */
