@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260804c" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260804c" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260804c" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260804d" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260804d" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260804d" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -347,23 +347,35 @@
                 </div>
               </div>
 
-              <!-- 开关 -->
+              <!-- 开关（下拉） -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row" style="display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" id="ui-acrylic-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">启用材质（关闭则转实底）</label>
+                <div class="form-row">
+                  <label class="form-label">材质效果</label>
+                  <select class="select" id="ui-acrylic-on">
+                    <option value="true">启用（半透明材质）</option>
+                    <option value="false">关闭（实底）</option>
+                  </select>
                 </div>
-                <div class="form-row" style="display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" id="ui-glow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">启用主题泛光</label>
+                <div class="form-row">
+                  <label class="form-label">主题泛光</label>
+                  <select class="select" id="ui-glow-on">
+                    <option value="true">启用</option>
+                    <option value="false">关闭</option>
+                  </select>
                 </div>
-                <div class="form-row" style="display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" id="ui-shadow-on" checked style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">启用投影阴影</label>
+                <div class="form-row">
+                  <label class="form-label">投影阴影</label>
+                  <select class="select" id="ui-shadow-on">
+                    <option value="true">启用</option>
+                    <option value="false">关闭</option>
+                  </select>
                 </div>
-                <div class="form-row" style="display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" id="ui-parallax-hover" style="width:18px;height:18px;accent-color:var(--color-brand)" />
-                  <label class="form-label" style="margin:0">卡片视差：悬停常驻（默认点击/长按触发）</label>
+                <div class="form-row">
+                  <label class="form-label">卡片视差模式</label>
+                  <select class="select" id="ui-parallax-hover">
+                    <option value="click">点击 / 长按触发（默认）</option>
+                    <option value="hover">悬停常驻</option>
+                  </select>
                 </div>
               </div>
 
@@ -380,6 +392,31 @@
                 <div class="form-row">
                   <label class="form-label">背景图暗色遮罩 <span id="ui-scrim-val" class="text-mono">40%</span></label>
                   <input type="range" class="slider" id="ui-scrim" min="0" max="80" value="40" />
+                </div>
+              </div>
+
+              <!-- ECG 波形模式: 自动(随今日推送数) / 手动(自定义参数) -->
+              <div class="grid grid-2" style="margin-top:var(--space-s)">
+                <div class="form-row">
+                  <label class="form-label">ECG 波形模式</label>
+                  <select class="select" id="ui-ecg-mode">
+                    <option value="auto">自动（随今日推送数变化）</option>
+                    <option value="manual">手动（自定义速度与复杂度）</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 手动模式专属调节(仅手动显示, 自动收起) -->
+              <div class="ecg-manual-block" id="ecg-manual-block">
+                <div class="grid grid-2">
+                  <div class="form-row">
+                    <label class="form-label">波形速度 <span id="ui-ecg-speed-val" class="text-mono">60%</span></label>
+                    <input type="range" class="slider" id="ui-ecg-speed" min="20" max="120" step="5" value="60" />
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label">波形复杂度 <span id="ui-ecg-complexity-val" class="text-mono">5</span></label>
+                    <input type="range" class="slider" id="ui-ecg-complexity" min="0" max="10" step="1" value="5" />
+                  </div>
                 </div>
               </div>
 
@@ -448,6 +485,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260804c"></script>
+    <script type="module" src="./scripts/app.js?v=20260804d"></script>
   </body>
 </html>

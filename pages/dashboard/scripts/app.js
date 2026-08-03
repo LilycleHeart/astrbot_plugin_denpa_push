@@ -349,7 +349,6 @@ function applyUiConfig() {
 function syncSettingsInputs() {
   const ui = state.uiConfig;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-  const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
 
   set("ui-color-mode", ui.color_mode);
   set("ui-bg-mode", ui.background_mode);
@@ -367,10 +366,10 @@ function syncSettingsInputs() {
   set("ui-glow", ui.glow_intensity);
   set("ui-shadow", ui.shadow_intensity);
   set("ui-scrim", ui.bg_scrim);
-  setChk("ui-acrylic-on", ui.acrylic_enabled);
-  setChk("ui-glow-on", ui.glow_enabled);
-  setChk("ui-shadow-on", ui.shadow_enabled);
-  setChk("ui-parallax-hover", ui.parallax_mode === "hover");
+  set("ui-acrylic-on", ui.acrylic_enabled === false ? "false" : "true");
+  set("ui-glow-on", ui.glow_enabled === false ? "false" : "true");
+  set("ui-shadow-on", ui.shadow_enabled === false ? "false" : "true");
+  set("ui-parallax-hover", ui.parallax_mode === "hover" ? "hover" : "click");
 
   // Slider labels
   const label = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
@@ -396,7 +395,6 @@ function updateBgPreview() {
 
 function collectUiConfig() {
   const get = (id) => document.getElementById(id)?.value;
-  const getChk = (id) => document.getElementById(id)?.checked;
   return {
     color_mode: get("ui-color-mode"),
     background_mode: get("ui-bg-mode"),
@@ -411,10 +409,10 @@ function collectUiConfig() {
     glow_intensity: Number(get("ui-glow")),
     shadow_intensity: Number(get("ui-shadow")),
     bg_scrim: Number(get("ui-scrim")),
-    acrylic_enabled: getChk("ui-acrylic-on"),
-    glow_enabled: getChk("ui-glow-on"),
-    shadow_enabled: getChk("ui-shadow-on"),
-    parallax_mode: getChk("ui-parallax-hover") ? "hover" : "click",
+    acrylic_enabled: get("ui-acrylic-on") === "true",
+    glow_enabled: get("ui-glow-on") === "true",
+    shadow_enabled: get("ui-shadow-on") === "true",
+    parallax_mode: get("ui-parallax-hover") === "hover" ? "hover" : "click",
     background_image: state.uiConfig.background_image,
     background_accent: state.uiConfig.background_accent,
   };
