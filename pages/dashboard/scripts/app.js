@@ -391,9 +391,31 @@ function syncSettingsInputs() {
   label("ui-ecg-speed-val", `${ui.ecg_speed ?? 60}%`);
   label("ui-ecg-complexity-val", `${ui.ecg_complexity ?? 5}`);
 
-  // 手动模式下显示 ECG 调节项, 自动模式收起
-  const ecgBlock = document.getElementById("ecg-manual-block");
-  if (ecgBlock) ecgBlock.classList.toggle("collapsed", (ui.ecg_mode || "auto") !== "manual");
+  syncConditionalBlocks();
+}
+
+// 设置面板: 按模式/开关条件收起对应的参数调节块(带展开收起动画)
+function syncConditionalBlocks() {
+  const ui = state.uiConfig;
+  const toggle = (id, show) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("collapsed", !show);
+  };
+
+  // 泛光/阴影强度: 对应开关关闭时收起
+  toggle("glow-param-block", ui.glow_enabled !== false);
+  toggle("shadow-param-block", ui.shadow_enabled !== false);
+  // 背景图暗色遮罩: 仅 image 背景模式
+  toggle("scrim-param-block", ui.background_mode === "image");
+  // 材质参数(不透明度/模糊): 仅 材质启用 且 材质类型=acrylic
+  toggle("mica-hide-block", ui.acrylic_enabled !== false && ui.material_type === "acrylic");
+  // ECG 手动参数: 仅手动模式
+  toggle("ecg-manual-block", ui.ecg_mode === "manual");
+  // 颜色: 主题色仅 static 取色; 自定义背景仅 custom 背景模式
+  toggle("color-brand-block", ui.color_mode === "static");
+  toggle("color-custom-bg-block", ui.background_mode === "custom");
+  // 背景图上传: 仅 image 背景模式
+  toggle("bg-image-row", ui.background_mode === "image");
 }
 
 function updateBgPreview() {

@@ -606,6 +606,22 @@ body {
   pointer-events: none;
 }
 
+/* 设置面板: 通用条件参数块 — 对应选项关闭/切换时整块收起(展开收起动画) */
+/* 泛光强度 / 阴影强度 / 背景图暗色遮罩 / 颜色(主题色·自定义背景) / 背景图上传 */
+.collapse-block {
+  max-height: 240px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 240ms cubic-bezier(0.33, 0, 0.67, 1), opacity 200ms ease, margin 240ms ease;
+}
+.collapse-block .form-row { margin-top: var(--space-s); }
+.collapse-block.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
 .glow-off .card,
 .glow-off .sidebar,
 .glow-off .hero,
