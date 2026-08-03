@@ -12,6 +12,7 @@
 - **Hero ECG waveform**: Waveform diversity with 15s rotation, speed/intensity driven by today's push count (capped at 20), rendering performance optimization
 - **Hero ECG waveform — auto/manual mode**: Settings panel toggle between auto (waveform speed & complexity driven by today's push count) and manual (custom speed 20–120% + complexity 0–10 sliders); manual controls collapse/hide with animation in auto mode
 - **Settings panel — conditional parameter blocks**: Parameter controls now collapse/hide when their governing option is off or switched — glow/shadow intensity (when their toggle is off), material opacity/blur (when material off or Mica), background-image scrim & upload (when bg mode ≠ image), theme color (when color mode ≠ static), custom backgrounds (when bg mode ≠ custom); unified `.collapse-block` animated collapse
+- **Settings panel — grouped layout**: Panel restructured into feature groups (取色 / 背景 / 材质 / 效果 / 排版 / ECG 波形), each parameter slider sits directly under its controlling option in a 640px column
 - **Parallax wallpaper interactions**: Click / long-press / drag-select three-state interactions, configurable parallax mode, responsive sidebar
 - **MD3 card rendering**: Layered card layout with full palette roles, per-avatar accent extraction, light/dark auto switching
 
