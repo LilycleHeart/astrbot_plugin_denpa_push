@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260804i" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260804i" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260804i" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260804j" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260804j" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260804j" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -317,6 +317,7 @@
                   <p class="card-subtitle">取色、背景、材质、字体与效果</p>
                 </div>
               </div>
+              <!-- 基础项: 无滑条的下拉 + 背景模式(自带遮罩滑条) -->
               <div class="grid grid-2">
                 <div class="form-row">
                   <label class="form-label">取色模式</label>
@@ -325,14 +326,22 @@
                     <option value="static">静态（自定义颜色）</option>
                   </select>
                 </div>
-                <div class="form-row">
-                  <label class="form-label">背景模式</label>
-                  <select class="select" id="ui-bg-mode">
-                    <option value="theme">跟随主题</option>
-                    <option value="brand_gradient">主题色渐变</option>
-                    <option value="custom">自定义</option>
-                    <option value="image">背景图片</option>
-                  </select>
+                <div>
+                  <div class="form-row">
+                    <label class="form-label">背景模式</label>
+                    <select class="select" id="ui-bg-mode">
+                      <option value="theme">跟随主题</option>
+                      <option value="brand_gradient">主题色渐变</option>
+                      <option value="custom">自定义</option>
+                      <option value="image">背景图片</option>
+                    </select>
+                  </div>
+                  <div class="collapse-block" id="scrim-param-block">
+                    <div class="form-row">
+                      <label class="form-label">背景图暗色遮罩 <span id="ui-scrim-val" class="text-mono">40%</span></label>
+                      <input type="range" class="slider" id="ui-scrim" min="0" max="80" value="40" />
+                    </div>
+                  </div>
                 </div>
                 <div class="form-row">
                   <label class="form-label">材质类型</label>
@@ -352,31 +361,6 @@
                   <label class="form-label">圆角大小（px） <span id="ui-radius-val" class="text-mono">14px</span></label>
                   <input type="number" class="input" id="ui-radius" value="14" min="0" max="40" />
                 </div>
-              </div>
-
-              <!-- 开关（下拉） -->
-              <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row">
-                  <label class="form-label">材质效果</label>
-                  <select class="select" id="ui-acrylic-on">
-                    <option value="true">启用（半透明材质）</option>
-                    <option value="false">关闭（实底）</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label class="form-label">主题泛光</label>
-                  <select class="select" id="ui-glow-on">
-                    <option value="true">启用</option>
-                    <option value="false">关闭</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label class="form-label">投影阴影</label>
-                  <select class="select" id="ui-shadow-on">
-                    <option value="true">启用</option>
-                    <option value="false">关闭</option>
-                  </select>
-                </div>
                 <div class="form-row">
                   <label class="form-label">卡片视差模式</label>
                   <select class="select" id="ui-parallax-hover">
@@ -386,63 +370,82 @@
                 </div>
               </div>
 
-              <!-- 滑条(按对应开关/背景模式条件收起) -->
+              <!-- 泛光 / 阴影: 下拉 + 强度滑条成组 -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="collapse-block" id="glow-param-block">
+                <div>
                   <div class="form-row">
-                    <label class="form-label">泛光强度 <span id="ui-glow-val" class="text-mono">15%</span></label>
-                    <input type="range" class="slider" id="ui-glow" min="0" max="100" value="15" />
+                    <label class="form-label">主题泛光</label>
+                    <select class="select" id="ui-glow-on">
+                      <option value="true">启用</option>
+                      <option value="false">关闭</option>
+                    </select>
+                  </div>
+                  <div class="collapse-block" id="glow-param-block">
+                    <div class="form-row">
+                      <label class="form-label">泛光强度 <span id="ui-glow-val" class="text-mono">15%</span></label>
+                      <input type="range" class="slider" id="ui-glow" min="0" max="100" value="15" />
+                    </div>
                   </div>
                 </div>
-                <div class="collapse-block" id="shadow-param-block">
+                <div>
                   <div class="form-row">
-                    <label class="form-label">阴影强度 <span id="ui-shadow-val" class="text-mono">60%</span></label>
-                    <input type="range" class="slider" id="ui-shadow" min="0" max="100" value="60" />
+                    <label class="form-label">投影阴影</label>
+                    <select class="select" id="ui-shadow-on">
+                      <option value="true">启用</option>
+                      <option value="false">关闭</option>
+                    </select>
                   </div>
-                </div>
-                <div class="collapse-block" id="scrim-param-block">
-                  <div class="form-row">
-                    <label class="form-label">背景图暗色遮罩 <span id="ui-scrim-val" class="text-mono">40%</span></label>
-                    <input type="range" class="slider" id="ui-scrim" min="0" max="80" value="40" />
+                  <div class="collapse-block" id="shadow-param-block">
+                    <div class="form-row">
+                      <label class="form-label">阴影强度 <span id="ui-shadow-val" class="text-mono">60%</span></label>
+                      <input type="range" class="slider" id="ui-shadow" min="0" max="100" value="60" />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- ECG 波形模式: 自动(随今日推送数) / 手动(自定义参数) -->
+              <!-- 材质效果: 2 个滑条 → 单独一栏(占满两列) -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row">
+                <div class="form-row" style="grid-column:1/-1">
+                  <label class="form-label">材质效果</label>
+                  <select class="select" id="ui-acrylic-on">
+                    <option value="true">启用（半透明材质）</option>
+                    <option value="false">关闭（实底）</option>
+                  </select>
+                </div>
+                <div class="mica-hide-block collapse-block" id="mica-hide-block" style="grid-column:1/-1">
+                  <div class="grid grid-2">
+                    <div class="form-row">
+                      <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
+                      <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
+                    </div>
+                    <div class="form-row">
+                      <label class="form-label">模糊强度 <span id="ui-blur-val" class="text-mono">5px</span></label>
+                      <input type="range" class="slider" id="ui-blur" min="0" max="100" value="5" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ECG 波形模式: 2 个滑条 → 单独一栏(占满两列) -->
+              <div class="grid grid-2" style="margin-top:var(--space-s)">
+                <div class="form-row" style="grid-column:1/-1">
                   <label class="form-label">ECG 波形模式</label>
                   <select class="select" id="ui-ecg-mode">
                     <option value="auto">自动（随今日推送数变化）</option>
                     <option value="manual">手动（自定义速度与复杂度）</option>
                   </select>
                 </div>
-              </div>
-
-              <!-- 手动模式专属调节(仅手动显示, 自动收起) -->
-              <div class="ecg-manual-block collapse-block" id="ecg-manual-block">
-                <div class="grid grid-2">
-                  <div class="form-row">
-                    <label class="form-label">波形速度 <span id="ui-ecg-speed-val" class="text-mono">60%</span></label>
-                    <input type="range" class="slider" id="ui-ecg-speed" min="20" max="120" step="5" value="60" />
-                  </div>
-                  <div class="form-row">
-                    <label class="form-label">波形复杂度 <span id="ui-ecg-complexity-val" class="text-mono">5</span></label>
-                    <input type="range" class="slider" id="ui-ecg-complexity" min="0" max="10" step="1" value="5" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- 材质专属调节(仅 Acrylic+材质启用 显示, 其余整块收起) -->
-              <div class="mica-hide-block collapse-block" id="mica-hide-block">
-                <div class="grid grid-2">
-                  <div class="form-row">
-                    <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
-                    <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
-                  </div>
-                  <div class="form-row">
-                    <label class="form-label">模糊强度 <span id="ui-blur-val" class="text-mono">5px</span></label>
-                    <input type="range" class="slider" id="ui-blur" min="0" max="100" value="5" />
+                <div class="ecg-manual-block collapse-block" id="ecg-manual-block" style="grid-column:1/-1">
+                  <div class="grid grid-2">
+                    <div class="form-row">
+                      <label class="form-label">波形速度 <span id="ui-ecg-speed-val" class="text-mono">60%</span></label>
+                      <input type="range" class="slider" id="ui-ecg-speed" min="20" max="120" step="5" value="60" />
+                    </div>
+                    <div class="form-row">
+                      <label class="form-label">波形复杂度 <span id="ui-ecg-complexity-val" class="text-mono">5</span></label>
+                      <input type="range" class="slider" id="ui-ecg-complexity" min="0" max="10" step="1" value="5" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -505,6 +508,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260804i"></script>
+    <script type="module" src="./scripts/app.js?v=20260804j"></script>
   </body>
 </html>
