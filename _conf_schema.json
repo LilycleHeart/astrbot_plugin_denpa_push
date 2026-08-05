@@ -66,6 +66,18 @@
     "default": "auto",
     "hint": "auto=优先gifski否则ffmpeg; gifski=高质量需安装gifski; ffmpeg=palettegen调色板"
   },
+  "history_retention_days": {
+    "description": "追踪卡片保留天数",
+    "type": "int",
+    "default": 30,
+    "hint": "「目前追踪」里的卡片只保留最近 N 天；设为 0 表示永久保留（需同时关闭自动清除）"
+  },
+  "history_auto_clean": {
+    "description": "自动清除过期追踪卡片",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后按保留天数自动删除过期卡片；关闭则永久保留全部记录"
+  },
   "proxy": {
     "description": "代理地址（可选）",
     "type": "string",

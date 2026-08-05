@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260804j" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260804j" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260804j" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260804k" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260804k" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260804k" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -180,7 +180,7 @@
               <div class="card-header">
                 <div>
                   <h2 class="card-title">推送时间线</h2>
-                  <p class="card-subtitle">所有推送操作的溯源记录，按时间排列</p>
+                  <p class="card-subtitle" id="tl-retention-hint">所有推送操作的溯源记录，按时间排列</p>
                 </div>
               </div>
               <div class="tl-stream" id="tracking-history"></div>
@@ -286,6 +286,17 @@
                     <option value="auto">auto（优先 gifski）</option>
                     <option value="gifski">gifski（高质量）</option>
                     <option value="ffmpeg">ffmpeg（palettegen）</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">追踪卡片保留天数</label>
+                  <input class="input" id="cfg-history_retention_days" type="number" min="0" max="3650" value="30" />
+                </div>
+                <div class="form-row">
+                  <label class="form-label">自动清除过期卡片</label>
+                  <select class="select" id="cfg-history_auto_clean">
+                    <option value="true">开启（按保留天数自动删除）</option>
+                    <option value="false">关闭（永久保留）</option>
                   </select>
                 </div>
               </div>
@@ -508,6 +519,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260804j"></script>
+    <script type="module" src="./scripts/app.js?v=20260804k"></script>
   </body>
 </html>

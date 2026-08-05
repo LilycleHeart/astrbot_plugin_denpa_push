@@ -119,7 +119,7 @@ class DenpaPushPlugin(Star):
         self._data_path = self._get_data_path()
         self._seed_cache = {}  # {image_url: rgb_tuple}
         self._push_logs = deque(maxlen=100)  # dashboard 信号日志
-        self._push_history = deque(maxlen=50)  # dashboard 推送历史(含卡片详情)
+        self._push_history = deque()  # dashboard 推送历史(含卡片详情)，按保留天数清理
         self._total_pushes = 0
         self._token_stats = {"prompt": 0, "completion": 0, "total": 0, "calls": 0}
         self._register_dashboard_apis(context)
@@ -143,14 +143,62 @@ class DenpaPushPlugin(Star):
                     data = json.load(f)
                 # 向后兼容：旧格式是 list，新格式是 {"history": [...], "total_pushes": N}
                 if isinstance(data, list):
-                    self._push_history = deque(data[:50], maxlen=50)
+                    self._push_history = deque(data)
                     self._total_pushes = len(self._push_history)
                 elif isinstance(data, dict):
                     hist = data.get("history", [])
-                    self._push_history = deque(hist[:50], maxlen=50)
+                    self._push_history = deque(hist)
                     self._total_pushes = data.get("total_pushes", len(self._push_history))
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to load push history: {e}")
+        # 按保留天数清理过期卡片
+        self._prune_push_history(quiet=True)
+
+    def _history_retention_days(self) -> int:
+        """追踪卡片保留天数（0 = 永久保留）。"""
+        try:
+            return int(self.config.get("history_retention_days", 30) or 0)
+        except (TypeError, ValueError):
+            return 30
+
+    def _prune_push_history(self, quiet: bool = False):
+        """按保留天数清理过期追踪卡片。
+
+        自动清除关闭或保留天数为 0 时不做任何事（永久保留）。
+        无有效时间戳的条目一律保留，避免误删。
+        """
+        auto_clean = self.config.get("history_auto_clean", True)
+        if isinstance(auto_clean, str):
+            auto_clean = auto_clean.strip().lower() not in ("0", "false", "no", "")
+        if not auto_clean:
+            return
+        days = self._history_retention_days()
+        if days <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        kept = []
+        dropped = 0
+        for entry in self._push_history:
+            raw = entry.get("time", "") if isinstance(entry, dict) else ""
+            try:
+                t = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=timezone.utc)
+            except Exception:
+                kept.append(entry)  # 无有效时间戳的条目保留
+                continue
+            if t >= cutoff:
+                kept.append(entry)
+            else:
+                dropped += 1
+        if dropped:
+            self._push_history.clear()
+            self._push_history.extend(kept)
+            self._save_push_history()
+            if not quiet:
+                self._log_push(
+                    f"已自动清理 {dropped} 条超过 {days} 天的追踪卡片", "info"
+                )
 
     def _save_push_history(self):
         try:
@@ -290,6 +338,7 @@ class DenpaPushPlugin(Star):
             "quoted_text": (info.get("quoted_text") or "")[:200],
         })
         self._save_push_history()
+        self._prune_push_history()
 
     def _data_cache_size_bytes(self) -> int:
         """统计插件在数据目录下持久化文件的总大小（字节）。
@@ -492,10 +541,16 @@ class DenpaPushPlugin(Star):
             "text_translate_provider", "image_translate_provider",
             "image_translate_mode", "translation_language",
             "text_translate_prompt", "image_translate_prompt",
-            "color_source", "gif_encoder", "proxy",
+            "color_source", "gif_encoder",
+            "history_retention_days", "history_auto_clean", "proxy",
         ]
         if request.method == "GET":
             data = {k: self.config.get(k, "") for k in SCHEMA_KEYS}
+            # 未保存过的新选项回退到 schema 默认值，避免界面显示空
+            if data.get("history_retention_days") in ("", None):
+                data["history_retention_days"] = 30
+            if data.get("history_auto_clean") in ("", None):
+                data["history_auto_clean"] = True
             # 脱敏: token 只显示前6位
             for key in ("twitter_auth_token", "twitter_ct0"):
                 v = data.get(key, "")
@@ -507,7 +562,14 @@ class DenpaPushPlugin(Star):
             try:
                 for k in SCHEMA_KEYS:
                     if k in payload:
-                        self.config[k] = payload[k]
+                        v = payload[k]
+                        # 布尔开关统一归一化为真布尔，避免 "false" 字符串被当 truthy
+                        if k == "history_auto_clean":
+                            if isinstance(v, str):
+                                v = v.strip().lower() not in ("0", "false", "no", "")
+                            else:
+                                v = bool(v)
+                        self.config[k] = v
                 self.config.save_config()
                 # 热更新凭据
                 self._apply_twitter_credentials()
@@ -519,9 +581,15 @@ class DenpaPushPlugin(Star):
         """推送历史详情（含推文内容、翻译、色板）。"""
         from astrbot.api.web import json_response
 
+        auto_clean = self.config.get("history_auto_clean", True)
+        if isinstance(auto_clean, str):
+            auto_clean = auto_clean.strip().lower() not in ("0", "false", "no", "")
         return json_response({
             "history": list(self._push_history),
             "rebuilding": self._rebuild_running,
+            "retention_days": self._history_retention_days(),
+            "auto_clean": bool(auto_clean),
+            "count": len(self._push_history),
         })
 
     async def _rebuild_history_async(self):

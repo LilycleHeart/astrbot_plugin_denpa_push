@@ -12,6 +12,9 @@ import {
 
 const bridge = window.AstrBotPluginPage;
 
+// 时间线一次渲染的最大卡片数(保留天数可能远超旧版的 50 条硬上限)
+const MAX_TIMELINE_CARDS = 500;
+
 // ─── State ───
 const state = {
   ctx: null,
@@ -1763,6 +1766,19 @@ function renderHistory(data) {
   state.timeline.history = allItems;
   const currentMode = state.timeline.mode;
 
+  // 在时间线页头提示当前保留策略(天数 / 永久 / 条数)
+  const retentionHint = document.getElementById("tl-retention-hint");
+  if (retentionHint) {
+    const days = Number(data?.retention_days) || 0;
+    const autoClean = data?.auto_clean !== false;
+    const count = Number(data?.count) ?? allItems.length;
+    let policy;
+    if (!autoClean) policy = "永久保留";
+    else if (days <= 0) policy = "永久保留";
+    else policy = `保留最近 ${days} 天`;
+    retentionHint.textContent = `已收录 ${count} 条 · ${policy} · 按时间排列`;
+  }
+
   // Rebuild tabs (accounts may have changed)
   renderTimelineTabs();
 
@@ -1856,7 +1872,7 @@ function _buildAndLayoutHistory(tlCt, items, emptyMsg) {
     return;
   }
   const frag = document.createDocumentFragment();
-  const sliced = items.slice(0, 50);
+  const sliced = items.slice(0, MAX_TIMELINE_CARDS);
   // 时间线面板隐藏时(首次加载、在其它页签刷新), 入场动画无法运行会停在 opacity:0,
   // 首次打开时间线时卡片不可见("切走再切回"才被 kickstart)。此时禁用入场动画,
   // 卡片/日期条保持默认可见, 打开即显示(确定性修复)。
@@ -2062,6 +2078,8 @@ async function loadPluginConfig() {
     set("cfg-gif_encoder", cfg.gif_encoder || "auto");
     set("cfg-text_translate_prompt", cfg.text_translate_prompt || "");
     set("cfg-image_translate_prompt", cfg.image_translate_prompt || "");
+    set("cfg-history_retention_days", cfg.history_retention_days ?? 30);
+    set("cfg-history_auto_clean", cfg.history_auto_clean !== false ? "true" : "false");
     // 自定义下拉(如有)同步显示当前选中项
     pvSyncAllSelects();
   } catch (e) {
@@ -2254,7 +2272,7 @@ async function init() {
       "text_translate_provider", "image_translate_provider",
       "image_translate_mode", "translation_language",
       "text_translate_prompt", "image_translate_prompt",
-      "color_source", "gif_encoder", "proxy",
+      "color_source", "gif_encoder", "history_retention_days", "proxy",
     ];
     const payload = {};
     keys.forEach(k => {
@@ -2263,6 +2281,10 @@ async function init() {
     });
     // poll_interval → int
     payload.poll_interval = Number(payload.poll_interval) || 5;
+    // 保留天数 → int；布尔开关 → 真布尔
+    payload.history_retention_days = Number(payload.history_retention_days) || 0;
+    const autoCleanEl = document.getElementById("cfg-history_auto_clean");
+    payload.history_auto_clean = autoCleanEl ? autoCleanEl.value === "true" : true;
     try {
       await bridge.apiPost("dashboard/config", payload);
       toast("配置已保存", "success");
