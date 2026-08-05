@@ -417,6 +417,28 @@ class DenpaPushPlugin(Star):
 
         return json_response(self.subscriptions)
 
+    def _normalize_session(self, session: str) -> str:
+        """把前端传入的会话统一为 unified_msg_origin 格式。
+
+        支持两种输入:
+        - 完整会话 "平台:消息类型:ID"(如 小赤羽:FriendMessage:2728007259)
+        - 纯 QQ 号 "2728007259": 若该 QQ 号已存在于现有会话则复用原会话;
+          否则沿用现有会话的 "平台:消息类型" 前缀拼装, 便于直接输入 QQ 号添加订阅。
+        无可参照会话时返回空串(由调用方回退到下拉会话或报错)。
+        """
+        session = (session or "").strip()
+        if not session:
+            return ""
+        if ":" in session:
+            return session
+        existing = list(self.subscriptions) or list(self.monitored_sessions)
+        for s in existing:
+            if s and ":" in s and s.rsplit(":", 1)[-1] == session:
+                return s
+        if existing:
+            return f"{existing[0].rsplit(':', 1)[0]}:{session}"
+        return ""
+
     async def _api_dashboard_subscribe(self):
         """Dashboard 添加订阅（可指定 session，否则自动选择）。"""
         from astrbot.api.web import request, json_response, error_response
@@ -426,8 +448,8 @@ class DenpaPushPlugin(Star):
         if not username:
             return error_response("缺少 username", status_code=400)
 
-        # 选择目标 session: 优先用前端指定的，否则自动选
-        target_session = payload.get("session", "")
+        # 选择目标 session: 优先用前端指定的（纯 QQ 号会自动补全前缀），否则自动选
+        target_session = self._normalize_session(payload.get("session", ""))
         if not target_session:
             if self.monitored_sessions:
                 target_session = next(iter(self.monitored_sessions))

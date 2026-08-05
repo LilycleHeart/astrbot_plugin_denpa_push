@@ -202,7 +202,7 @@
               <div id="subs-session-list"></div>
               <div class="flex gap-s mt-m" style="align-items:center;flex-wrap:wrap">
                 <input class="input" id="add-username" placeholder="@username" style="max-width:200px" spellcheck="false" />
-                <input class="input" id="add-session-input" placeholder="或输入会话ID" style="max-width:180px" spellcheck="false" />
+                <input class="input" id="add-session-input" placeholder="或输入QQ号" style="max-width:180px" spellcheck="false" inputmode="numeric" autocomplete="off" />
                 <select class="select" id="add-session-select" style="max-width:180px">
                   <option value="">选择会话…</option>
                 </select>
@@ -415,17 +415,17 @@
                 </div>
               </div>
 
-              <!-- 材质效果: 2 个滑条 → 单独一栏(占满两列) -->
+              <!-- 材质效果 + ECG 波形模式: 下拉各占一列, 滑条跟随其下(与其他选项一致) -->
               <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row" style="grid-column:1/-1">
-                  <label class="form-label">材质效果</label>
-                  <select class="select" id="ui-acrylic-on">
-                    <option value="true">启用（半透明材质）</option>
-                    <option value="false">关闭（实底）</option>
-                  </select>
-                </div>
-                <div class="mica-hide-block collapse-block" id="mica-hide-block" style="grid-column:1/-1">
-                  <div class="grid grid-2">
+                <div>
+                  <div class="form-row">
+                    <label class="form-label">材质效果</label>
+                    <select class="select" id="ui-acrylic-on">
+                      <option value="true">启用（半透明材质）</option>
+                      <option value="false">关闭（实底）</option>
+                    </select>
+                  </div>
+                  <div class="mica-hide-block collapse-block" id="mica-hide-block">
                     <div class="form-row">
                       <label class="form-label">材质不透明度 <span id="ui-material-val" class="text-mono">45%</span></label>
                       <input type="range" class="slider" id="ui-material" min="0" max="100" value="45" />
@@ -436,19 +436,15 @@
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <!-- ECG 波形模式: 2 个滑条 → 单独一栏(占满两列) -->
-              <div class="grid grid-2" style="margin-top:var(--space-s)">
-                <div class="form-row" style="grid-column:1/-1">
-                  <label class="form-label">ECG 波形模式</label>
-                  <select class="select" id="ui-ecg-mode">
-                    <option value="auto">自动（随今日推送数变化）</option>
-                    <option value="manual">手动（自定义速度与复杂度）</option>
-                  </select>
-                </div>
-                <div class="ecg-manual-block collapse-block" id="ecg-manual-block" style="grid-column:1/-1">
-                  <div class="grid grid-2">
+                <div>
+                  <div class="form-row">
+                    <label class="form-label">ECG 波形模式</label>
+                    <select class="select" id="ui-ecg-mode">
+                      <option value="auto">自动（随今日推送数变化）</option>
+                      <option value="manual">手动（自定义速度与复杂度）</option>
+                    </select>
+                  </div>
+                  <div class="ecg-manual-block collapse-block" id="ecg-manual-block">
                     <div class="form-row">
                       <label class="form-label">波形速度 <span id="ui-ecg-speed-val" class="text-mono">60%</span></label>
                       <input type="range" class="slider" id="ui-ecg-speed" min="20" max="120" step="5" value="60" />
