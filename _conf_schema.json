@@ -82,5 +82,11 @@
     "description": "代理地址（可选）",
     "type": "string",
     "hint": "如 http://127.0.0.1:7890，留空不使用代理"
+  },
+  "silent_mode": {
+    "description": "静默处理模式",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后收到链接仅回复一次确认请求，不再输出额外对话文本，直接发送解析结果（卡片/图片/视频）"
   }
 }

@@ -960,10 +960,12 @@ class DenpaPushPlugin(Star):
         )
         username = m.group(1) if m else "unknown"
         tweet_id = m.group(2) if m else ""
-        for chain in await self._cmd_push(event, url):
+        silent = bool(self.config.get("silent_mode", False))
+        for chain in await self._cmd_push(event, url, silent=silent):
             await self.context.send_message(umo, chain)
             await asyncio.sleep(0.3)
-        yield f"已推送 @{username} 的推文 {tweet_id}"
+        if not silent:
+            yield f"已推送 @{username} 的推文 {tweet_id}"
 
     @filter.llm_tool(name="twitter_list")
     async def twitter_list(self, event: AstrMessageEvent):
@@ -1047,7 +1049,7 @@ class DenpaPushPlugin(Star):
             )
         return _plain("\n".join(lines))
 
-    async def _cmd_push(self, event: AstrMessageEvent, url: str):
+    async def _cmd_push(self, event: AstrMessageEvent, url: str, silent: bool = False):
         results = []
         m = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/(\d+)", url)
         if not m:
@@ -1059,7 +1061,8 @@ class DenpaPushPlugin(Star):
             return results
         username, tweet_id = m.group(1), m.group(2)
         try:
-            results.append(_plain("正在获取推文..."))
+            if not silent:
+                results.append(_plain("正在获取推文..."))
             tweet = await self.twitter.get_tweet_by_id(tweet_id)
             data = TwitterClient.extract_tweet_data(tweet)
 

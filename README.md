@@ -130,6 +130,7 @@ pip install easyocr
 | `image_translate_mode` | `multimodal` 或 `text_extraction` |
 | `translation_language` | 翻译目标语言（默认：中文） |
 | `poll_interval` | 推文轮询间隔（分钟） |
+| `silent_mode` | 静默处理：收到链接仅回复一次确认请求，直接发送解析结果，不再输出额外对话文本 |
 
 ---
 

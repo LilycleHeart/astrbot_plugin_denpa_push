@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **静默处理模式** (`silent_mode` 配置项): 收到推文链接后仅回复一次确认请求，直接发送解析结果（卡片/图片/视频），不再让 LLM 输出额外对话文本
+
 ## v2.0.0 (2026-08-03)
 
 ### Features
