@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preconnect" href="https://cdn-font.hyperos.mi.com" crossorigin />
     <link href="https://cdn-font.hyperos.mi.com/font/css?family=MiSans:100,200,300,400,450,500,600,650,700,900:Chinese_Simplify,Latin&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/tokens.css?v=20260804l" />
-    <link rel="stylesheet" href="./styles/theme.css?v=20260804l" />
-    <link rel="stylesheet" href="./styles/components.css?v=20260804l" />
+    <link rel="stylesheet" href="./styles/tokens.css?v=20260805a" />
+    <link rel="stylesheet" href="./styles/theme.css?v=20260805a" />
+    <link rel="stylesheet" href="./styles/components.css?v=20260805a" />
   </head>
   <body>
     <div id="bg-layer" style="position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none"></div>
@@ -298,6 +298,21 @@
               </div>
 
               <div class="form-row mt-m">
+                <label class="form-label">文字翻译回退模型 <span class="text-mono">主模型失败时按顺序尝试</span></label>
+                <div class="tag-editor" id="cfg-text_translate_fallback_providers-editor">
+                  <div class="tag-list" data-tags></div>
+                  <input class="input tag-input" type="text" placeholder="输入提供商 ID 后回车添加，可逗号分隔" spellcheck="false" data-tag-input />
+                </div>
+              </div>
+              <div class="form-row mt-s">
+                <label class="form-label">图片翻译回退模型 <span class="text-mono">留空沿用文字回退列表</span></label>
+                <div class="tag-editor" id="cfg-image_translate_fallback_providers-editor">
+                  <div class="tag-list" data-tags></div>
+                  <input class="input tag-input" type="text" placeholder="输入提供商 ID 后回车添加，可逗号分隔" spellcheck="false" data-tag-input />
+                </div>
+              </div>
+
+              <div class="form-row mt-m">
                 <label class="form-label">文字翻译 Prompt <span class="text-mono">可用: {lang} {text} {prefix}</span></label>
                 <textarea class="textarea" id="cfg-text_translate_prompt" rows="3" placeholder="留空使用默认"></textarea>
               </div>
@@ -511,6 +526,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260804l"></script>
+    <script type="module" src="./scripts/app.js?v=20260805a"></script>
   </body>
 </html>

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Features
+- **回退模型列表** (`text_translate_fallback_providers` / `image_translate_fallback_providers`): 主翻译模型请求失败、超时或返回空结果时，按配置顺序自动切换到备用模型；图片回退列表留空则沿用文字回退列表；token 统计覆盖失败尝试；dashboard 配置页提供 tag 式编辑器（回车/逗号添加、点击 × 移除、Backspace 删除末项），AstrBot 插件配置页使用多选 provider 列表
 - **静默处理模式** (`silent_mode` 配置项): 收到推文链接后仅回复一次确认请求，直接发送解析结果（卡片/图片/视频），不再让 LLM 输出额外对话文本
 
 ### Fixes

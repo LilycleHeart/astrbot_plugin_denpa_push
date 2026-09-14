@@ -226,6 +226,66 @@ class DenpaPushPlugin(Star):
                 return await asyncio.wait_for(coro, timeout=timeout)
             return await coro
 
+    async def _llm_generate_with_fallback(
+        self, provider_ids, prompt, image_urls=None, timeout=None
+    ):
+        """按顺序尝试 provider 链, 单次调用内完成回退(不做跨请求记忆)。
+
+        回退触发条件(与 AstrBot 核心 fallback_chat_models 一致):
+          - 调用抛异常(超时 / 网络 / 鉴权 / 限流等)
+          - 返回 None 或 completion_text 为空白(视为本次请求失败)
+        每个拿到的响应都会计入 token 统计 —— 失败的尝试同样消耗了 token。
+        全部候选都失败时返回最后一次的响应(可能是 None), 由调用方决定兜底文案。
+        """
+        chain = [p for p in (provider_ids or []) if p]
+        if not chain:
+            return None
+
+        last_resp = None
+        last_error = None
+        for idx, pid in enumerate(chain):
+            try:
+                resp = await self._llm_generate(
+                    provider_id=pid,
+                    prompt=prompt,
+                    image_urls=image_urls,
+                    timeout=timeout,
+                )
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[DenpaPush] LLM provider `{pid}` 调用失败: "
+                    f"{type(e).__name__}: {e}"
+                )
+                if idx < len(chain) - 1:
+                    logger.info(f"[DenpaPush] 切换到回退模型 `{chain[idx + 1]}`")
+                continue
+
+            if resp is not None:
+                self._track_token_usage(resp)
+            text = getattr(resp, "completion_text", None)
+            if text and text.strip():
+                if idx > 0:
+                    logger.info(
+                        f"[DenpaPush] 回退模型 `{pid}` 返回成功(主模型: `{chain[0]}`)"
+                    )
+                return resp
+
+            # 空响应同样视为失败, 继续尝试下一个候选
+            last_resp = resp
+            if idx < len(chain) - 1:
+                logger.warning(
+                    f"[DenpaPush] LLM provider `{pid}` 返回空结果, "
+                    f"切换到回退模型 `{chain[idx + 1]}`"
+                )
+
+        if last_error and last_resp is None:
+            logger.warning(
+                f"[DenpaPush] 全部 {len(chain)} 个模型均失败, "
+                f"最后错误: {type(last_error).__name__}: {last_error}"
+            )
+        return last_resp
+
     def _get_data_path(self):
         root = getattr(self.context, "astrbot_root", os.getcwd())
         return os.path.join(root, DATA_DIR, DATA_FILE)
@@ -757,13 +817,21 @@ class DenpaPushPlugin(Star):
         SCHEMA_KEYS = [
             "twitter_auth_token", "twitter_ct0", "poll_interval",
             "text_translate_provider", "image_translate_provider",
+            "text_translate_fallback_providers", "image_translate_fallback_providers",
             "image_translate_mode", "translation_language",
             "text_translate_prompt", "image_translate_prompt",
             "color_source",
             "history_retention_days", "history_auto_clean", "proxy",
         ]
+        FALLBACK_KEYS = (
+            "text_translate_fallback_providers",
+            "image_translate_fallback_providers",
+        )
         if request.method == "GET":
             data = {k: self.config.get(k, "") for k in SCHEMA_KEYS}
+            # 回退模型列表统一输出数组，前端 tag 编辑器可直接使用
+            for k in FALLBACK_KEYS:
+                data[k] = self._normalize_fallback_list(self.config.get(k, []))
             # 未保存过的新选项回退到 schema 默认值，避免界面显示空
             if data.get("history_retention_days") in ("", None):
                 data["history_retention_days"] = 30
@@ -787,6 +855,9 @@ class DenpaPushPlugin(Star):
                                 v = v.strip().lower() not in ("0", "false", "no", "")
                             else:
                                 v = bool(v)
+                        elif k in FALLBACK_KEYS:
+                            # 回退列表归一化为数组存储(兼容前端传字符串的情况)
+                            v = self._normalize_fallback_list(v)
                         self.config[k] = v
                 self.config.save_config()
                 # 热更新凭据
@@ -2265,11 +2336,77 @@ class DenpaPushPlugin(Star):
                 )
             except Exception:
                 pass
+        return self._normalize_provider_id(pid)
+
+    @staticmethod
+    def _normalize_provider_id(pid) -> str:
+        """归一化 provider 配置值为 id 字符串。
+
+        配置可能来自 AstrBot select_provider(字符串)、旧版的 dict 结构,
+        或用户手填的字符串, 统一取出 id 并去除首尾空白。
+        """
         if isinstance(pid, str):
-            return pid
+            return pid.strip()
         if isinstance(pid, dict):
-            return pid.get("id", "")
-        return str(pid) if pid else ""
+            return str(pid.get("id", "") or "").strip()
+        return str(pid).strip() if pid else ""
+
+    def _normalize_fallback_list(self, raw) -> list:
+        """把回退模型配置归一化为去空、去重、保序的 id 列表。
+
+        兼容三种写法: list(select_providers 多选)、逗号/分号/换行分隔的字符串。
+        """
+        if isinstance(raw, str):
+            items = re.split(r"[,，;；\r\n]+", raw)
+        elif isinstance(raw, (list, tuple, set)):
+            items = list(raw)
+        else:
+            items = []
+
+        result = []
+        for item in items:
+            pid = self._normalize_provider_id(item)
+            if pid and pid not in result:
+                result.append(pid)
+        return result
+
+    def _collect_fallback_providers(self, key: str) -> list:
+        """读取回退模型列表配置, 去空去重并保持顺序。"""
+        return self._normalize_fallback_list(self.config.get(key, []))
+
+    async def _provider_chain(self, kind: str = "text") -> list:
+        """构造 [主模型, *回退模型] 候选链(去重、跳过空值)。
+
+        - text:  主模型 = text_translate_provider(留空时用当前会话默认模型);
+                 回退列表 = text_translate_fallback_providers
+        - image: 主模型 = image_translate_provider → 文字主模型 → 会话默认模型;
+                 回退列表 = image_translate_fallback_providers,
+                 留空时沿用文字翻译的回退列表
+        """
+        if kind == "image":
+            primary = self._normalize_provider_id(
+                self.config.get("image_translate_provider", "")
+            )
+            if not primary:
+                primary = await self._get_provider_id()
+            fallbacks = self._collect_fallback_providers(
+                "image_translate_fallback_providers"
+            )
+            if not fallbacks:
+                fallbacks = self._collect_fallback_providers(
+                    "text_translate_fallback_providers"
+                )
+        else:
+            primary = await self._get_provider_id()
+            fallbacks = self._collect_fallback_providers(
+                "text_translate_fallback_providers"
+            )
+
+        chain = [primary] if primary else []
+        for pid in fallbacks:
+            if pid not in chain:
+                chain.append(pid)
+        return chain
 
     def _track_token_usage(self, llm_resp):
         """从 LLM 响应对象中提取 token 用量并累计。
@@ -2349,11 +2486,8 @@ class DenpaPushPlugin(Star):
             return "(无文字内容)"
 
         target_lang = self.config.get("translation_language", "中文")
-        provider_id = await self._get_provider_id()
-        if not provider_id:
-            provider_id = self.config.get("text_translate_provider", "")
-
-        if not provider_id:
+        provider_chain = await self._provider_chain("text")
+        if not provider_chain:
             return text
 
         MAX_CHUNK = 10000
@@ -2377,12 +2511,11 @@ class DenpaPushPlugin(Star):
             prompt_tpl = self.config.get("text_translate_prompt", "") or default_prompt
             prompt = prompt_tpl.replace("{lang}", target_lang).replace("{prefix}", prefix).replace("{text}", chunk)
             try:
-                llm_resp = await self._llm_generate(
-                    provider_id=provider_id,
+                llm_resp = await self._llm_generate_with_fallback(
+                    provider_ids=provider_chain,
                     prompt=prompt,
                     timeout=self._llm_timeout(),
                 )
-                self._track_token_usage(llm_resp)
                 if llm_resp and llm_resp.completion_text:
                     return llm_resp.completion_text.strip()
                 else:
@@ -2404,12 +2537,10 @@ class DenpaPushPlugin(Star):
             return ""
 
         mode = self.config.get("image_translate_mode", "multimodal")
-        provider_id = self.config.get("image_translate_provider", "")
         target_lang = self.config.get("translation_language", "中文")
-        if not provider_id:
-            provider_id = self.config.get("text_translate_provider", "")
+        provider_chain = await self._provider_chain("image")
 
-        if not provider_id:
+        if not provider_chain:
             return "(未配置翻译提供商)"
 
         img_urls = [
@@ -2430,14 +2561,13 @@ class DenpaPushPlugin(Star):
             async def _translate_one(url):
                 try:
                     prompt = img_prompt_tpl.replace("{lang}", target_lang)
-                    resp = await self._llm_generate(
-                        provider_id=provider_id,
+                    resp = await self._llm_generate_with_fallback(
+                        provider_ids=provider_chain,
                         prompt=prompt,
                         image_urls=[url],
                         timeout=60,
                     )
-                    self._track_token_usage(resp)
-                    return resp.completion_text or ""
+                    return (resp.completion_text or "") if resp else ""
                 except Exception as e:
                     logger.warning(
                         f"Image LLM timeout/fail: {url[:50]} - {type(e).__name__}"
@@ -2456,13 +2586,12 @@ class DenpaPushPlugin(Star):
             for img_url in img_urls:
                 text_in_image = await self._ocr_image(img_url)
                 if text_in_image:
-                    llm_resp = await self._llm_generate(
-                        provider_id=provider_id,
+                    llm_resp = await self._llm_generate_with_fallback(
+                        provider_ids=provider_chain,
                         prompt=f"将以下内容翻译成{target_lang}:\n\n{text_in_image}",
                         timeout=self._llm_timeout(),
                     )
-                    self._track_token_usage(llm_resp)
-                    result = llm_resp.completion_text or ""
+                    result = (llm_resp.completion_text or "") if llm_resp else ""
                     if result:
                         translations.append(result)
             if translations:

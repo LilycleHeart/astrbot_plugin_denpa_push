@@ -2074,6 +2074,103 @@ function renderLogs(data) {
   });
 }
 
+// ─── Fallback provider tag editors ───
+// 回退模型列表：配置项在 _conf_schema.json 中是 list/select_providers，
+// dashboard 用 tag 编辑器读写，保存时整体提交为数组。
+const FALLBACK_PROVIDER_KEYS = [
+  "text_translate_fallback_providers",
+  "image_translate_fallback_providers",
+];
+const fallbackTags = {
+  text_translate_fallback_providers: [],
+  image_translate_fallback_providers: [],
+};
+
+function splitProviderIds(raw) {
+  return String(raw || "")
+    .split(/[,，;；\r\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function initFallbackTagEditors() {
+  FALLBACK_PROVIDER_KEYS.forEach(key => {
+    const root = document.getElementById(`cfg-${key}-editor`);
+    if (!root || root.dataset.ready) return;
+    const input = root.querySelector("[data-tag-input]");
+    const listEl = root.querySelector("[data-tags]");
+    if (!input || !listEl) return;
+
+    const render = () => {
+      listEl.innerHTML = "";
+      const items = fallbackTags[key] || [];
+      if (items.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "tag-empty";
+        empty.textContent = "未配置（主模型失败时不回退）";
+        listEl.appendChild(empty);
+        return;
+      }
+      items.forEach((pid, idx) => {
+        const chip = document.createElement("span");
+        chip.className = "tag-chip";
+        const text = document.createElement("span");
+        text.textContent = `${idx + 1}. ${pid}`;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "tag-chip-del";
+        del.title = "移除";
+        del.textContent = "×";
+        del.addEventListener("click", () => {
+          fallbackTags[key].splice(idx, 1);
+          render();
+        });
+        chip.append(text, del);
+        listEl.appendChild(chip);
+      });
+    };
+
+    const addFrom = (raw) => {
+      let changed = false;
+      splitProviderIds(raw).forEach(pid => {
+        if (!fallbackTags[key].includes(pid)) {
+          fallbackTags[key].push(pid);
+          changed = true;
+        }
+      });
+      if (changed) render();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "," || e.key === "，") {
+        e.preventDefault();
+        addFrom(input.value);
+        input.value = "";
+      } else if (e.key === "Backspace" && !input.value && fallbackTags[key].length) {
+        fallbackTags[key].pop();
+        render();
+      }
+    });
+    input.addEventListener("blur", () => {
+      if (input.value.trim()) {
+        addFrom(input.value);
+        input.value = "";
+      }
+    });
+
+    root.dataset.ready = "1";
+    root._renderTags = render;
+    render();
+  });
+}
+
+function renderFallbackTagEditors() {
+  FALLBACK_PROVIDER_KEYS.forEach(key => {
+    const root = document.getElementById(`cfg-${key}-editor`);
+    if (root && root._renderTags) root._renderTags();
+  });
+}
+
 // ─── Plugin Config Load ───
 async function loadPluginConfig() {
   try {
@@ -2093,6 +2190,12 @@ async function loadPluginConfig() {
     set("cfg-image_translate_prompt", cfg.image_translate_prompt || "");
     set("cfg-history_retention_days", cfg.history_retention_days ?? 30);
     set("cfg-history_auto_clean", cfg.history_auto_clean !== false ? "true" : "false");
+    // 回退模型列表（后端统一返回数组，字符串形式也兼容）
+    FALLBACK_PROVIDER_KEYS.forEach(k => {
+      const v = cfg[k];
+      fallbackTags[k] = Array.isArray(v) ? v.slice() : splitProviderIds(v);
+    });
+    renderFallbackTagEditors();
     // 自定义下拉(如有)同步显示当前选中项
     pvSyncAllSelects();
   } catch (e) {
@@ -2285,6 +2388,7 @@ async function init() {
   });
 
   // ─── Plugin config (schema) load/save ───
+  initFallbackTagEditors();
   loadPluginConfig();
   document.getElementById("btn-save-config").addEventListener("click", async () => {
     const keys = [
@@ -2301,6 +2405,10 @@ async function init() {
     });
     // poll_interval → int
     payload.poll_interval = Number(payload.poll_interval) || 5;
+    // 回退模型列表：整体提交为数组（顺序即回退优先级）
+    FALLBACK_PROVIDER_KEYS.forEach(k => {
+      payload[k] = (fallbackTags[k] || []).slice();
+    });
     // 保留天数 → int；布尔开关 → 真布尔
     payload.history_retention_days = Number(payload.history_retention_days) || 0;
     const autoCleanEl = document.getElementById("cfg-history_auto_clean");

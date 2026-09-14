@@ -21,11 +21,29 @@
     "type": "string",
     "hint": "选择用于翻译推文文字的 AI 模型"
   },
+  "text_translate_fallback_providers": {
+    "description": "文字翻译回退模型列表",
+    "type": "list",
+    "items": {
+      "type": "string"
+    },
+    "_special": "select_providers",
+    "hint": "主模型请求失败/超时/返回空结果时，按列表顺序依次切换到这些模型；已在主模型中的项会自动跳过"
+  },
   "image_translate_provider": {
     "description": "图片翻译使用的 AI 提供商",
     "_special": "select_provider",
     "type": "string",
     "hint": "选择用于图片 OCR/翻译的 AI 模型（需要多模态能力）"
+  },
+  "image_translate_fallback_providers": {
+    "description": "图片翻译回退模型列表",
+    "type": "list",
+    "items": {
+      "type": "string"
+    },
+    "_special": "select_providers",
+    "hint": "图片翻译失败时按顺序回退；留空则沿用「文字翻译回退模型列表」。多模态模式请选择支持图片输入的模型"
   },
   "image_translate_mode": {
     "description": "图片翻译模式",
