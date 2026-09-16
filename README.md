@@ -133,6 +133,25 @@ pip install easyocr
 | `translation_language` | 翻译目标语言（默认：中文） |
 | `poll_interval` | 推文轮询间隔（分钟） |
 | `silent_mode` | 静默处理：收到链接仅回复一次确认请求，直接发送解析结果，不再输出额外对话文本 |
+| `llm_concurrency` | LLM 并发上限（默认 3，文字与图片翻译共享） |
+| `http_concurrency` | 媒体下载并发上限（默认 8，共享连接池） |
+| `twitter_concurrency` | Twitter API 并发上限（默认 4，过高易触发 429） |
+| `render_concurrency` | 卡片渲染并发上限（默认 2，过高会吃满 CPU/内存） |
+| `send_concurrency` | QQ 消息发送并发上限（默认 3，保护 NapCat 发送队列） |
+| `max_download_mb` | 单文件下载上限 MB（默认 64，超限跳过） |
+| `send_image_max_side` | 发送到 QQ 的图片最长边（默认 1280，防合并转发报文过大） |
+| `send_image_max_total_mb` | 单条消息图片内联总量上限 MB（默认 12） |
+| `gif_convert_timeout` | GIF 转换超时秒数（默认 120） |
+| `max_card_height` | 卡片截图最大高度像素（默认 6000，防巨幅位图） |
+| `backlog_budget` | 每账号每轮最多补推条数（默认 10） |
+| `history_retention_days` | 追踪卡片保留天数（默认 30，0 = 永久） |
+| `history_auto_clean` | 是否自动清除过期追踪卡片（默认开启） |
+| `history_max_entries` | 追踪卡片硬上限条数（默认 2000，永久保留时也封顶） |
+| `debug_render_dump` | 保存渲染调试文件到 `data/config/debug_render`（默认关闭） |
+| `proxy` | 代理地址，如 `http://127.0.0.1:7890` |
+
+> 并发相关配置（`render_concurrency`/`send_concurrency`/`twitter_concurrency`/`http_concurrency`/`llm_concurrency`）默认值已在「不易卡死」和「够快」之间取平衡。
+> 只有在机器性能充裕、且确认 NapCat 与网络能承受时，才建议调高 `render_concurrency` 与 `send_concurrency`。
 
 ---
 

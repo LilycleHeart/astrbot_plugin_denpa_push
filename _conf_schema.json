@@ -123,5 +123,65 @@
     "type": "int",
     "default": 10,
     "hint": "掉线期间积压的推文每轮最多补推多少条，剩余留到下一轮，避免积压雪崩拖垮网络"
+  },
+  "render_concurrency": {
+    "description": "卡片渲染并发上限",
+    "type": "int",
+    "default": 2,
+    "hint": "同时进行的 Playwright 截图数。调大可加快多图推送，但过高会吃满 CPU/内存导致 AstrBot 与 NapCat 卡死，建议 1-4"
+  },
+  "send_concurrency": {
+    "description": "消息发送并发上限",
+    "type": "int",
+    "default": 3,
+    "hint": "同时发往 QQ 的消息数。过高会把大量图片/视频同时压进 NapCat 发送队列导致其卡死，建议 2-4"
+  },
+  "twitter_concurrency": {
+    "description": "Twitter API 并发上限",
+    "type": "int",
+    "default": 4,
+    "hint": "同时进行的 Twitter 请求数，过高易触发速率限制(429)"
+  },
+  "max_download_mb": {
+    "description": "单文件下载上限（MB）",
+    "type": "int",
+    "default": 64,
+    "hint": "视频/图片单文件最大下载体积，超过则跳过，防止超大文件占满内存"
+  },
+  "max_card_height": {
+    "description": "卡片截图最大高度（像素）",
+    "type": "int",
+    "default": 6000,
+    "hint": "超长卡片会被截断到该高度，避免生成巨幅位图吃光内存"
+  },
+  "history_max_entries": {
+    "description": "追踪卡片硬上限条数",
+    "type": "int",
+    "default": 2000,
+    "hint": "即使保留天数设为 0（永久）也会按此条数封顶，防止长时间运行内存持续增长"
+  },
+  "debug_render_dump": {
+    "description": "保存渲染调试文件",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后每次卡片渲染都会把 HTML/元数据写入 data/config/debug_render，仅排查问题时开启"
+  },
+  "send_image_max_side": {
+    "description": "发送图片最长边（像素）",
+    "type": "int",
+    "default": 1280,
+    "hint": "发到 QQ 的图片会先压到这个尺寸。合并转发会把图片 base64 内联进报文，直接用原图会让单条消息膨胀到几百 MB"
+  },
+  "send_image_max_total_mb": {
+    "description": "单条消息图片内联总量上限（MB）",
+    "type": "int",
+    "default": 12,
+    "hint": "一条消息里所有图片编码后的总大小上限，超出部分不再发送，防止撑爆 AstrBot 与 NapCat 内存"
+  },
+  "gif_convert_timeout": {
+    "description": "GIF 转换超时（秒）",
+    "type": "int",
+    "default": 120,
+    "hint": "ffmpeg 转换超时后放弃并跳过，防止损坏视频把推送队列卡死"
   }
 }

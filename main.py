@@ -1,7 +1,10 @@
 import asyncio
+import itertools
 import json
 import os
 import re
+import threading
+import time
 from collections import deque
 from datetime import datetime, timezone, timedelta
 
@@ -50,33 +53,349 @@ def _unwrap_event(event) -> AstrMessageEvent:
         return event.context.event
     return event
 
-# Shared persistent Playwright (module-level, survives plugin reload)
+# ═══════════════════════════════════════════════════════════
+# 并发基础设施
+# ═══════════════════════════════════════════════════════════
+# 插件热重载会换事件循环, 绑定在已关闭 loop 上的 Lock/Semaphore 一旦复用会抛
+# RuntimeError, 因此统一按 "当前 loop + 当前配置" 惰性重建。
+
+
+class _LoopBoundSemaphore:
+    """跨事件循环安全的惰性信号量, 并发上限变化时自动重建。"""
+
+    def __init__(self, size_getter):
+        self._get_size = size_getter
+        self._sem = None
+        self._key = None
+
+    def get(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        size = max(1, int(self._get_size()))
+        key = (loop, size)
+        if self._sem is None or self._key != key:
+            self._sem = asyncio.Semaphore(size)
+            self._key = key
+        return self._sem
+
+
+class _LoopBoundLock:
+    """跨事件循环安全的惰性互斥锁。"""
+
+    def __init__(self):
+        self._lock = None
+        self._loop = None
+
+    def get(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._loop is not loop:
+            self._lock = asyncio.Lock()
+            self._loop = loop
+        return self._lock
+
+
+# ═══════════════════════════════════════════════════════════
+# 共享 Playwright (module-level, survives plugin reload)
+# ═══════════════════════════════════════════════════════════
 _pw_instance = None
 _pw_browser = None
+_pw_browser_loop = None
+_pw_lock = _LoopBoundLock()
+
+_TEMP_PREFIX = "astrbot_twitter_"
+_tmp_counter = itertools.count()
+# 每个目标路径一把进程内锁: Windows 上 os.replace 若目标正被另一线程替换/占用,
+# 会抛 WinError 5(拒绝访问), 必须把 "写临时文件 + 替换" 串行化。
+_atomic_locks = {}
+_atomic_locks_guard = threading.Lock()
+
+
+def _atomic_lock_for(path: str) -> threading.Lock:
+    with _atomic_locks_guard:
+        lock = _atomic_locks.get(path)
+        if lock is None:
+            lock = _atomic_locks[path] = threading.Lock()
+        return lock
+
+
+def _write_text(path: str, content: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+def _shrink_image_file(path: str, max_side: int) -> str:
+    """把图片压成"发送用"副本, 返回新路径; 失败返回原路径。
+
+    用于合并转发/图片消息: 这些内容会被 AstrBot 转成 base64 内联进 OneBot 报文,
+    直接发 orig 原图会让单条消息膨胀到几百 MB。压缩后再发可把体积降一个数量级。
+    """
+    if not path or max_side <= 0:
+        return path
+    name = None
+    try:
+        import tempfile
+
+        from PIL import Image
+
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+            if max(im.size) <= max_side:
+                return path  # 已经足够小, 不重复编码
+            im.thumbnail((max_side, max_side), Image.LANCZOS)
+            out = tempfile.NamedTemporaryFile(
+                suffix=".jpg", delete=False, prefix=_TEMP_PREFIX
+            )
+            name = out.name
+            out.close()
+            # 必须先登记再写: 若 save 抛异常(磁盘满/编码失败), 这份临时文件
+            # 否则会"两表都不在"而脱管, 只能等 6 小时后的陈旧清扫兜底
+            _register_temp(name)
+            im.save(name, format="JPEG", quality=82, optimize=True)
+        return name
+    except Exception as e:
+        logger.warning(f"[DenpaPush] shrink image failed: {e}")
+        # 写失败的半截文件立即清掉, 不留在临时目录
+        _remove_temp(name)
+        return path
+
+
+def _atomic_write_json(path: str, payload) -> None:
+    """原子写 JSON: 先写临时文件再 os.replace。
+
+    原实现直接 open(path, "w") 截断后就地写, 与并发读取方交叠时会读到空/半截
+    文件(表现为订阅或历史莫名丢失); os.replace 在同一文件系统上是原子的。
+    同一路径的并发写用进程内锁串行化, 规避 Windows 的 WinError 5。
+    """
+    tmp = f"{path}.{os.getpid()}.{next(_tmp_counter)}.tmp"
+    try:
+        with _atomic_lock_for(path):
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            for attempt in range(3):
+                try:
+                    os.replace(tmp, path)
+                    break
+                except PermissionError:
+                    # 目标可能被杀毒/索引器短暂占用, 退避重试
+                    if attempt == 2:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+    finally:
+        _remove_temp(tmp)
+
+
+_TRACKED_TEMP = set()
+_TRACKED_TEMP_GUARD = threading.Lock()
+
+
+def _register_temp(path):
+    """登记本进程产生的临时文件, 供退出时精确回收。"""
+    if path:
+        with _TRACKED_TEMP_GUARD:
+            _TRACKED_TEMP.add(path)
+    return path
+
+
+def _forget_temp(path) -> None:
+    if path:
+        with _TRACKED_TEMP_GUARD:
+            _TRACKED_TEMP.discard(path)
+
+
+def _remove_temp(path) -> None:
+    _forget_temp(path)
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+# 媒体文件回收宽限期(秒)。必须覆盖 NapCat 回拉文件的窗口:
+# AstrBot 的 Video.to_dict() 只是把本地路径注册成一次性令牌(默认 300s),
+# 真正的文件传输是 NapCat 之后异步通过 HTTP 回拉完成的。因此发送调用返回后
+# 立刻删文件会与之竞态, 导致视频消息发送失败。宽限期取 300s 令牌有效期再多留余量。
+_TEMP_GRACE_SECONDS = 360.0
+# {path: 可删除的时间戳} —— 待回收的临时文件
+_PENDING_REMOVE = {}
+_PENDING_GUARD = threading.Lock()
+
+
+def _release_temp(paths) -> None:
+    """把临时文件标记为「宽限期后可删除」, 并顺手回收已到期的文件。
+
+    刻意不用 asyncio.sleep 长任务: 每条推文一个 6 分钟休眠任务会随推送量堆积,
+    这里只登记时间戳, 由下一次释放/清扫机会式回收, 无任务、有界。
+    """
+    now = time.time()
+    with _PENDING_GUARD:
+        for p in paths:
+            if p:
+                _PENDING_REMOVE.setdefault(p, now + _TEMP_GRACE_SECONDS)
+    # 移出"使用中"登记表: 从此这些文件由待回收表负责, 避免两表同时持有
+    # 导致 terminate 的宽限期判断把它们当成仍在使用的文件
+    for p in paths:
+        _forget_temp(p)
+    with _PENDING_GUARD:
+        # 机会式回收已到期的文件
+        due = [p for p, ts in _PENDING_REMOVE.items() if ts <= now]
+        for p in due:
+            _PENDING_REMOVE.pop(p, None)
+    for p in due:
+        _remove_temp(p)
+
+
+def _flush_released_temp(force: bool = False) -> int:
+    """回收已过宽限期的临时文件; force=True 时全部回收(退出时用)。"""
+    now = time.time()
+    with _PENDING_GUARD:
+        due = [
+            p
+            for p, ts in _PENDING_REMOVE.items()
+            if force or ts <= now
+        ]
+        for p in due:
+            _PENDING_REMOVE.pop(p, None)
+        remaining = list(_PENDING_REMOVE)
+    for p in due:
+        _remove_temp(p)
+    # 已被其他途径(如陈旧清扫)删掉的路径也摘除, 否则待回收表会慢慢长大。
+    # 存在性检查放在锁外做, 避免持锁期间做文件 IO。
+    for p in remaining:
+        if not os.path.exists(p):
+            with _PENDING_GUARD:
+                _PENDING_REMOVE.pop(p, None)
+    return len(due)
+
+
+def _sweep_own_temp_files() -> int:
+    """退出时回收本进程的临时文件 —— 但绝不越过宽限期。
+
+    关键约束: NapCat 是独立进程, 并不随 AstrBot 退出而停止回拉文件, 而插件
+    reload/停用会频繁触发 terminate。若在这里强制删掉仍在 NapCat 令牌窗口
+    (300s) 内的文件, 刚发出的视频/图片就会回拉失败。
+    因此这里只删已过宽限期的文件; 宽限期内的留在磁盘上, 仅取消登记,
+    交给下次启动的 _sweep_stale_temp_files 按 mtime 回收(成为可被收拾的孤儿)。
+    """
+    removed = _flush_released_temp()  # 注意: 不带 force
+    with _TRACKED_TEMP_GUARD:
+        # 仍在宽限期内(或尚未释放)的文件不删除, 只从登记表摘除,
+        # 使其不再被"跳过清理"逻辑保护, 从而能被后续的陈旧清扫回收
+        _TRACKED_TEMP.clear()
+    return removed
+
+
+def _sweep_stale_temp_files(max_age_seconds: float = 6 * 3600) -> int:
+    """清理上次运行残留的卡片 HTML/PNG 与媒体临时文件。
+
+    原实现从不删除已发送的卡片 PNG 与下载的媒体, 磁盘只增不减; 这里按
+    修改时间清理陈旧文件(默认 6 小时), 既回收空间又不会误删在途文件。
+    """
+    import tempfile
+    import time as _time
+
+    removed = 0
+    try:
+        tmp_dir = tempfile.gettempdir()
+        now = _time.time()
+        with _TRACKED_TEMP_GUARD:
+            tracked = set(_TRACKED_TEMP)
+        for name in os.listdir(tmp_dir):
+            if not name.startswith(_TEMP_PREFIX):
+                continue
+            p = os.path.join(tmp_dir, name)
+            # 本进程仍在使用的文件不清理
+            if p in tracked:
+                continue
+            try:
+                if os.path.isfile(p) and now - os.path.getmtime(p) > max_age_seconds:
+                    os.remove(p)
+                    removed += 1
+            except OSError:
+                continue
+        # 顺带丢弃已不存在的登记项(渲染失败时 PNG 路径已登记但从未生成),
+        # 保证登记表本身不会随运行时长增长
+        with _TRACKED_TEMP_GUARD:
+            for p in list(_TRACKED_TEMP):
+                if not os.path.exists(p):
+                    _TRACKED_TEMP.discard(p)
+    except OSError:
+        pass
+    return removed
 
 
 async def _get_shared_browser():
-    """Lazy-init and return a persistent Chromium browser shared across all instances."""
-    global _pw_instance, _pw_browser
-    if _pw_browser and _pw_browser.is_connected():
-        return _pw_browser
-    if not _pw_instance:
-        from playwright.async_api import async_playwright
+    """Lazy-init and return a persistent Chromium browser shared across all instances.
 
-        _pw_instance = await async_playwright().start()
-    _pw_browser = await _pw_instance.chromium.launch(headless=True)
-    return _pw_browser
+    并发安全: 整个 "检查 → 启动 → 赋值" 过程串行化。原实现在并发首次渲染时
+    会有多个协程同时看到 _pw_browser 为 None, 各自 launch 一个 Chromium,
+    短时间内拉起 N 个浏览器进程吃光内存, 导致 AstrBot 与 NapCat 一起卡死。
+    """
+    global _pw_instance, _pw_browser, _pw_browser_loop
+
+    loop = asyncio.get_running_loop()
+    # 热重载/换事件循环后旧实例绑在已关闭的 loop 上, 必须丢弃重建
+    if _pw_browser_loop is not None and _pw_browser_loop is not loop:
+        _pw_browser = None
+        _pw_instance = None
+        _pw_browser_loop = None
+
+    if _pw_browser is not None:
+        try:
+            if _pw_browser.is_connected():
+                return _pw_browser
+        except Exception:
+            pass
+        _pw_browser = None
+
+    async with _pw_lock.get():
+        if _pw_browser is not None:
+            try:
+                if _pw_browser.is_connected():
+                    return _pw_browser
+            except Exception:
+                pass
+            _pw_browser = None
+        if _pw_instance is None:
+            from playwright.async_api import async_playwright
+
+            _pw_instance = await async_playwright().start()
+        _pw_browser = await _pw_instance.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-sync",
+                "--mute-audio",
+                "--no-first-run",
+                # 单页渲染用不到大堆内存, 压低上限避免多开时 OOM
+                "--js-flags=--max-old-space-size=256",
+            ],
+        )
+        _pw_browser_loop = loop
+        logger.info("[DenpaPush] Chromium launched for card rendering")
+        return _pw_browser
 
 
 async def _close_shared_browser():
     """Close shared Playwright and browser."""
-    global _pw_instance, _pw_browser
-    if _pw_browser:
-        await _pw_browser.close()
-        _pw_browser = None
-    if _pw_instance:
-        await _pw_instance.stop()
-        _pw_instance = None
+    global _pw_instance, _pw_browser, _pw_browser_loop
+    browser, instance = _pw_browser, _pw_instance
+    _pw_browser = None
+    _pw_instance = None
+    _pw_browser_loop = None
+    if browser:
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    if instance:
+        try:
+            await instance.stop()
+        except Exception:
+            pass
 
 
 def _twitter_media_url(url: str, size: str = "orig") -> str:
@@ -93,9 +412,32 @@ def _twitter_media_url(url: str, size: str = "orig") -> str:
     return f"{url}:{size}"
 
 
-def _file_to_data_uri(path: str) -> str:
-    """Read a local image file and return a base64 data URI."""
-    import base64, mimetypes
+def _file_to_data_uri(path: str, max_side: int = 0) -> str:
+    """Read a local image file and return a base64 data URI.
+
+    max_side > 0 时先用 PIL 等比降采样到最长边不超过该值再编码。卡片里只显示
+    缩略图, 内联原图(单张可达数 MB)会按 base64 放大约 1.33 倍, 一张多图推文的
+    HTML 就能涨到几十 MB, 多路并发渲染时直接把内存打满。
+    """
+    import base64
+    import mimetypes
+
+    if max_side > 0:
+        try:
+            import io
+
+            from PIL import Image
+
+            with Image.open(path) as im:
+                im = im.convert("RGB")
+                if max(im.size) > max_side:
+                    im.thumbnail((max_side, max_side), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=82, optimize=True)
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            return f"data:image/jpeg;base64,{b64}"
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Thumbnail downscale failed, using original: {e}")
 
     mime = mimetypes.guess_type(path)[0] or "image/jpeg"
     with open(path, "rb") as f:
@@ -117,6 +459,7 @@ class DenpaPushPlugin(Star):
         self.subscriptions = {}  # {session_umo: {username: {info}}}
         self.monitored_sessions = set()
         self.monitor_task = None
+        self._rebuild_task = None
         self._running = False
         self._rebuild_running = False
         self._data_path = self._get_data_path()
@@ -125,24 +468,44 @@ class DenpaPushPlugin(Star):
         self._push_history = deque()  # dashboard 推送历史(含卡片详情)，按保留天数清理
         self._total_pushes = 0
         self._push_fail_counts = {}  # {(session_umo, username, tweet_id): 连续失败轮数}
+        self._last_prune_at = None  # 历史清理节流时间戳
+        # 加载成功标志: 为 False 时禁止覆盖写磁盘, 防止一次读取失败把
+        # 磁盘上完好的订阅/历史按空模板覆盖掉(数据永久丢失)
+        self._data_loaded_ok = False
+        self._history_loaded_ok = False
         self._token_stats = {"prompt": 0, "completion": 0, "total": 0, "calls": 0}
         # 共享连接池 + 并发信号量: 全局限制 LLM 与 HTTP 下载并发, 防止积压时连接风暴
         self._http_client = None
-        self._http_semaphore = None
-        self._llm_semaphore = None
+        self._http_client_key = None
         self._register_dashboard_apis(context)
+        # 注册并发闸门(按当前事件循环 + 配置惰性重建)
+        self._http_semaphore = _LoopBoundSemaphore(self._http_concurrency)
+        self._llm_semaphore = _LoopBoundSemaphore(self._llm_concurrency)
+        self._render_semaphore = _LoopBoundSemaphore(self._render_concurrency)
+        self._send_semaphore = _LoopBoundSemaphore(self._send_concurrency)
+        self._push_lock = _LoopBoundLock()
+        self._pending_saves = {}
+
+    @staticmethod
+    def _as_int(value, default: int, minimum: int = 1, maximum: int = 64) -> int:
+        try:
+            return max(minimum, min(maximum, int(value)))
+        except (TypeError, ValueError):
+            return default
 
     def _http_concurrency(self) -> int:
-        try:
-            return max(1, int(self.config.get("http_concurrency", 8)))
-        except (TypeError, ValueError):
-            return 8
+        return self._as_int(self.config.get("http_concurrency", 8), 8)
 
     def _llm_concurrency(self) -> int:
-        try:
-            return max(1, int(self.config.get("llm_concurrency", 3)))
-        except (TypeError, ValueError):
-            return 3
+        return self._as_int(self.config.get("llm_concurrency", 3), 3)
+
+    def _render_concurrency(self) -> int:
+        """同时进行的 Playwright 渲染数。"""
+        return self._as_int(self.config.get("render_concurrency", 2), 2, 1, 8)
+
+    def _send_concurrency(self) -> int:
+        """同时进行的平台出站发送数, 保护 NapCat/OneBot 不被消息洪水打爆。"""
+        return self._as_int(self.config.get("send_concurrency", 3), 3, 1, 16)
 
     def _llm_timeout(self) -> float:
         try:
@@ -151,32 +514,61 @@ class DenpaPushPlugin(Star):
             return 120.0
 
     def _get_http_semaphore(self) -> asyncio.Semaphore:
-        if self._http_semaphore is None:
-            self._http_semaphore = asyncio.Semaphore(self._http_concurrency())
-        return self._http_semaphore
+        return self._http_semaphore.get()
 
     def _get_llm_semaphore(self) -> asyncio.Semaphore:
-        if self._llm_semaphore is None:
-            self._llm_semaphore = asyncio.Semaphore(self._llm_concurrency())
-        return self._llm_semaphore
+        return self._llm_semaphore.get()
+
+    def _get_render_semaphore(self) -> asyncio.Semaphore:
+        return self._render_semaphore.get()
+
+    def _get_send_semaphore(self) -> asyncio.Semaphore:
+        return self._send_semaphore.get()
+
+    async def _send(self, session_umo: str, chain: MessageChain) -> bool:
+        """受全局信号量保护的出站发送。
+
+        并发推送多条推文时, 无节制的 send_message 会把大量(尤其是含大图/视频的)
+        消息同时压进 NapCat 的发送队列, NapCat 内存暴涨后与 AstrBot 一起卡死。
+        这里限制在途发送数, 并让单次发送失败只影响当前会话。
+        """
+        async with self._get_send_semaphore():
+            return bool(await self.context.send_message(session_umo, chain))
 
     def _get_http_client(self):
         """懒加载一个全局共享的 httpx.AsyncClient(连接池)。
 
         复用同一个 client(而非每个文件新建)让 TCP+TLS 连接在多张图片下载间保活,
         避免积压时几十个裸连接同时握手。proxy 由配置决定。
+        重建条件: 事件循环更换(插件热重载后旧 loop 已关闭) 或 proxy 配置变更
+        —— 后者若不重建, 热改代理后媒体下载与取色仍走旧代理, 与 twikit 侧不一致。
         """
         import httpx
 
+        loop = asyncio.get_running_loop()
+        proxy = (self.config.get("proxy", "") or "").strip() or None
+        key = (loop, proxy)
+        if self._http_client_key != key:
+            # 旧 client 绑定的 loop/proxy 已失效, 丢弃重建
+            if self._http_client is not None and not self._http_client.is_closed:
+                try:
+                    asyncio.get_running_loop().create_task(
+                        self._http_client.aclose()
+                    )
+                except Exception:
+                    pass
+            self._http_client = None
         if self._http_client is None or self._http_client.is_closed:
-            proxy = self.config.get("proxy", None)
             self._http_client = httpx.AsyncClient(
-                proxy=proxy if proxy else None,
+                proxy=proxy,
                 timeout=httpx.Timeout(60.0, connect=15.0),
                 limits=httpx.Limits(
                     max_connections=20, max_keepalive_connections=10
                 ),
                 follow_redirects=True,
+                # trust_env=False: "proxy 留空" 就是直连, 不应被 HTTP_PROXY 等
+                # 环境变量悄悄接管, 否则行为依赖运行环境难以排查
+                trust_env=False,
                 headers={
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -185,28 +577,62 @@ class DenpaPushPlugin(Star):
                     ),
                 },
             )
+            self._http_client_key = key
         return self._http_client
 
+    def _max_download_bytes(self) -> int:
+        """单文件下载上限(MB → 字节), 防止超大视频把内存吃满。"""
+        return self._as_int(self.config.get("max_download_mb", 64), 64, 1, 1024) * 1024 * 1024
+
     async def _download_file(self, url, suffix=".jpg", timeout=60.0):
-        """用共享连接池下载到临时文件, 受 http 信号量限流。"""
+        """用共享连接池流式下载到临时文件, 受 http 信号量限流且限制单文件大小。
+
+        原实现 r = await client.get(url) 会把整个响应体读进内存再写盘, 一个几百 MB
+        的视频就能顶爆内存; 改流式写盘并边下边累计字节数, 超限立即中止。
+        """
         if not url:
             return None
         try:
             import tempfile
 
             client = self._get_http_client()
+            max_bytes = self._max_download_bytes()
             async with self._get_http_semaphore():
-                r = await client.get(url, timeout=timeout)
-                r.raise_for_status()
                 ext = suffix
-                for s in [".mp4", ".gif", ".jpg", ".jpeg", ".png"]:
+                for s in [".mp4", ".gif", ".jpg", ".jpeg", ".png", ".webp"]:
                     if s in url.lower():
                         ext = s
                         break
-                tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
-                tmp.write(r.content)
+                tmp = tempfile.NamedTemporaryFile(
+                    suffix=ext, delete=False, prefix=_TEMP_PREFIX
+                )
+                name = _register_temp(tmp.name)
+                total = 0
+                try:
+                    async with client.stream("GET", url, timeout=timeout) as r:
+                        r.raise_for_status()
+                        declared = r.headers.get("content-length")
+                        if declared and declared.isdigit() and int(declared) > max_bytes:
+                            logger.warning(
+                                f"[DenpaPush] Skip oversized media "
+                                f"({int(declared) // 1048576}MB): {url[:60]}"
+                            )
+                            tmp.close()
+                            _remove_temp(name)
+                            return None
+                        async for chunk in r.aiter_bytes(65536):
+                            total += len(chunk)
+                            if total > max_bytes:
+                                raise ValueError(
+                                    f"download exceeds {max_bytes // 1048576}MB limit"
+                                )
+                            tmp.write(chunk)
+                except Exception:
+                    tmp.close()
+                    _remove_temp(name)
+                    raise
                 tmp.close()
-                return tmp.name
+                return name
         except Exception as e:
             logger.warning(f"Media download failed: {url[:60]} - {e}")
             return None
@@ -368,20 +794,47 @@ class DenpaPushPlugin(Star):
         return any(k in msg.lower() for k in transient)
 
     def _load_push_history(self):
+        """加载推送历史; 读取失败时保留内存现状并不允许覆盖写。
+
+        与订阅同理: 一次读取抖动不该让整个历史被空列表覆盖掉。
+        内容损坏时备份后放行(历史属可再生成的次要数据, 不该因此锁死写入)。
+        """
+        self._history_loaded_ok = False
+        if not os.path.exists(self._push_history_path):
+            self._history_loaded_ok = True
+            self._prune_push_history(quiet=True)
+            return
         try:
-            if os.path.exists(self._push_history_path):
-                with open(self._push_history_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                # 向后兼容：旧格式是 list，新格式是 {"history": [...], "total_pushes": N}
-                if isinstance(data, list):
-                    self._push_history = deque(data)
-                    self._total_pushes = len(self._push_history)
-                elif isinstance(data, dict):
-                    hist = data.get("history", [])
-                    self._push_history = deque(hist)
-                    self._total_pushes = data.get("total_pushes", len(self._push_history))
+            with open(self._push_history_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (ValueError, UnicodeDecodeError) as e:
+            self._quarantine_broken_file(self._push_history_path, "push history", e)
+            self._history_loaded_ok = True
+            self._prune_push_history(quiet=True)
+            return
         except Exception as e:
-            logger.warning(f"[DenpaPush] Failed to load push history: {e}")
+            logger.error(
+                f"[DenpaPush] Failed to read push history (transient), "
+                f"refusing to overwrite: {e}"
+            )
+            self._prune_push_history(quiet=True)
+            return
+
+        try:
+            # 向后兼容：旧格式是 list，新格式是 {"history": [...], "total_pushes": N}
+            if isinstance(data, list):
+                self._push_history = deque(data)
+                self._total_pushes = len(self._push_history)
+            elif isinstance(data, dict):
+                hist = data.get("history", [])
+                self._push_history = deque(hist)
+                self._total_pushes = data.get("total_pushes", len(self._push_history))
+            else:
+                raise ValueError(f"unexpected history root: {type(data).__name__}")
+            self._history_loaded_ok = True
+        except Exception as e:
+            self._quarantine_broken_file(self._push_history_path, "push history", e)
+            self._history_loaded_ok = True
         # 按保留天数清理过期卡片
         self._prune_push_history(quiet=True)
 
@@ -397,6 +850,7 @@ class DenpaPushPlugin(Star):
 
         自动清除关闭或保留天数为 0 时不做任何事（永久保留）。
         无有效时间戳的条目一律保留，避免误删。
+        高频推送时用时间戳节流, 避免每条推文都全量扫描一次历史。
         """
         auto_clean = self.config.get("history_auto_clean", True)
         if isinstance(auto_clean, str):
@@ -406,7 +860,12 @@ class DenpaPushPlugin(Star):
         days = self._history_retention_days()
         if days <= 0:
             return
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        now = datetime.now(timezone.utc)
+        last = getattr(self, "_last_prune_at", None)
+        if quiet and last is not None and (now - last).total_seconds() < 60:
+            return
+        self._last_prune_at = now
+        cutoff = now - timedelta(days=days)
         kept = []
         dropped = 0
         for entry in self._push_history:
@@ -425,20 +884,23 @@ class DenpaPushPlugin(Star):
         if dropped:
             self._push_history.clear()
             self._push_history.extend(kept)
-            self._save_push_history()
+            self._schedule_save("push_history", self._write_history_payload, self._history_payload)
             if not quiet:
                 self._log_push(
                     f"已自动清理 {dropped} 条超过 {days} 天的追踪卡片", "info"
                 )
 
     def _save_push_history(self):
+        # 历史从未成功加载过时拒绝写入, 防止用空历史覆盖磁盘上的既有记录
+        if not getattr(self, "_history_loaded_ok", False):
+            logger.warning(
+                "[DenpaPush] Skip saving push history: initial load never "
+                "succeeded, refusing to overwrite existing history file"
+            )
+            return
         try:
             os.makedirs(os.path.dirname(self._push_history_path), exist_ok=True)
-            with open(self._push_history_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "history": list(self._push_history),
-                    "total_pushes": self._total_pushes,
-                }, f, ensure_ascii=False)
+            _atomic_write_json(self._push_history_path, self._history_payload())
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to save push history: {e}")
 
@@ -461,14 +923,13 @@ class DenpaPushPlugin(Star):
     def _save_token_stats(self):
         try:
             os.makedirs(os.path.dirname(self._token_stats_path), exist_ok=True)
-            with open(self._token_stats_path, "w", encoding="utf-8") as f:
-                json.dump(self._token_stats, f, ensure_ascii=False)
+            _atomic_write_json(self._token_stats_path, self._token_stats)
         except Exception as e:
             logger.warning(f"[DenpaPush] Failed to save token stats: {e}")
 
     async def initialize(self):
         try:
-            import twikit
+            import twikit  # noqa: F401
 
         except ImportError:
             logger.error("twikit 未安装，请确保 requirements.txt 中的依赖已被安装")
@@ -476,6 +937,13 @@ class DenpaPushPlugin(Star):
         self._load_data()
         self._load_push_history()
         self._load_token_stats()
+        # 清理上次运行残留的卡片/媒体临时文件, 避免磁盘与内存长期累积
+        try:
+            swept = await asyncio.to_thread(_sweep_stale_temp_files)
+            if swept:
+                logger.info(f"[DenpaPush] Swept {swept} stale temp files")
+        except Exception as e:
+            logger.warning(f"[DenpaPush] temp sweep failed: {e}")
         auto_monitor = True
         if self.subscriptions and auto_monitor:
             self._start_monitor()
@@ -489,26 +957,83 @@ class DenpaPushPlugin(Star):
             or "avatar_url" not in e
             for e in self._push_history
         ):
-            asyncio.create_task(self._rebuild_history_async())
+            self._rebuild_task = asyncio.create_task(self._rebuild_history_async())
 
     def _apply_twitter_credentials(self):
         auth_token = self.config.get("twitter_auth_token", "")
         ct0 = self.config.get("twitter_ct0", "")
+        # 代理与 API 并发同样热更新: twikit 底层连接池在 set_proxy 时重建
+        try:
+            self.twitter.set_proxy(self.config.get("proxy", ""))
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to apply proxy: {e}")
+        self.twitter.set_concurrency(self._twitter_concurrency())
         if auth_token:
             self.twitter.set_credentials(auth_token, ct0)
 
+    def _twitter_concurrency(self) -> int:
+        """同时进行的 Twitter API 请求数。"""
+        return self._as_int(self.config.get("twitter_concurrency", 4), 4, 1, 16)
+
     async def terminate(self):
         self._running = False
-        self._save_token_stats()
+        # 先落盘所有去抖写入, 再取消后台任务, 避免丢数据
+        self._flush_pending_saves()
         if self.monitor_task:
-            self.monitor_task.cancel()
+            task = self.monitor_task
             self.monitor_task = None
+            # 两阶段收尾, 目标是"既保留在途发送的自然收尾机会, 又不永久挂住":
+            #   阶段1: 只等待、不取消(asyncio.wait 本身不会取消任务)。若此刻正卡在
+            #          send_message 的 await 上(消息已发出、等响应), 它能在窗口内
+            #          自然返回; 否则基线不推进会导致下轮重复推送。
+            #   阶段2: 窗口用尽仍未结束, 才强制取消, 并短暂等一下让它真正退出,
+            #          之后才关闭共享资源(避免任务在已关闭的 client/browser 上跑)。
+            done, pending = await asyncio.wait({task}, timeout=3.0)
+            if pending:
+                logger.warning(
+                    "[DenpaPush] Monitor task exceeded grace period, cancelling"
+                )
+                task.cancel()
+                # 给它一点时间响应取消, 争取在关资源前真正停止
+                await asyncio.wait({task}, timeout=2.0)
+            if task.done():
+                # 消费异常结果, 避免 "exception was never retrieved" 告警
+                try:
+                    task.exception()
+                except (asyncio.CancelledError, Exception):
+                    pass
+            else:
+                logger.warning(
+                    "[DenpaPush] Monitor task still running after cancel; "
+                    "closing shared resources anyway"
+                )
+        rebuild_task = getattr(self, "_rebuild_task", None)
+        if rebuild_task and not rebuild_task.done():
+            rebuild_task.cancel()
+        self._rebuild_task = None
         if self._http_client is not None and not self._http_client.is_closed:
             try:
                 await self._http_client.aclose()
             except Exception:
                 pass
-            self._http_client = None
+        self._http_client = None
+        self._http_client_key = None
+        self._seed_cache.clear()
+        # 关闭 twikit 与 GraphQL 的连接池, 避免热重载时连接泄漏
+        try:
+            await self.twitter.close()
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to close twitter client: {e}")
+        # 关闭共享 Chromium(否则热重载会遗留孤儿浏览器进程)
+        try:
+            await _close_shared_browser()
+        except Exception as e:
+            logger.warning(f"[DenpaPush] Failed to close shared browser: {e}")
+        # 本次运行产生的临时文件回收(宽限期内的保留给 NapCat 回拉, 见函数注释)
+        try:
+            await asyncio.to_thread(_sweep_own_temp_files)
+        except Exception:
+            pass
 
     # ═══════════════════════════════════════════════════════════
     # Dashboard API (Signal Observatory)
@@ -581,8 +1106,22 @@ class DenpaPushPlugin(Star):
             "quoted_screen_name": info.get("quoted_screen_name", ""),
             "quoted_text": (info.get("quoted_text") or "")[:200],
         })
-        self._save_push_history()
-        self._prune_push_history()
+        # 硬上限: 保留天数设为 0(永久) 或关闭自动清理时也要封顶, 否则长跑必爆内存
+        max_entries = self._as_int(
+            self.config.get("history_max_entries", 2000), 2000, 50, 100000
+        )
+        while len(self._push_history) > max_entries:
+            self._push_history.pop()
+        # 去抖落盘: 原实现每条推送都全量 json.dump + 全量扫描清理, 高频推送时
+        # 同步写盘会明显阻塞事件循环。历史上限可达 2000 条, 每条推送都重新序列化
+        # 一遍整个历史是 O(n²) 量级, 故用更长的合并窗口(历史展示对实时性不敏感)。
+        self._schedule_save(
+            "push_history",
+            self._write_history_payload,
+            self._history_payload,
+            delay=8.0,
+        )
+        self._prune_push_history(quiet=True)
 
     def _data_cache_size_bytes(self) -> int:
         """统计插件在数据目录下持久化文件的总大小（字节）。
@@ -822,6 +1361,11 @@ class DenpaPushPlugin(Star):
             "text_translate_prompt", "image_translate_prompt",
             "color_source",
             "history_retention_days", "history_auto_clean", "proxy",
+            "llm_concurrency", "http_concurrency", "backlog_budget",
+            "render_concurrency", "send_concurrency", "twitter_concurrency",
+            "max_download_mb", "max_card_height", "history_max_entries",
+            "debug_render_dump", "send_image_max_side",
+            "send_image_max_total_mb", "gif_convert_timeout",
         ]
         FALLBACK_KEYS = (
             "text_translate_fallback_providers",
@@ -963,13 +1507,17 @@ class DenpaPushPlugin(Star):
                                 seed_url = _twitter_media_url(first_url, "orig")
                         if seed_url:
                             seed_rgb = await self._extract_seed_color(seed_url)
-                            pal, _is_dark = self._generate_palette(seed_rgb)
+                            pal, _is_dark = await self._build_palette_async(seed_rgb)
                             entry["seed_color"] = (
                                 "#%02x%02x%02x" % seed_rgb if seed_rgb else ""
                             )
                             entry["palette"] = pal
                     rebuilt += 1
-                    self._save_push_history()
+                    self._schedule_save(
+                        "push_history",
+                        self._write_history_payload,
+                        self._history_payload,
+                    )
                     await asyncio.sleep(2)  # 规避 Twitter API 速率限制
                 except asyncio.CancelledError:
                     raise
@@ -1100,40 +1648,188 @@ class DenpaPushPlugin(Star):
         return json_response({"removed": True})
 
     def _load_data(self):
+        """从磁盘加载订阅数据。
+
+        安全约束: 只有"确认读到了内容"或"确认文件不存在"才算加载成功。
+        读取/解析失败时**绝不直接覆盖**磁盘 —— 否则一次瞬时 IO 抖动就会让内存落到
+        空态, 随后 terminate 的无条件落盘会把完好的订阅按空模板覆盖掉(实测可复现)。
+
+        但要区分两类失败, 否则内容已损坏的用户会永久无法保存(可用性死角):
+          - 瞬时 IO 错误(占用/权限/IO): 保守处理, 本次运行拒绝写盘, 下次重试即可;
+          - 内容损坏(JSON 解析失败/结构非法): 先把坏文件备份, 再放行写盘,
+            让用户能继续使用插件, 同时保留现场供排查。
+        """
+        self._data_loaded_ok = False
+        if not os.path.exists(self._data_path):
+            # 首次运行: 磁盘上本就没有数据, 空态是正确状态
+            self._data_loaded_ok = True
+            return
         try:
-            if os.path.exists(self._data_path):
-                with open(self._data_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                tracked = data.get("tracked_users")
-                if tracked is not None:
-                    sessions = data.get("monitored_sessions", [])
-                    self.subscriptions = {}
-                    for s in sessions:
-                        self.subscriptions[s] = dict(tracked)
-                    self.monitored_sessions = set(sessions)
-                else:
-                    self.subscriptions = data.get("subscriptions", {})
-                    self.monitored_sessions = set(data.get("monitored_sessions", []))
-                total = sum(len(users) for users in self.subscriptions.values())
-                logger.info(
-                    f"Loaded {len(self.subscriptions)} sessions with {total} tracked users"
-                )
+            with open(self._data_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (ValueError, UnicodeDecodeError) as e:
+            # json.JSONDecodeError 继承自 ValueError; 内容坏了, 备份后放行
+            self._quarantine_broken_file(self._data_path, "subscriptions", e)
+            self._data_loaded_ok = True
+            return
         except Exception as e:
-            logger.warning(f"Failed to load data: {e}")
-            self.subscriptions = {}
-            self.monitored_sessions = set()
+            # 瞬时 IO 问题: 保留磁盘现状, 本次运行不写盘
+            logger.error(
+                f"[DenpaPush] Failed to read subscription data (transient), "
+                f"refusing to overwrite to avoid data loss: {e}"
+            )
+            return
+
+        try:
+            if not isinstance(data, dict):
+                raise ValueError(f"unexpected data root: {type(data).__name__}")
+            tracked = data.get("tracked_users")
+            if tracked is not None:
+                sessions = data.get("monitored_sessions", [])
+                self.subscriptions = {}
+                for s in sessions:
+                    self.subscriptions[s] = dict(tracked)
+                self.monitored_sessions = set(sessions)
+            else:
+                self.subscriptions = data.get("subscriptions", {})
+                self.monitored_sessions = set(data.get("monitored_sessions", []))
+            total = sum(len(users) for users in self.subscriptions.values())
+            logger.info(
+                f"Loaded {len(self.subscriptions)} sessions with {total} tracked users"
+            )
+            self._data_loaded_ok = True
+        except Exception as e:
+            self._quarantine_broken_file(self._data_path, "subscriptions", e)
+            self._data_loaded_ok = True
+
+    @staticmethod
+    def _quarantine_broken_file(path: str, label: str, err: Exception) -> None:
+        """把无法解析的数据文件改名备份, 让插件能继续启动而不是永久拒绝写盘。"""
+        backup = f"{path}.broken"
+        try:
+            if os.path.exists(backup):
+                _remove_temp(backup)
+            os.replace(path, backup)
+            logger.error(
+                f"[DenpaPush] {label} file is corrupted ({err}); "
+                f"moved it to {os.path.basename(backup)} and starting with empty state"
+            )
+        except Exception as e:
+            logger.error(
+                f"[DenpaPush] {label} file is corrupted ({err}) and could not be "
+                f"backed up ({e}); starting with empty state"
+            )
+
+    def _data_payload(self) -> dict:
+        """在事件循环线程里快照订阅数据(深一层拷贝), 供线程池写盘使用。"""
+        return {
+            "subscriptions": {s: dict(u) for s, u in self.subscriptions.items()},
+            "monitored_sessions": list(self.monitored_sessions),
+        }
 
     def _save_data(self):
+        """原子写订阅数据。
+
+        推送循环在每条推文后都会调用, 原实现直接截断重写, 与 Dashboard 并发读
+        时可能读到半截 JSON; 改为原子替换。
+        未成功加载过数据时拒绝写入, 防止用空态覆盖磁盘上完好的订阅。
+        """
+        if not getattr(self, "_data_loaded_ok", False):
+            logger.warning(
+                "[DenpaPush] Skip saving subscriptions: initial load never "
+                "succeeded, refusing to overwrite existing data file"
+            )
+            return
         try:
             os.makedirs(os.path.dirname(self._data_path), exist_ok=True)
-            data = {
-                "subscriptions": self.subscriptions,
-                "monitored_sessions": list(self.monitored_sessions),
-            }
-            with open(self._data_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            _atomic_write_json(self._data_path, self._data_payload())
         except Exception as e:
             logger.error(f"Failed to save data: {e}")
+
+    def _history_payload(self) -> dict:
+        return {
+            "history": list(self._push_history),
+            "total_pushes": self._total_pushes,
+        }
+
+    def _schedule_save(self, key: str, writer, payload_fn, delay: float = 1.5) -> None:
+        """去抖落盘: 合并高频写入, 并在线程池里执行真正的写盘。
+
+        payload_fn 在事件循环线程内先把数据快照出来(避免线程遍历时容器被并发
+        修改), 随后 json.dump 与文件替换都放到线程池, 不阻塞 AstrBot 的事件循环。
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # 无运行中的 loop(如 terminate 收尾) 直接同步写
+            try:
+                writer(payload_fn())
+            except Exception as e:
+                logger.warning(f"[DenpaPush] sync save failed: {e}")
+            return
+
+        old = self._pending_saves.pop(key, None)
+        if old is not None:
+            old.cancel()
+
+        async def _runner():
+            try:
+                await asyncio.sleep(delay)
+                # 快照在事件循环内完成
+                payload = payload_fn()
+                await asyncio.to_thread(writer, payload)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"[DenpaPush] deferred save failed: {e}")
+            finally:
+                # 只清理自己: 期间可能已有新的写入挂到同一 key 上,
+                # 无条件 pop 会把新任务从待写表中抹掉, terminate 时就会丢数据
+                if self._pending_saves.get(key) is task:
+                    self._pending_saves.pop(key, None)
+
+        task = loop.create_task(_runner())
+        self._pending_saves[key] = task
+
+    def _flush_pending_saves(self) -> None:
+        """立即落盘所有挂起的去抖写入(terminate 时调用)。
+
+        注意: 这里用带守卫的 _save_* 而非 _write_*_payload, 因为"从未成功加载"
+        时写入空态会覆盖磁盘上完好的数据(实测可复现的丢数据路径)。
+        """
+        for key, task in list(self._pending_saves.items()):
+            try:
+                task.cancel()
+            except Exception:
+                pass
+            self._pending_saves.pop(key, None)
+        for fn in (self._save_data, self._save_push_history, self._save_token_stats):
+            try:
+                fn()
+            except Exception as e:
+                logger.warning(f"[DenpaPush] flush save failed: {e}")
+
+    def _write_data_payload(self, payload) -> None:
+        if not getattr(self, "_data_loaded_ok", False):
+            logger.warning(
+                "[DenpaPush] Skip writing subscriptions: initial load never succeeded"
+            )
+            return
+        os.makedirs(os.path.dirname(self._data_path), exist_ok=True)
+        _atomic_write_json(self._data_path, payload)
+
+    def _write_history_payload(self, payload) -> None:
+        if not getattr(self, "_history_loaded_ok", False):
+            logger.warning(
+                "[DenpaPush] Skip writing push history: initial load never succeeded"
+            )
+            return
+        os.makedirs(os.path.dirname(self._push_history_path), exist_ok=True)
+        _atomic_write_json(self._push_history_path, payload)
+
+    def _write_token_payload(self, payload) -> None:
+        os.makedirs(os.path.dirname(self._token_stats_path), exist_ok=True)
+        _atomic_write_json(self._token_stats_path, payload)
 
     def _start_monitor(self):
         if self.monitor_task and not self.monitor_task.done():
@@ -1180,8 +1876,13 @@ class DenpaPushPlugin(Star):
         elif sub == "list":
             yield await self._cmd_list(event)
         elif sub == "push" and len(parts) >= 3:
-            for result in await self._cmd_push(event, parts[2]):
-                yield result
+            tmps = []
+            try:
+                for result in await self._cmd_push(event, parts[2], temp_sink=tmps):
+                    yield result
+            finally:
+                # 发送完成后标记待回收(宽限期覆盖 NapCat 的异步回拉窗口)
+                _release_temp(tmps)
         elif sub == "monitor":
             yield await self._cmd_monitor(event)
         else:
@@ -1237,9 +1938,16 @@ class DenpaPushPlugin(Star):
         username = m.group(1) if m else "unknown"
         tweet_id = m.group(2) if m else ""
         silent = bool(self.config.get("silent_mode", False))
-        for chain in await self._cmd_push(event, url, silent=silent):
-            await self.context.send_message(umo, chain)
-            await asyncio.sleep(0.3)
+        tmps = []
+        try:
+            for chain in await self._cmd_push(
+                event, url, silent=silent, temp_sink=tmps
+            ):
+                await self._send(umo, chain)
+                await asyncio.sleep(0.3)
+        finally:
+            # 发送完成后再回收媒体/卡片临时文件(宽限期覆盖 NapCat 异步回拉)
+            _release_temp(tmps)
         if not silent:
             yield f"已推送 @{username} 的推文 {tweet_id}"
 
@@ -1325,7 +2033,13 @@ class DenpaPushPlugin(Star):
             )
         return _plain("\n".join(lines))
 
-    async def _cmd_push(self, event: AstrMessageEvent, url: str, silent: bool = False):
+    async def _cmd_push(
+        self,
+        event: AstrMessageEvent,
+        url: str,
+        silent: bool = False,
+        temp_sink: list = None,
+    ):
         results = []
         m = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/(\d+)", url)
         if not m:
@@ -1363,6 +2077,10 @@ class DenpaPushPlugin(Star):
                     # detect original fps via ffprobe
                     fps = 15
                     if _ffprobe:
+                        # 探测同样要有超时: 损坏/超长 mp4 会让 ffprobe 长时间不退出,
+                        # 而本协程持有 _push_lock, 无超时会把后续所有推送一起卡住
+                        # (与下面 ffmpeg 转换超时同构)
+                        probe = None
                         try:
                             probe = await asyncio.create_subprocess_exec(
                                 _ffprobe,
@@ -1374,13 +2092,24 @@ class DenpaPushPlugin(Star):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL,
                             )
-                            out, _ = await probe.communicate()
+                            out, _ = await asyncio.wait_for(
+                                probe.communicate(), timeout=15
+                            )
                             info = json.loads(out.decode())
                             num, den = map(
                                 int, info["streams"][0]["r_frame_rate"].split("/")
                             )
                             fps = num / den if den else 15
+                        except asyncio.TimeoutError:
+                            logger.warning("ffprobe timed out, fallback to 15fps")
+                            if probe is not None:
+                                try:
+                                    probe.kill()
+                                    await probe.wait()
+                                except Exception:
+                                    pass
                         except Exception:
+                            # 探测失败不影响主流程, 用默认帧率继续
                             pass
 
                     # ffmpeg palettegen+paletteuse
@@ -1398,7 +2127,23 @@ class DenpaPushPlugin(Star):
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                    rc = await proc.wait()
+                    # 加超时: 损坏/超长视频会让 ffmpeg 长时间不退出, 而这条协程
+                    # 正持有 _push_lock, 无超时就会把后续所有推送一起卡住
+                    gif_timeout = self._as_int(
+                        self.config.get("gif_convert_timeout", 120), 120, 10, 1800
+                    )
+                    try:
+                        rc = await asyncio.wait_for(proc.wait(), timeout=gif_timeout)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"GIF conversion timed out after {gif_timeout}s, skipping"
+                        )
+                        try:
+                            proc.kill()
+                            await proc.wait()
+                        except Exception:
+                            pass
+                        return None
                     if rc == 0 and os.path.exists(gif_path):
                         return gif_path
                 except Exception as e:
@@ -1425,6 +2170,15 @@ class DenpaPushPlugin(Star):
 
             info = await self._build_card_data(data, media_url_to_path)
 
+            # 把本次产生的临时文件交给调用方回收(命令返回后立即删除)
+            if temp_sink is not None:
+                temp_sink.extend(p for p in img_files if p)
+                temp_sink.extend(
+                    p
+                    for p in info.get("card_img_urls", [])
+                    if p and not str(p).startswith("http")
+                )
+
             # 1. 卡片 PNG 直接发送（多张长文章分块）
             for url in info.get("card_img_urls", [info.get("card_img_url", "")]):
                 if url:
@@ -1436,10 +2190,16 @@ class DenpaPushPlugin(Star):
             )
 
             uname = info.get("user_name", info["screen_name"])
+            # 发送用图片先压缩: 合并转发会把图片 base64 内联进 OneBot 报文,
+            # 直接用 orig 原图会撑爆单条消息
+            send_images = await self._prepare_send_images(
+                [p for p in img_files if p]
+            )
+            if temp_sink is not None:
+                temp_sink.extend(send_images)
             img_contents = [Plain(f"📸 @{info['screen_name']} 的图片")]
-            for f in img_files:
-                if f:
-                    img_contents.append(CompImage.fromFileSystem(f))
+            for f in send_images:
+                img_contents.append(CompImage.fromFileSystem(f))
             if len(img_contents) > 1:
                 node = Node(uin="0", name=uname, content=img_contents)
                 results.append(_chain([node]))
@@ -1448,8 +2208,12 @@ class DenpaPushPlugin(Star):
                 if vurl:
                     f = await self._download_file(vurl, suffix=".mp4")
                     if f:
+                        if temp_sink is not None:
+                            temp_sink.append(f)
                         gif_path = await _convert_to_gif(f)
                         if gif_path:
+                            if temp_sink is not None:
+                                temp_sink.append(gif_path)
                             results.append(
                                 _chain([CompImage.fromFileSystem(gif_path)])
                             )
@@ -1462,6 +2226,8 @@ class DenpaPushPlugin(Star):
                 if vurl:
                     f = await self._download_file(vurl)
                     if f:
+                        if temp_sink is not None:
+                            temp_sink.append(f)
                         results.append(
                             _chain([CompVideo.fromFileSystem(f)])
                         )
@@ -1538,7 +2304,7 @@ class DenpaPushPlugin(Star):
                                     sess_users[username]["avatar_url"] = av
                                 if disp_name:
                                     sess_users[username]["name"] = disp_name
-                        self._save_data()
+                        self._schedule_save("data", self._write_data_payload, self._data_payload)
                         logger.info(f"[Monitor] Backfilled avatar for @{username}")
 
                     # Highest last_tweet_id across sessions tracking this user
@@ -1552,20 +2318,30 @@ class DenpaPushPlugin(Star):
                     new_tweets = [t for t in tweets if t.id > last_id]
 
                     if new_tweets:
-                        pushed_any = False
+                        # 各会话基线独立, 先算出每个会话自己的待推队列(旧→新)。
+                        # 随后按"推文"维度批量推送: 同一条推文只建卡一次(翻译/取色/
+                        # 渲染各一次), 再复用给所有需要它的会话 —— 原实现是
+                        # _process_and_push(data, [sess_umo]) 逐会话各建一次卡,
+                        # N 个会话就要渲染/翻译 N 次, 长文分块还会再翻倍。
+                        try:
+                            backlog_budget = max(
+                                1, int(self.config.get("backlog_budget", 10) or 10)
+                            )
+                        except (TypeError, ValueError):
+                            backlog_budget = 10
+                        queues = {}
                         for sess_umo in user_sessions.get(username, []):
                             sess_users = self.subscriptions.get(sess_umo)
                             sess_info = (sess_users or {}).get(username)
                             if not sess_info:
                                 continue
-                            # 未监控的会话: 丢弃本轮新推文并推进基线, 防止开启监控后补推轰炸
+                            # 未监控的会话: 丢弃本轮新推文并推进基线, 防开启监控后补推轰炸
                             if sess_umo not in self.monitored_sessions:
                                 sess_info["last_tweet_id"] = new_tweets[0].id
                                 sess_info["last_checked_at"] = datetime.now(
                                     timezone.utc
                                 ).isoformat()
                                 continue
-                            # 该会话自己的待推区间(各会话基线独立, 失败会话下轮从失败点补推)
                             sess_new = [
                                 t
                                 for t in tweets
@@ -1573,14 +2349,7 @@ class DenpaPushPlugin(Star):
                             ]
                             if not sess_new:
                                 continue
-                            # 积压预算: 掉线期间可能积压大量推文, 每轮只补推最旧的 N 条,
-                            # 剩余留到下轮, 避免单轮长时间连接风暴拖垮网络。
-                            try:
-                                backlog_budget = max(
-                                    1, int(self.config.get("backlog_budget", 10) or 10)
-                                )
-                            except (TypeError, ValueError):
-                                backlog_budget = 10
+                            # 积压预算: 掉线期间可能积压大量推文, 每轮只补推最旧的 N 条
                             if len(sess_new) > backlog_budget:
                                 logger.warning(
                                     f"[Monitor] {username} → {sess_umo[:20]}…: "
@@ -1593,72 +2362,11 @@ class DenpaPushPlugin(Star):
                                 f"{len(sess_new)} new tweets "
                                 f"(last={sess_info.get('last_tweet_id', '0')[:15]}..)"
                             )
-                            for t in reversed(sess_new):
-                                ok = False
-                                push_err = None
-                                try:
-                                    data = TwitterClient.extract_tweet_data(t)
-                                    results = await self._process_and_push(
-                                        data, [sess_umo]
-                                    )
-                                    ok = results.get(sess_umo, False)
-                                except Exception as e:
-                                    push_err = e
-                                    logger.error(
-                                        f"[Monitor] Push failed for {username}: {t.id}: {e}"
-                                    )
-                                if ok:
-                                    # 推送成功 → 基线推进到本条
-                                    sess_info["last_tweet_id"] = t.id
-                                    sess_info["last_checked_at"] = datetime.now(
-                                        timezone.utc
-                                    ).isoformat()
-                                    pushed_any = True
-                                    self._push_fail_counts.pop(
-                                        (sess_umo, username, t.id), None
-                                    )
-                                else:
-                                    # 推送失败 → 基线不推进, 停在本条之前, 下轮自动补推。
-                                    # 暂时性失败(掉线/网络/超时)不累计轮数, 恢复后继续补推;
-                                    # 只有持久性失败(内容/渲染问题)才累计, 连续多轮后强制跳过。
-                                    fkey = (sess_umo, username, t.id)
-                                    transient = push_err is not None and (
-                                        self._is_transient_failure(push_err)
-                                    )
-                                    if transient:
-                                        fail_rounds = 0
-                                        self._log_push(
-                                            f"@{username} → {sess_umo[:20]}… 推送暂时失败(网络/超时)，下轮自动补推",
-                                            "error",
-                                        )
-                                    else:
-                                        fail_rounds = (
-                                            self._push_fail_counts.get(fkey, 0) + 1
-                                        )
-                                        self._push_fail_counts[fkey] = fail_rounds
-                                        self._log_push(
-                                            f"@{username} → {sess_umo[:20]}… 推送失败，基线未推进，下轮补推",
-                                            "error",
-                                        )
-                                    if fail_rounds >= PUSH_MAX_FAIL_ROUNDS:
-                                        # 连续多轮持久失败: 强制跳过, 防基线永久卡死
-                                        logger.warning(
-                                            f"[Monitor] {username} → {sess_umo[:20]}…: "
-                                            f"{t.id[:15]}.. failed {fail_rounds} rounds, skipping"
-                                        )
-                                        self._log_push(
-                                            f"@{username} 推文 {t.id[:12]}… 连续 "
-                                            f"{fail_rounds} 轮推送失败，已强制跳过",
-                                            "error",
-                                        )
-                                        sess_info["last_tweet_id"] = t.id
-                                        sess_info["last_checked_at"] = datetime.now(
-                                            timezone.utc
-                                        ).isoformat()
-                                        self._push_fail_counts.pop(fkey, None)
-                                    break
-                                await asyncio.sleep(2)
-                        self._save_data()
+                            queues[sess_umo] = list(reversed(sess_new))  # 旧→新
+                        pushed_any = await self._push_pending_tweets(
+                            username, queues, tweets
+                        )
+                        self._schedule_save("data", self._write_data_payload, self._data_payload)
                         if pushed_any:
                             logger.info(
                                 f"[Monitor] {username}: pushed, baseline advanced per session"
@@ -1677,17 +2385,23 @@ class DenpaPushPlugin(Star):
                         break
                     logger.error(f"[Monitor] Error for {username}: {e}")
                     self._log_push(f"@{username} 检查异常: {estr[:60]}", "error")
+                    # 单个账号异常不影响其余账号: 原实现在非限流异常时也会继续
+                    # 下一个账号, 这里显式 sleep 让出事件循环避免密集重试
+                    await asyncio.sleep(1)
 
+            # 每轮回收: 已过宽限期的媒体文件 + 陈旧残留下载/卡片文件,
+            # 保证长时间运行磁盘不会只增不减
+            try:
+                await asyncio.to_thread(_flush_released_temp)
+                await asyncio.to_thread(_sweep_stale_temp_files)
+            except Exception:
+                pass
             await asyncio.sleep(interval)
 
     async def _extract_seed_color(self, image_url: str):
         if image_url in self._seed_cache:
             return self._seed_cache[image_url]
         try:
-            from PIL import Image
-            import io
-            from material_color_utilities import prominent_colors_from_image
-
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -1716,24 +2430,55 @@ class DenpaPushPlugin(Star):
                     img_bytes = _r.content
             if not img_bytes:
                 return (103, 80, 164)
-            _img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
-            # align with MCU: downsample to 48×48 before quantizing
-            _img = _img.resize((48, 48), Image.LANCZOS)
-            colors = prominent_colors_from_image(_img, max_colors=128)
-            if not colors:
-                return (103, 80, 164)
-            # colors 是 RRGGBB hex 格式 #rrggbb
-            h = colors[0].lstrip("#")
-            rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-            logger.warning(
-                f"Seed extracted: RGB={rgb} from {len(img_bytes)} bytes via {used_url.split('/')[-1][:40]}"
+            # 解码 + 量化是纯 CPU 的同步操作(最高 128 色的 MCU 量化可达上百毫秒),
+            # 放在事件循环里会直接卡住 AstrBot/NapCat 的心跳与收发
+            rgb = await asyncio.to_thread(
+                self._quantize_seed_color, img_bytes
             )
+            if rgb is None:
+                return (103, 80, 164)
+            logger.debug(f"Seed extracted: RGB={rgb} from {used_url.split('/')[-1][:40]}")
+            # 简单的 FIFO 上限: 长跑下头像 URL 会不断累积, 不封顶就是内存泄漏
+            if len(self._seed_cache) >= 512:
+                for k in list(self._seed_cache)[:128]:
+                    self._seed_cache.pop(k, None)
             self._seed_cache[image_url] = rgb
             return rgb
         except Exception as e:
             logger.warning(f"Seed color extraction failed: {type(e).__name__}: {e}")
             self._seed_cache[image_url] = (103, 80, 164)
             return (103, 80, 164)
+
+    async def _file_to_data_uri_async(self, path: str, max_side: int = 640) -> str:
+        """在线程池里做缩略图编码(PIL 解码+缩放+JPEG 编码是同步 CPU 操作)。"""
+        try:
+            return await asyncio.to_thread(_file_to_data_uri, path, max_side)
+        except Exception as e:
+            logger.warning(f"[DenpaPush] thumbnail encode failed: {e}")
+            return ""
+
+    @staticmethod
+    def _quantize_seed_color(img_bytes: bytes):
+        """同步的取色计算(供线程池调用)。"""
+        import io
+
+        from PIL import Image
+        from material_color_utilities import prominent_colors_from_image
+
+        with Image.open(io.BytesIO(img_bytes)) as im:
+            im = im.convert("RGBA")
+            # align with MCU: downsample to 48×48 before quantizing
+            im = im.resize((48, 48), Image.LANCZOS)
+        colors = prominent_colors_from_image(im, max_colors=128)
+        if not colors:
+            return None
+        # colors 是 RRGGBB hex 格式 #rrggbb
+        h = colors[0].lstrip("#")
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    async def _build_palette_async(self, seed_rgb):
+        """在线程池里算 Material 配色(MCU 主题求解是纯 CPU 密集计算)。"""
+        return await asyncio.to_thread(self._generate_palette, seed_rgb)
 
     def _generate_palette(self, seed_rgb):
         h = int(
@@ -1776,12 +2521,12 @@ class DenpaPushPlugin(Star):
                 "surface_container": scheme.surface_container,
                 "surface_container_rgb": rgb_str(scheme.surface_container),
             }
-            logger.warning(
+            logger.debug(
                 f"Dynamic palette from seed={hex_color} (dark={is_dark}): primary={scheme.primary}"
             )
             return palette, is_dark
         except Exception as e:
-            logger.warning(f"Dynamic palette failed: {e}")
+            logger.debug(f"Dynamic palette failed: {e}")
 
         # Fallback hardcoded palettes
         if is_dark:
@@ -1825,6 +2570,54 @@ class DenpaPushPlugin(Star):
             "surface_container": "#f0eaf8",
             "surface_container_rgb": "240, 234, 248",
         }, is_dark
+
+    async def _prepare_send_images(self, paths: list) -> list:
+        """把待发送的原图压成"发送用"副本, 并限制单条消息的内联总量。
+
+        为什么必须做: AstrBot 的 `Node.to_dict()` / `_from_segment_to_dict` 会把
+        图片转成 base64 内联进 OneBot 报文(components.py:590-598)。合并转发里若塞
+        入 4 张 orig 原图, 按 max_download_mb=64 计, 单条消息的 JSON 可达数百 MB,
+        经 websocket 发给 NapCat 时直接把两边内存打爆 —— 这正是"高并发下卡死"的
+        主要通道之一。这里按最长边与总量双重限制, 超出的图片直接不发送。
+        """
+        if not paths:
+            return []
+        max_side = self._as_int(
+            self.config.get("send_image_max_side", 1280), 1280, 320, 4096
+        )
+        total_budget = (
+            self._as_int(self.config.get("send_image_max_total_mb", 12), 12, 1, 128)
+            * 1024
+            * 1024
+        )
+
+        out = []
+        used = 0
+        for p in paths:
+            if not p:
+                continue
+            try:
+                shrunk = await asyncio.to_thread(_shrink_image_file, p, max_side)
+            except Exception as e:
+                logger.warning(f"[Push] shrink image failed, skipping: {e}")
+                continue
+            if not shrunk:
+                continue
+            try:
+                size = os.path.getsize(shrunk)
+            except OSError:
+                continue
+            # base64 会放大约 4/3, 这里按编码后的量估算预算
+            if used + size * 4 // 3 > total_budget:
+                _release_temp([shrunk])
+                logger.warning(
+                    f"[Push] inline budget exceeded "
+                    f"({used // 1024}KB used), dropping remaining images"
+                )
+                break
+            used += size * 4 // 3
+            out.append(shrunk)
+        return out
 
     async def _build_card_data(self, data: dict, media_url_to_path: dict = None) -> dict:
         import re as _re
@@ -1898,7 +2691,9 @@ class DenpaPushPlugin(Star):
             if not mu:
                 continue
             if media_url_to_path and mu in media_url_to_path:
-                quoted_thumbnails.append(_file_to_data_uri(media_url_to_path[mu]))
+                quoted_thumbnails.append(
+                    await self._file_to_data_uri_async(media_url_to_path[mu])
+                )
             else:
                 quoted_thumbnails.append(_twitter_media_url(mu, "medium"))
         q_user_name = quoted_user.get("name", "")
@@ -1954,7 +2749,9 @@ class DenpaPushPlugin(Star):
             poster = m.get("media_url", "")
             if poster:
                 if media_url_to_path and poster in media_url_to_path:
-                    thumbnail_urls.append(_file_to_data_uri(media_url_to_path[poster]))
+                    thumbnail_urls.append(
+                        await self._file_to_data_uri_async(media_url_to_path[poster])
+                    )
                 else:
                     thumbnail_urls.append(_twitter_media_url(poster, "medium"))
 
@@ -1963,8 +2760,10 @@ class DenpaPushPlugin(Star):
         tmpl_path = _os.path.join(
             _os.path.dirname(__file__), "templates", "tweet_card.html"
         )
-        with open(tmpl_path, "r", encoding="utf-8") as f:
-            template = f.read()
+        # 模板读取是阻塞 IO, 放线程池避免偶发卡顿
+        template = await asyncio.to_thread(
+            lambda: open(tmpl_path, "r", encoding="utf-8").read()
+        )
 
         # 图片译文合并到文字译文末尾
         if image_translations:
@@ -1972,7 +2771,7 @@ class DenpaPushPlugin(Star):
 
         raw_avatar = data["user"]["avatar_url"]
         avatar_url = raw_avatar.replace("_normal.", "_400x400.")
-        logger.warning(f"Avatar URL: {raw_avatar} -> {avatar_url}")
+        logger.debug(f"Avatar URL: {raw_avatar} -> {avatar_url}")
 
         color_source = self.config.get("color_source", "avatar")
         seed_url = avatar_url
@@ -1983,11 +2782,10 @@ class DenpaPushPlugin(Star):
                 first_url = orig_all[0].get("media_url", "")
                 if first_url:
                     seed_url = _twitter_media_url(first_url, "orig")
-                    logger.warning(f"Seed from first media: {seed_url[:80]}...")
+                    logger.debug(f"Seed from first media: {seed_url[:80]}...")
 
         seed_rgb = await self._extract_seed_color(seed_url)
-        logger.warning(f"Seed RGB: {seed_rgb}")
-        palette, is_dark = self._generate_palette(seed_rgb)
+        palette, is_dark = await self._build_palette_async(seed_rgb)
         card_data = {
             "user_name": data["user"]["name"],
             "screen_name": data["user"]["screen_name"],
@@ -2153,50 +2951,91 @@ class DenpaPushPlugin(Star):
             logger.warning(f"Failed to dump render debug: {e}")
 
     async def _render_card(self, template: str, card_data: dict) -> str:
-        """本地 Playwright 渲染 HTML → PNG，返回文件路径。"""
-        import tempfile, os as _os, time as _time
+        """本地 Playwright 渲染 HTML → PNG，返回文件路径。
+
+        并发保护: 渲染受 _render_concurrency 限制。原实现没有任何上限, 高并发时
+        会同时开出大量 Chromium page 并各自截图(每张 620×N × deviceScaleFactor=2
+        的位图), CPU/内存瞬间打满, AstrBot 事件循环被拖住, NapCat 也随之无响应。
+        """
+        import tempfile
+        import os as _os
+        import time as _time
 
         _tag = f"{id(self)}_{int(_time.time() * 1000000) % 1000000}"
-        html_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.html")
-        png_path = _os.path.join(tempfile.gettempdir(), f"astrbot_twitter_{_tag}.png")
+        html_path = _register_temp(
+            _os.path.join(tempfile.gettempdir(), f"{_TEMP_PREFIX}{_tag}.html")
+        )
+        png_path = _register_temp(
+            _os.path.join(tempfile.gettempdir(), f"{_TEMP_PREFIX}{_tag}.png")
+        )
         from jinja2 import Template
 
-        html = Template(template).render(card_data)
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
+        # Jinja2 渲染是纯 CPU 的同步操作, 长文章模板可到几百毫秒, 放线程池避免卡事件循环
+        html = await asyncio.to_thread(Template(template).render, card_data)
+        await asyncio.to_thread(_write_text, html_path, html)
 
         try:
-            try:
-                browser = await _get_shared_browser()
-                ctx = await browser.new_context(device_scale_factor=2)
-                page = await ctx.new_page()
-                await page.set_viewport_size({"width": 620, "height": 100})
-                await page.goto(
-                    f"file:///{html_path.replace(chr(92), '/')}",
-                    wait_until="domcontentloaded",
-                    timeout=10000,
-                )
-                await page.wait_for_timeout(300)
-                # 等待所有图片加载完成(成功或失败)再测高/截图,
-                # 瀑布流/网格会随图片加载重排,提前截图会错位或留空白
+            async with self._get_render_semaphore():
                 try:
-                    await page.wait_for_function(
-                        "() => [...document.images].every(img => img.complete)",
-                        timeout=8000,
-                    )
-                except Exception:
-                    pass
-                h = await page.evaluate("document.body.scrollHeight")
-                await page.set_viewport_size({"width": 620, "height": h})
-                await page.wait_for_timeout(500)
-                await page.screenshot(
-                    path=png_path, full_page=True, omit_background=True
-                )
-                await ctx.close()
-                await self._dump_render_debug(html, card_data, png_path)
-                return png_path
-            except Exception as e:
-                logger.error(f"Local card render failed: {e}")
+                    browser = await _get_shared_browser()
+                    ctx = await browser.new_context(device_scale_factor=2)
+                except Exception as e:
+                    logger.error(f"Local card render init failed: {e}")
+                    ctx = None
+
+                if ctx is not None:
+                    # ctx 必须在 finally 关闭: 原实现只在成功路径 close, 任何异常
+                    # (超时/图片卡住/页面崩溃)都会漏掉 context, 长期累积拖垮 Chromium
+                    try:
+                        page = await ctx.new_page()
+                        await page.set_viewport_size({"width": 620, "height": 100})
+                        await page.goto(
+                            f"file:///{html_path.replace(chr(92), '/')}",
+                            wait_until="domcontentloaded",
+                            timeout=10000,
+                        )
+                        await page.wait_for_timeout(300)
+                        # 等待所有图片加载完成(成功或失败)再测高/截图,
+                        # 瀑布流/网格会随图片加载重排,提前截图会错位或留空白
+                        try:
+                            await page.wait_for_function(
+                                "() => [...document.images].every(img => img.complete)",
+                                timeout=8000,
+                            )
+                        except Exception:
+                            pass
+                        h = await page.evaluate("document.body.scrollHeight")
+                        # 限制截图高度: 超长卡片(长文章/大量图片)会生成巨幅位图,
+                        # 单张就能吃掉几百 MB 内存。
+                        # 注意: full_page=True 会让 Playwright 重新测量文档真实高度,
+                        # 光设 viewport 高度并不能封顶 —— 必须用 clip 明确指定截取区域。
+                        max_h = self._as_int(
+                            self.config.get("max_card_height", 6000), 6000, 500, 30000
+                        )
+                        full_h = max(100, int(h or 100))
+                        clip_h = min(full_h, max_h)
+                        if clip_h < full_h:
+                            logger.warning(
+                                f"[DenpaPush] Card height {full_h}px exceeds "
+                                f"max_card_height={max_h}px, clipping"
+                            )
+                        await page.set_viewport_size({"width": 620, "height": clip_h})
+                        await page.wait_for_timeout(500)
+                        await page.screenshot(
+                            path=png_path,
+                            omit_background=True,
+                            clip={"x": 0, "y": 0, "width": 620, "height": clip_h},
+                        )
+                        if self.config.get("debug_render_dump", False):
+                            await self._dump_render_debug(html, card_data, png_path)
+                        return png_path
+                    except Exception as e:
+                        logger.error(f"Local card render failed: {e}")
+                    finally:
+                        try:
+                            await ctx.close()
+                        except Exception:
+                            pass
 
             try:
                 card_img_url = await self.html_render(
@@ -2209,11 +3048,7 @@ class DenpaPushPlugin(Star):
                 logger.error(f"Remote card render also failed: {e2}")
                 return ""
         finally:
-            try:
-                if _os.path.exists(html_path):
-                    _os.remove(html_path)
-            except Exception:
-                pass
+            _remove_temp(html_path)
 
     async def _process_and_push(self, data: dict, target_sessions: list) -> dict:
         """推送一条推文到各目标会话。
@@ -2242,90 +3077,245 @@ class DenpaPushPlugin(Star):
             if path:
                 media_url_to_path[img["media_url"]] = path
 
-        info = await self._build_card_data(data, media_url_to_path)
+        # 已下载的文件必须先纳入保护: _build_card_data 里任何异常(翻译/取色/渲染)
+        # 都会走到下面的 finally, 若此时还没登记这些路径就会永久泄漏在临时目录
+        cleanup_paths = [p for p in img_files if p]
+        try:
+            info = await self._build_card_data(data, media_url_to_path)
 
-        results = {s: False for s in target_sessions}
-        for session_umo in target_sessions:
-            try:
-                # 主消息：卡片（多张分块）+ 推主注明
-                card_urls = info.get("card_img_urls", [info.get("card_img_url", "")])
-                first_card = True
-                for url in card_urls:
-                    if not url:
-                        continue
-                    card_chain = MessageChain()
-                    if url.startswith("http"):
-                        card_chain.chain.append(CompImage.fromURL(url))
-                    else:
-                        card_chain.chain.append(CompImage.fromFileSystem(url))
-                    if first_card:
-                        card_chain.message(
-                            f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
-                        )
-                        first_card = False
-                    logger.info(f"[Push] Card to {session_umo}")
-                    await self.context.send_message(session_umo, card_chain)
-                    await asyncio.sleep(0.5)
-                if first_card:
-                    fallback = MessageChain()
-                    if info["translated_text"]:
-                        fallback.message(
-                            f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}"
-                        )
-                    else:
-                        fallback.message(
-                            f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}"
-                        )
-                    await self.context.send_message(session_umo, fallback)
+            results = {s: False for s in target_sessions}
+            # 已发送的本地卡片 PNG 也要回收: 每次渲染都产出新 PNG, 原实现从不删除,
+            # 每张几百 KB~数 MB, 长期运行会把磁盘写满
+            cleanup_paths.extend(
+                p
+                for p in info.get("card_img_urls", [])
+                if p and not str(p).startswith("http")
+            )
+            # 发送用图片只压缩一次, 供所有目标会话复用。
+            # 原实现在 for session_umo 内压缩, 多会话推送时同一批图会被重复解码
+            # 与重编码 N 次(N 倍 CPU + N 倍临时文件), 与"降低 CPU/内存占用"的目标相悖。
+            send_images = await self._prepare_send_images(
+                [p for p in img_files if p]
+            )
+            cleanup_paths.extend(send_images)
+            # 同一会话的消息串行发出, 避免多条推文并发推送时卡片/图片/视频互相穿插
+            async with self._push_lock.get():
+                for session_umo in target_sessions:
+                    try:
+                        # 关键消息(卡片/兜底文本)决定本次是否算推送成功:
+                        # context.send_message 在"找不到匹配平台"时返回 False 且不抛异常,
+                        # 若忽略返回值仍置成功, 监控循环会推进基线 → 这条推文永久丢失。
+                        delivered = True
+                        # 主消息：卡片（多张分块）+ 推主注明
+                        card_urls = info.get("card_img_urls", [info.get("card_img_url", "")])
+                        first_card = True
+                        for url in card_urls:
+                            if not url:
+                                continue
+                            card_chain = MessageChain()
+                            if url.startswith("http"):
+                                card_chain.chain.append(CompImage.fromURL(url))
+                            else:
+                                card_chain.chain.append(CompImage.fromFileSystem(url))
+                            if first_card:
+                                card_chain.message(
+                                    f"\n📢 @{info['screen_name']}\n{info.get('tweet_url', '')}"
+                                )
+                                first_card = False
+                            logger.info(f"[Push] Card to {session_umo}")
+                            if not await self._send(session_umo, card_chain):
+                                delivered = False
+                                logger.error(
+                                    f"[Push] Card not delivered to {session_umo} "
+                                    f"(no matching platform?)"
+                                )
+                            await asyncio.sleep(0.5)
+                        if first_card:
+                            fallback = MessageChain()
+                            if info["translated_text"]:
+                                fallback.message(
+                                    f"📢 @{info['screen_name']}\n{info.get('tweet_url', '')}\n\n{info['translated_text'][:500]}"
+                                )
+                            else:
+                                fallback.message(
+                                    f"📢 @{info['screen_name']} 新推文\n{info.get('tweet_url', '')}"
+                                )
+                            if not await self._send(session_umo, fallback):
+                                delivered = False
 
-                # 图片合并到一条群合并转发消息
-                from astrbot.api.message_components import Node, Plain
+                        # 图片合并到一条群合并转发消息。
+                        # 复用前面已压缩好的 send_images(循环外只压一次):
+                        # 这些图会被 base64 内联进 OneBot 报文, 直接用 orig 原图
+                        # 会让单条消息膨胀到几百 MB 打爆内存。
+                        from astrbot.api.message_components import Node, Plain
 
-                img_contents = []
-                for f in img_files:
-                    if f:
-                        img_contents.append(CompImage.fromFileSystem(f))
-                if img_contents:
-                    node = Node(
-                        uin="0",
-                        name=info.get("user_name", info["screen_name"]),
-                        content=img_contents,
-                    )
-                    fwd_chain = MessageChain()
-                    fwd_chain.chain.append(node)
-                    logger.info(f"[Push] Images forward to {session_umo}")
-                    await self.context.send_message(session_umo, fwd_chain)
-                    await asyncio.sleep(0.5)
+                        img_contents = [CompImage.fromFileSystem(f) for f in send_images]
+                        if img_contents:
+                            node = Node(
+                                uin="0",
+                                name=info.get("user_name", info["screen_name"]),
+                                content=img_contents,
+                            )
+                            fwd_chain = MessageChain()
+                            fwd_chain.chain.append(node)
+                            logger.info(f"[Push] Images forward to {session_umo}")
+                            await self._send(session_umo, fwd_chain)
+                            await asyncio.sleep(0.5)
 
-                # GIF/视频直接发送
-                for gif in info.get("gifs", []):
-                    gurl = gif.get("video_url", gif.get("media_url", ""))
-                    if gurl:
-                        gif_chain = MessageChain()
-                        gif_chain.chain.append(CompVideo.fromURL(gurl))
-                        logger.info(f"[Push] GIF to {session_umo}")
-                        await self.context.send_message(session_umo, gif_chain)
-                        await asyncio.sleep(0.5)
-                for vid in info.get("videos", []):
-                    vurl = vid.get("video_url", vid.get("media_url", ""))
-                    if vurl:
-                        vid_chain = MessageChain()
-                        vid_chain.chain.append(CompVideo.fromURL(vurl))
-                        logger.info(f"[Push] Video to {session_umo}")
-                        await self.context.send_message(session_umo, vid_chain)
-                        await asyncio.sleep(0.5)
+                        # GIF/视频直接发送(次要内容: 失败不影响主消息投递判定)
+                        for gif in info.get("gifs", []):
+                            gurl = gif.get("video_url", gif.get("media_url", ""))
+                            if gurl:
+                                gif_chain = MessageChain()
+                                gif_chain.chain.append(CompVideo.fromURL(gurl))
+                                logger.info(f"[Push] GIF to {session_umo}")
+                                await self._send(session_umo, gif_chain)
+                                await asyncio.sleep(0.5)
+                        for vid in info.get("videos", []):
+                            vurl = vid.get("video_url", vid.get("media_url", ""))
+                            if vurl:
+                                vid_chain = MessageChain()
+                                vid_chain.chain.append(CompVideo.fromURL(vurl))
+                                logger.info(f"[Push] Video to {session_umo}")
+                                await self._send(session_umo, vid_chain)
+                                await asyncio.sleep(0.5)
 
-                self._total_pushes += 1
-                self._log_push(
-                    f"@{info['screen_name']} → {session_umo[:20]}…",
-                    "push",
-                )
-                self._record_push_history(info, session_umo, source="auto")
-                results[session_umo] = True
-            except Exception as e:
-                logger.error(f"[Push] Failed to push to {session_umo}: {e}")
-                self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")
+                        if delivered:
+                            self._total_pushes += 1
+                            self._log_push(
+                                f"@{info['screen_name']} → {session_umo[:20]}…",
+                                "push",
+                            )
+                            self._record_push_history(info, session_umo, source="auto")
+                            results[session_umo] = True
+                        else:
+                            # 未投递成功 → 不推进基线, 下轮自动补推
+                            self._log_push(
+                                f"@{info.get('screen_name', '?')} → "
+                                f"{session_umo[:20]}… 未找到可用平台，消息未发出",
+                                "error",
+                            )
+                    except Exception as e:
+                        logger.error(f"[Push] Failed to push to {session_umo}: {e}")
+                        self._log_push(f"推送失败 @{info.get('screen_name', '?')}: {str(e)[:60]}", "error")
+        finally:
+            # 媒体/卡片临时文件标记为待回收。这里不能立刻删除: 视频等文件是
+            # NapCat 后续异步回拉的, 立即删会与之竞态导致发送失败。
+            _release_temp(cleanup_paths)
+            _release_temp(media_url_to_path.values())
         return results
+
+    async def _push_pending_tweets(
+        self, username: str, queues: dict, tweets: list
+    ) -> bool:
+        """按"推文"维度批量推送, 让同一条推文在所有会话间只建卡一次。
+
+        参数:
+          queues: {session_umo: [tweet, ...]} 各会话自己的待推队列, 已按旧→新排序
+          tweets: 本轮拉到的全部推文(用于按 id 反查 tweet 对象)
+
+        为什么要聚合: 原实现逐会话调用 _process_and_push(data, [sess_umo]),
+        同一推文有几个会话就要完整走几遍"下载媒体 → 翻译 → 取色 → 渲染卡片",
+        长文分块时开销再翻 N 倍 —— 这是渲染风暴的主要来源之一。
+
+        顺序保证: 按推文 id 从旧到新推进; 每条推文在每个会话内仍串行发送。
+        失败语义不变: 某会话推送失败则其基线不推进, 下轮从该条继续补推。
+        """
+        if not queues:
+            return False
+
+        by_id = {t.id: t for t in tweets}
+        # 按推文聚合出 "这条推文要发给哪些会话", 并保持全局旧→新顺序
+        session_last_ok = {}  # {sess: 已成功推进到的 tweet_id}
+        order = []
+        seen = set()
+        for sess_umo, seq in queues.items():
+            for t in seq:
+                if t.id not in seen:
+                    seen.add(t.id)
+                    order.append(t.id)
+        order.sort(key=lambda i: int(i) if str(i).isdigit() else 0)
+
+        pushed_any = False
+        for tid in order:
+            t = by_id.get(tid)
+            if t is None:
+                continue
+            # 只把"该条仍在各会话待推队列里"的会话作为目标
+            targets = [
+                sess
+                for sess, seq in queues.items()
+                if any(x.id == tid for x in seq)
+            ]
+            if not targets:
+                continue
+
+            push_err = None
+            results = {}
+            try:
+                data = TwitterClient.extract_tweet_data(t)
+                results = await self._process_and_push(data, targets)
+            except Exception as e:
+                push_err = e
+                logger.error(f"[Monitor] Push failed for {username}: {tid}: {e}")
+
+            for sess_umo in targets:
+                sess_users = self.subscriptions.get(sess_umo)
+                sess_info = (sess_users or {}).get(username)
+                if not sess_info:
+                    continue
+                if results.get(sess_umo, False):
+                    # 推送成功 → 该会话基线推进到本条
+                    sess_info["last_tweet_id"] = t.id
+                    sess_info["last_checked_at"] = datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                    session_last_ok[sess_umo] = t.id
+                    pushed_any = True
+                    self._push_fail_counts.pop((sess_umo, username, t.id), None)
+                    continue
+                # 推送失败 → 基线不推进, 下轮从该条继续补推。
+                # 暂时性失败(掉线/网络/超时)不累计轮数; 持久性失败才累计,
+                # 连续多轮后强制跳过, 防基线永久卡死。
+                fkey = (sess_umo, username, t.id)
+                transient = push_err is not None and self._is_transient_failure(push_err)
+                if transient:
+                    fail_rounds = 0
+                    self._log_push(
+                        f"@{username} → {sess_umo[:20]}… 推送暂时失败(网络/超时)，下轮自动补推",
+                        "error",
+                    )
+                else:
+                    fail_rounds = self._push_fail_counts.get(fkey, 0) + 1
+                    self._push_fail_counts[fkey] = fail_rounds
+                    self._log_push(
+                        f"@{username} → {sess_umo[:20]}… 推送失败，基线未推进，下轮补推",
+                        "error",
+                    )
+                if fail_rounds >= PUSH_MAX_FAIL_ROUNDS:
+                    logger.warning(
+                        f"[Monitor] {username} → {sess_umo[:20]}…: "
+                        f"{str(t.id)[:15]}.. failed {fail_rounds} rounds, skipping"
+                    )
+                    self._log_push(
+                        f"@{username} 推文 {str(t.id)[:12]}… 连续 "
+                        f"{fail_rounds} 轮推送失败，已强制跳过",
+                        "error",
+                    )
+                    sess_info["last_tweet_id"] = t.id
+                    sess_info["last_checked_at"] = datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                    self._push_fail_counts.pop(fkey, None)
+                else:
+                    # 该会话卡在这一条: 从它的待推队列里移除本条之后的全部内容,
+                    # 保证下轮仍从这一条开始补推(与原有"失败即 break"语义一致)
+                    queues[sess_umo] = [
+                        x for x in queues[sess_umo] if x.id == t.id
+                    ]
+            # 每条推文之间稍作停顿, 避免连续轰炸平台
+            await asyncio.sleep(2)
+        return pushed_any
 
     async def _get_provider_id(self) -> str:
         pid = self.config.get("text_translate_provider", "")
@@ -2443,7 +3433,8 @@ class DenpaPushPlugin(Star):
             self._token_stats["completion"] += completion_t
             self._token_stats["total"] += total_t
             self._token_stats["calls"] += 1
-            self._save_token_stats()
+            # 去抖落盘: 高频翻译会把每次调用都写一遍磁盘
+            self._schedule_save("token_stats", self._write_token_payload, lambda: dict(self._token_stats), delay=3.0)
         except Exception as e:
             logger.warning(f"[DenpaPush] token usage parse failed: {e}, usage={usage!r}")
 
@@ -2598,24 +3589,39 @@ class DenpaPushPlugin(Star):
                 return " | ".join(translations)
         return ""
 
-    async def _ocr_image(self, img_url: str) -> str:
-        try:
+    def _get_ocr_reader(self):
+        """惰性创建并复用 easyocr Reader 单例。
+
+        原先每次 OCR 都 new 一个 Reader(["ch_sim","en"]) —— 会重复加载数百 MB
+        模型, 且加载与推理都是同步 CPU 操作, 直接跑在事件循环上会把 AstrBot
+        整条链路卡住(同步调用也无法被 wait_for 取消)。
+        """
+        reader = getattr(self, "_ocr_reader", None)
+        if reader is None:
             from easyocr import Reader
 
             reader = Reader(["ch_sim", "en"], gpu=False)
-            async with self._get_http_semaphore():
-                r = await self._get_http_client().get(img_url, timeout=30)
-                if r.status_code == 200:
-                    import tempfile
+            self._ocr_reader = reader
+        return reader
 
-                    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                    tmp.write(r.content)
-                    tmp.close()
-                    results = reader.readtext(tmp.name)
-                    os.unlink(tmp.name)
-                    return " ".join(txt for _, txt, _ in results)
+    async def _ocr_image(self, img_url: str) -> str:
+        """下载图片并做 OCR。下载走共享连接池与大小上限, 识别在线程池执行。"""
+        tmp_path = None
+        try:
+            path = await self._download_file(img_url, suffix=".jpg")
+            if not path:
+                return ""
+            tmp_path = path
+            # 注意: reader 本身也必须在线程池里构造 —— self._get_ocr_reader() 作为
+            # 实参会在调用 to_thread 之前、于事件循环线程上求值, 那样首次 OCR 仍会
+            # 同步加载数百 MB 模型把事件循环卡住。这里分两步, 构造与推理都在 worker。
+            reader = await asyncio.to_thread(self._get_ocr_reader)
+            results = await asyncio.to_thread(reader.readtext, tmp_path)
+            return " ".join(txt for _, txt, _ in results)
         except ImportError:
-            pass
+            return ""
         except Exception as e:
             logger.warning(f"OCR failed: {e}")
-        return ""
+            return ""
+        finally:
+            _remove_temp(tmp_path)
