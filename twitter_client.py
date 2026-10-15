@@ -349,7 +349,7 @@ class TwitterClient:
             return {}
 
     async def get_full_article_text(self, tweet_id: str) -> str:
-        """Fetch full article text body via TweetResultByRestId withArticlePlainText=True."""
+        """仅返回真正的 Article 正文；普通推文和 NoteTweet 不作为文章返回。"""
         result = await self._fetch_tweet_result(tweet_id)
         if not result:
             return ""
@@ -358,6 +358,8 @@ class TwitterClient:
         art_result = (
             result.get("article", {}).get("article_results", {}).get("result", {})
         )
+        if not art_result:
+            return ""
         content_state = art_result.get("content_state", {})
         blocks = content_state.get("blocks", [])
         if blocks:
@@ -427,19 +429,11 @@ class TwitterClient:
             if html_parts:
                 return "\n\n".join(html_parts)
 
-        note = (
-            result.get("note_tweet", {})
-            .get("note_tweet_results", {})
-            .get("result", {})
-        )
-        if note:
-            text = note.get("text", "")
-            if text:
-                return text
-        legacy = result.get("legacy", {})
-        if legacy.get("full_text"):
-            return legacy["full_text"]
-        return legacy.get("text", legacy.get("full_text", ""))
+        # withArticlePlainText 可在没有 rich-content blocks 时提供文章纯文本。
+        # 不回退到 note_tweet / legacy：调用方会将非空结果标记为 Article，
+        # 导致普通推文误跳过 X 翻译；NoteTweet 全文已由 extract_tweet_data 提取。
+        text = art_result.get("plain_text") or art_result.get("full_text") or ""
+        return text if isinstance(text, str) else ""
 
     async def close(self):
         """关闭共享 GraphQL 连接池与所有已替换掉的旧连接池。

@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import unittest
 from urllib.parse import unquote
+from unittest.mock import AsyncMock
 
 import httpx
 
@@ -17,7 +18,7 @@ def load_client_methods():
     path = Path(__file__).resolve().parents[1] / "twitter_client.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     client = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TwitterClient")
-    methods = {"_translation_language", "_translation_response_text", "translate_tweet", "_call", "_get_semaphore"}
+    methods = {"_translation_language", "_translation_response_text", "translate_tweet", "_call", "_get_semaphore", "get_full_article_text"}
     client.body = [n for n in client.body if getattr(n, "name", None) in methods]
     namespace = {
         "asyncio": asyncio, "html": html, "json": json, "re": re,
@@ -128,6 +129,35 @@ class XTranslationClientTests(unittest.IsolatedAsyncioTestCase):
             client.translate_tweet(str(i), "中文") for i in range(6)
         ]), ["译文"] * 6)
         self.assertEqual(peak, 2)
+
+
+    async def test_regular_and_note_tweets_are_not_reported_as_articles(self):
+        for result in (
+            {"legacy": {"full_text": "Regular tweet"}},
+            {"legacy": {"text": "Regular tweet"}},
+            {"legacy": {"full_text": "Preview"}, "note_tweet": {
+                "note_tweet_results": {"result": {"text": "Full NoteTweet text"}},
+            }},
+            {},
+        ):
+            with self.subTest(result=result):
+                client = NativeClient()
+                client._fetch_tweet_result = AsyncMock(return_value=result)
+                self.assertEqual(await client.get_full_article_text("123"), "")
+
+    async def test_real_article_blocks_and_plain_text_are_preserved(self):
+        for article, expected in (
+            ({"content_state": {"blocks": [{"type": "unstyled", "text": "Article body"}]}}, "<p>Article body</p>"),
+            ({"plain_text": "Full article text"}, "Full article text"),
+            ({}, ""),
+        ):
+            with self.subTest(article=article):
+                client = NativeClient()
+                client._fetch_tweet_result = AsyncMock(return_value={
+                    "article": {"article_results": {"result": article}},
+                    "legacy": {"full_text": "Article summary link"},
+                })
+                self.assertEqual(await client.get_full_article_text("123"), expected)
 
 
 if __name__ == "__main__":

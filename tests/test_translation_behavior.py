@@ -437,6 +437,27 @@ class TranslationBehaviorTests(unittest.IsolatedAsyncioTestCase):
         info["text_translation"]["source"] = "changed"
         self.assertEqual(plugin._push_history[0]["text_translation"]["source"], "x")
 
+    async def test_full_build_keeps_regular_tweet_on_x_translation_path(self):
+        from test_x_translation_client import NativeClient
+
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        native = NativeClient()
+        native._fetch_tweet_result = AsyncMock(return_value={"legacy": {"full_text": "Hello"}})
+        plugin.twitter.get_full_article_text = native.get_full_article_text
+        plugin._extract_seed_color = AsyncMock(return_value=None)
+        plugin._build_palette_async = AsyncMock(return_value=({}, False))
+        plugin._render_card = AsyncMock(return_value="card.png")
+        data = {
+            "id": "123", "text": "Hello", "user": {
+                "id": "1", "name": "Name", "screen_name": "user", "avatar_url": "",
+            },
+        }
+        info = await plugin._build_card_data(data)
+        plugin.twitter.translate_tweet.assert_awaited_once_with("123", "中文")
+        plugin._llm_generate_with_fallback.assert_not_awaited()
+        self.assertFalse(data.get("article"))
+        self.assertEqual(info["text_translation"]["source"], "x")
+
 
 if __name__ == "__main__":
     unittest.main()
