@@ -3369,19 +3369,21 @@ class DenpaPushPlugin(Star):
 
         - text:  主模型 = text_translate_provider(留空时用当前会话默认模型);
                  回退列表 = text_translate_fallback_providers
-        - image: 主模型 = image_translate_provider → 文字主模型 → 会话默认模型;
+        - image: 主模型 = image_translate_provider;
                  回退列表 = image_translate_fallback_providers,
-                 留空时沿用文字翻译的回退列表
+                 已配置图片主模型时, 留空沿用文字翻译的回退列表;
+                 图片主模型和图片回退列表均为空时关闭图片翻译
         """
         if kind == "image":
             primary = self._normalize_provider_id(
                 self.config.get("image_translate_provider", "")
             )
-            if not primary:
-                primary = await self._get_provider_id()
             fallbacks = self._collect_fallback_providers(
                 "image_translate_fallback_providers"
             )
+            # 图片翻译必须显式配置, 文字/会话模型不能隐式开启图片翻译。
+            if not primary and not fallbacks:
+                return []
             if not fallbacks:
                 fallbacks = self._collect_fallback_providers(
                     "text_translate_fallback_providers"
@@ -3532,7 +3534,7 @@ class DenpaPushPlugin(Star):
         provider_chain = await self._provider_chain("image")
 
         if not provider_chain:
-            return "(未配置翻译提供商)"
+            return ""
 
         img_urls = [
             img.get("media_url", "") for img in images[:4] if img.get("media_url", "")

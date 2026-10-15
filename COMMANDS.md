@@ -180,8 +180,8 @@
 |---|---|---|
 | `text_translate_provider` | 文字翻译使用的 AI 提供商 | 无 |
 | `text_translate_fallback_providers` | 文字翻译回退模型列表（按顺序尝试） | 空 |
-| `image_translate_provider` | 图片翻译使用的 AI 提供商 | 无 |
-| `image_translate_fallback_providers` | 图片翻译回退模型列表（留空沿用文字回退列表） | 空 |
+| `image_translate_provider` | 图片翻译使用的 AI 提供商；此项和图片回退列表均留空时关闭图片翻译和 OCR | 无 |
+| `image_translate_fallback_providers` | 图片翻译回退模型列表；单独配置也会开启图片翻译，有图片主模型时留空沿用文字回退列表 | 空 |
 | `image_translate_mode` | 图片翻译模式 | `multimodal` |
 | `translation_language` | 翻译目标语言 | `中文` |
 

@@ -264,7 +264,7 @@
                 </div>
                 <div class="form-row">
                   <label class="form-label">图片翻译提供商 ID</label>
-                  <input class="input" id="cfg-image_translate_provider" type="text" placeholder="需多模态能力" spellcheck="false" />
+                  <input class="input" id="cfg-image_translate_provider" type="text" placeholder="此项和图片回退列表均留空时关闭图片翻译" spellcheck="false" />
                 </div>
                 <div class="form-row">
                   <label class="form-label">图片翻译模式</label>
@@ -305,7 +305,7 @@
                 </div>
               </div>
               <div class="form-row mt-s">
-                <label class="form-label">图片翻译回退模型 <span class="text-mono">留空沿用文字回退列表</span></label>
+                <label class="form-label">图片翻译回退模型 <span class="text-mono">配置后开启图片翻译；有图片主模型时留空沿用文字回退列表</span></label>
                 <div class="tag-editor" id="cfg-image_translate_fallback_providers-editor">
                   <div class="tag-list" data-tags></div>
                   <input class="input tag-input" type="text" placeholder="输入提供商 ID 后回车添加，可逗号分隔" spellcheck="false" data-tag-input />

@@ -34,7 +34,7 @@
     "description": "图片翻译使用的 AI 提供商",
     "_special": "select_provider",
     "type": "string",
-    "hint": "选择用于图片 OCR/翻译的 AI 模型（需要多模态能力）"
+    "hint": "选择用于图片 OCR/翻译的 AI 模型（多模态模式需支持图片输入）；此项和图片回退列表均留空时关闭图片翻译"
   },
   "image_translate_fallback_providers": {
     "description": "图片翻译回退模型列表",
@@ -43,7 +43,7 @@
       "type": "string"
     },
     "_special": "select_providers",
-    "hint": "图片翻译失败时按顺序回退；留空则沿用「文字翻译回退模型列表」。多模态模式请选择支持图片输入的模型"
+    "hint": "图片翻译失败时按顺序回退；已配置图片主模型时，留空沿用文字回退列表。仅配置此列表也会开启图片翻译。多模态模式请选择支持图片输入的模型"
   },
   "image_translate_mode": {
     "description": "图片翻译模式",
