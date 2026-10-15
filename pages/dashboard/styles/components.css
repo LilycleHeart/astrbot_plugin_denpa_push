@@ -876,6 +876,12 @@ input[type="color"].input::-moz-color-swatch {
   white-space: pre-wrap; overflow-wrap: break-word;
   border-left: 2px solid var(--md-primary, #5700d2); padding-left: 8px; margin-top: 2px;
 }
+.tc-translation-source {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant, #49454f);
+  overflow-wrap: anywhere;
+}
 
 .tc-divider { height: 1px; background: rgba(var(--md-on-surface-variant-rgb, 73,69,79), 0.12); margin: 1px 0; }
 

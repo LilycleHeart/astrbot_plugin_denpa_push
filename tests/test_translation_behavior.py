@@ -2,6 +2,8 @@
 
 import ast
 import asyncio
+from collections import deque
+from datetime import datetime, timezone
 import logging
 from pathlib import Path
 import re
@@ -25,12 +27,17 @@ def load_translation_methods():
         "_translate_text", "_translate_images", "_llm_timeout",
         "_translate_text_with_x",
         "_llm_generate_with_fallback", "_api_dashboard_config",
+        "_build_card_data", "_record_push_history", "_as_int",
     }
     plugin.bases = []
     plugin.keywords = []
     plugin.decorator_list = []
     plugin.body = [node for node in plugin.body if getattr(node, "name", None) in methods]
-    namespace = {"asyncio": asyncio, "re": re, "logger": logging.getLogger(__name__)}
+    namespace = {
+        "asyncio": asyncio, "re": re, "logger": logging.getLogger(__name__),
+        "__file__": str(path), "datetime": datetime, "timezone": timezone,
+        "TwitterClient": SimpleNamespace(extract_tweet_media=lambda data: ([], [], [])),
+    }
     exec(compile(ast.Module(body=[plugin], type_ignores=[]), str(path), "exec"), namespace)
     return namespace["DenpaPushPlugin"]
 
@@ -331,6 +338,104 @@ class TranslationBehaviorTests(unittest.IsolatedAsyncioTestCase):
         })
         await plugin._translate_text({"id": "123", "text": "Hello"})
         self.assertEqual(plugin._llm_generate_with_fallback.await_args.kwargs["provider_ids"], ["text-model"])
+
+
+    def use_real_model_fallback(self, plugin, generate):
+        del plugin._llm_generate_with_fallback
+        plugin._llm_generate = generate
+        plugin._track_token_usage = Mock()
+
+    async def test_metadata_records_x_success(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        meta = {}
+        await plugin._translate_text({"id": "123", "text": "Hello"}, meta)
+        self.assertEqual(meta, {"source": "x", "providers": []})
+
+    async def test_metadata_records_only_successful_model(self):
+        plugin = self.make_plugin({
+            "text_translate_source": "x_first", "x_translate_fallback_providers": ["failed", "success"],
+        })
+        plugin.twitter.translate_tweet.side_effect = RuntimeError("failed")
+        self.use_real_model_fallback(plugin, AsyncMock(side_effect=[
+            RuntimeError("failed"), SimpleNamespace(completion_text="译文"),
+        ]))
+        meta = {}
+        await plugin._translate_text({"id": "123", "text": "Hello"}, meta)
+        self.assertEqual(meta, {"source": "llm", "providers": ["success"]})
+
+    async def test_metadata_original_and_empty_text_are_not_marked_ai(self):
+        plugin = self.make_plugin({"text_translate_provider": "failed"})
+        self.use_real_model_fallback(plugin, AsyncMock(side_effect=RuntimeError("failed")))
+        meta = {"source": "x", "providers": ["stale"]}
+        self.assertEqual(await plugin._translate_text({"text": "Hello"}, meta), "Hello")
+        self.assertEqual(meta, {"source": "original", "providers": []})
+        await plugin._translate_text({"text": "https://example.com"}, meta)
+        self.assertEqual(meta, {"source": "none", "providers": []})
+
+    async def test_metadata_partial_translation_and_multiple_models(self):
+        for partial in (True, False):
+            with self.subTest(partial=partial):
+                plugin = self.make_plugin({
+                    "text_translate_provider": "one", "text_translate_fallback_providers": ["two"],
+                })
+
+                async def generate(provider_id, prompt, **kwargs):
+                    if "AAAA" in prompt:
+                        return SimpleNamespace(completion_text="第一段")
+                    if partial or provider_id == "one":
+                        return None
+                    return SimpleNamespace(completion_text="第二段")
+
+                self.use_real_model_fallback(plugin, AsyncMock(side_effect=generate))
+                meta = {}
+                translated = await plugin._translate_text({"text": "A" * 9999 + "\n\nBBBB"}, meta)
+                self.assertEqual(meta["source"], "mixed" if partial else "llm")
+                self.assertEqual(meta["providers"], ["one"] if partial else ["one", "two"])
+                self.assertIn("BBBB" if partial else "第二段", translated)
+
+    async def test_metadata_is_isolated_between_concurrent_tweets(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first", "text_translate_provider": "model"})
+
+        async def native(tweet_id, language):
+            await asyncio.sleep(0.01)
+            if tweet_id == "123":
+                return "X 译文"
+            raise RuntimeError("failed")
+
+        plugin.twitter.translate_tweet.side_effect = native
+        self.use_real_model_fallback(plugin, AsyncMock(return_value=SimpleNamespace(completion_text="AI 译文")))
+        x_meta, ai_meta = {}, {}
+        await asyncio.gather(
+            plugin._translate_text({"id": "123", "text": "First"}, x_meta),
+            plugin._translate_text({"id": "456", "text": "Second"}, ai_meta),
+        )
+        self.assertEqual(x_meta, {"source": "x", "providers": []})
+        self.assertEqual(ai_meta, {"source": "llm", "providers": ["model"]})
+
+    async def test_source_reaches_history_but_not_sent_card_render_data(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        plugin.twitter.get_full_article_text = AsyncMock(return_value="")
+        plugin._extract_seed_color = AsyncMock(return_value=None)
+        plugin._build_palette_async = AsyncMock(return_value=({}, False))
+        plugin._render_card = AsyncMock(return_value="card.png")
+        info = await plugin._build_card_data({
+            "id": "123", "text": "Hello", "user": {
+                "id": "1", "name": "Name", "screen_name": "user", "avatar_url": "",
+            },
+        })
+        self.assertEqual(info["text_translation"], {"source": "x", "providers": []})
+        rendered = plugin._render_card.await_args.args[1]
+        self.assertNotIn("text_translation", rendered)
+        self.assertEqual(rendered["translated_text"], "X 译文")
+        plugin._push_history = deque()
+        plugin._schedule_save = Mock()
+        plugin._write_history_payload = Mock()
+        plugin._history_payload = Mock()
+        plugin._prune_push_history = Mock()
+        plugin._record_push_history(info, "session")
+        self.assertEqual(plugin._push_history[0]["text_translation"], {"source": "x", "providers": []})
+        info["text_translation"]["source"] = "changed"
+        self.assertEqual(plugin._push_history[0]["text_translation"]["source"], "x")
 
 
 if __name__ == "__main__":

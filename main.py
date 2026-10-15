@@ -653,7 +653,7 @@ class DenpaPushPlugin(Star):
             return await coro
 
     async def _llm_generate_with_fallback(
-        self, provider_ids, prompt, image_urls=None, timeout=None
+        self, provider_ids, prompt, image_urls=None, timeout=None, used_providers=None
     ):
         """按顺序尝试 provider 链, 单次调用内完成回退(不做跨请求记忆)。
 
@@ -691,6 +691,8 @@ class DenpaPushPlugin(Star):
                 self._track_token_usage(resp)
             text = getattr(resp, "completion_text", None)
             if text and text.strip():
+                if used_providers is not None and pid not in used_providers:
+                    used_providers.append(pid)
                 if idx > 0:
                     logger.info(
                         f"[DenpaPush] 回退模型 `{pid}` 返回成功(主模型: `{chain[0]}`)"
@@ -1084,6 +1086,7 @@ class DenpaPushPlugin(Star):
             mu = m.get("media_url", "")
             if mu:
                 hist_thumbs.append(_twitter_media_url(mu, "medium"))
+        translation = info.get("text_translation") or {}
         self._push_history.appendleft({
             "time": datetime.now(timezone.utc).isoformat(),
             "source": source,
@@ -1094,6 +1097,10 @@ class DenpaPushPlugin(Star):
             "avatar_url": info.get("avatar_url", ""),
             "text": (info.get("original_text") or "")[:300],
             "translated_text": (info.get("translated_text") or "")[:300],
+            "text_translation": {
+                "source": translation.get("source", "unknown"),
+                "providers": list(translation.get("providers", [])),
+            },
             "tweet_url": info.get("tweet_url", ""),
             "seed_color": info.get("seed_color", ""),
             "palette": info.get("palette", []),
@@ -2683,11 +2690,13 @@ class DenpaPushPlugin(Star):
                 logger.warning(f"Quoted article fetch failed: {e}")
 
         translated_text = data.get("text", "")
+        text_translation = {"source": "original", "providers": []}
         try:
-            translated_text = await self._translate_text(data)
+            translated_text = await self._translate_text(data, translation_meta=text_translation)
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
             translated_text = data.get("text", "(翻译失败)")
+            text_translation.update(source="original", providers=[])
 
         # 提取引用推文数据用于卡片
         quoted = data.get("quoted_tweet", {})
@@ -2911,6 +2920,7 @@ class DenpaPushPlugin(Star):
             "card_img_urls": card_img_urls,
             "card_img_url": card_img_urls[0] if card_img_urls else "",
             "translated_text": translated_text,
+            "text_translation": text_translation,
             "images": images,
             "gifs": gifs,
             "videos": videos,
@@ -3477,9 +3487,12 @@ class DenpaPushPlugin(Star):
             parts.append(prefix + translated.strip())
         return "\n\n".join(parts)
 
-    async def _translate_text(self, data: dict) -> str:
+    async def _translate_text(self, data: dict, translation_meta: dict = None) -> str:
         import re as _re
 
+        if translation_meta is not None:
+            translation_meta.clear()
+            translation_meta.update(source="original", providers=[])
         text = data.get("text", "")
         article = data.get("article")
         if article:
@@ -3508,11 +3521,15 @@ class DenpaPushPlugin(Star):
             text = f"{text}\n\n[引用 @{quoted_user.get('screen_name', '')} ({q_name})]:\n{quoted_text}"
 
         if not text or not text.strip():
+            if translation_meta is not None:
+                translation_meta["source"] = "none"
             return "(无文字内容)"
 
         # 过滤链接
         text = _re.sub(r"https?://\S+", "", text).strip()
         if not text:
+            if translation_meta is not None:
+                translation_meta["source"] = "none"
             return "(无文字内容)"
 
         target_lang = self.config.get("translation_language", "中文")
@@ -3522,6 +3539,8 @@ class DenpaPushPlugin(Star):
                     self._translate_text_with_x(data, target_lang), timeout=15.0
                 )
                 if translated:
+                    if translation_meta is not None:
+                        translation_meta["source"] = "x"
                     return translated
             except Exception as e:
                 # 不记录响应正文或凭据；失败后保留原有模型回退和原文兜底。
@@ -3554,25 +3573,35 @@ class DenpaPushPlugin(Star):
             default_prompt = f"请将以下内容翻译成{{lang}}，只返回翻译结果:\n\n{{prefix}}{{text}}"
             prompt_tpl = self.config.get("text_translate_prompt", "") or default_prompt
             prompt = prompt_tpl.replace("{lang}", target_lang).replace("{prefix}", prefix).replace("{text}", chunk)
+            used_providers = []
             try:
                 llm_resp = await self._llm_generate_with_fallback(
                     provider_ids=provider_chain,
                     prompt=prompt,
                     timeout=self._llm_timeout(),
+                    used_providers=used_providers,
                 )
-                if llm_resp and llm_resp.completion_text:
-                    return llm_resp.completion_text.strip()
+                if llm_resp and llm_resp.completion_text and llm_resp.completion_text.strip():
+                    return llm_resp.completion_text.strip(), used_providers, True
                 else:
-                    return chunk
+                    return chunk, [], False
             except Exception as e:
                 logger.warning(f"LLM translate chunk {i} failed: {e}")
-                return chunk
+                return chunk, [], False
 
-        translated_parts = list(
-            await asyncio.gather(
-                *[_do_chunk(i, chunk) for i, chunk in enumerate(chunks)]
-            )
+        results = await asyncio.gather(
+            *[_do_chunk(i, chunk) for i, chunk in enumerate(chunks)]
         )
+        translated_parts = [result[0] for result in results]
+        if translation_meta is not None:
+            translated_count = sum(result[2] for result in results)
+            translation_meta["source"] = (
+                "llm" if translated_count == len(results)
+                else "mixed" if translated_count else "original"
+            )
+            translation_meta["providers"] = list(dict.fromkeys(
+                pid for _, providers, _ in results for pid in providers
+            ))
 
         return "\n\n".join(translated_parts) if translated_parts else text
 

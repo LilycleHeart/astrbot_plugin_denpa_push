@@ -37,6 +37,7 @@
 - **渲染调试文件默认不再落盘**: `_dump_render_debug` 原先每次渲染都写 HTML + JSON 到 `data/config/debug_render`，改为由 `debug_render_dump`（默认关闭）控制
 
 ### Features
+- **后台卡片显示翻译来源**: 推送历史记录正文实际使用的 X 翻译或 AI 模型 ID，分块部分失败时标明保留原文；旧记录显示来源未记录。来源仅在插件后台展示，发送的卡片不添加标记。
 - **X 自带翻译** (`text_translate_source`): 可选择优先使用 X 的 Grok 翻译，复用登录 Cookie 和代理；正文与引用推文按 ID 翻译，15 秒超时或接口失败后按 `x_translate_fallback_providers` 自选列表依次尝试 AI 模型，留空沿用文字翻译模型及备用列表。Article 长文使用 AI，图片翻译保持独立控制。默认仍为 `llm`。
 - **回退模型列表** (`text_translate_fallback_providers` / `image_translate_fallback_providers`): 主翻译模型请求失败、超时或返回空结果时，按配置顺序自动切换到备用模型；图片回退列表留空则沿用文字回退列表；token 统计覆盖失败尝试；dashboard 配置页提供 tag 式编辑器（回车/逗号添加、点击 × 移除、Backspace 删除末项），AstrBot 插件配置页使用多选 provider 列表
 - **静默处理模式** (`silent_mode` 配置项): 收到推文链接后仅回复一次确认请求，直接发送解析结果（卡片/图片/视频），不再让 LLM 输出额外对话文本

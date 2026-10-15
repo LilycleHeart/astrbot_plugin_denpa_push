@@ -1642,6 +1642,20 @@ function _deriveCardPalette(seed, isDark) {
   }
 }
 
+function textTranslationSourceLabel(item) {
+  const meta = item.text_translation || {};
+  const providers = Array.isArray(meta.providers) ? meta.providers.filter(p => typeof p === "string" && p) : [];
+  const models = providers.length ? ` · ${providers.join(" / ")}` : "";
+  switch (meta.source) {
+    case "x": return "正文：X 自带翻译";
+    case "llm": return `正文：AI 翻译${models}`;
+    case "mixed": return `正文：部分 AI 翻译，部分保留原文${models}`;
+    case "original": return "正文：未翻译，保留原文";
+    case "none": return "正文：无可翻译文字";
+    default: return "正文翻译来源未记录";
+  }
+}
+
 function buildHistoryCard(item) {
   const rawPal = item.palette || {};
   const seed = item.seed_color || argbToHex(rawPal.primary) || "#1d9bf0";
@@ -1733,6 +1747,7 @@ function buildHistoryCard(item) {
           </div>
 
           <div class="tc-trans-text">${escapeHtml(item.translated_text || "")}</div>
+          <div class="tc-translation-source">${escapeHtml(textTranslationSourceLabel(item))}</div>
 
           ${hasMedia ? `
           <div class="tc-divider"></div>
