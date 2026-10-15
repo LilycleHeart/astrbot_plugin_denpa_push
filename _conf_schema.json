@@ -15,6 +15,20 @@
     "default": 5,
     "hint": "每隔多少分钟检查一次新推文"
   },
+  "text_translate_source": {
+    "description": "文字翻译来源",
+    "type": "string",
+    "options": ["llm", "x_first"],
+    "default": "llm",
+    "hint": "llm=使用配置的 AI 模型；x_first=优先 X 自带翻译，失败/超时回退 AI 模型。需有效 auth_token 和 ct0；Article 长文仍使用 AI 模型"
+  },
+  "x_translate_fallback_providers": {
+    "description": "X 翻译回退模型列表",
+    "type": "list",
+    "items": {"type": "string"},
+    "_special": "select_providers",
+    "hint": "x_first 模式下，X 翻译失败/超时或 Article 长文使用这些模型，按列表顺序尝试；留空沿用文字翻译主模型及回退列表"
+  },
   "text_translate_provider": {
     "description": "文字翻译使用的 AI 提供商",
     "_special": "select_provider",

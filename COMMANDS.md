@@ -179,6 +179,8 @@
 | 配置项 | 说明 | 默认值 |
 |---|---|---|
 | `text_translate_provider` | 文字翻译使用的 AI 提供商 | 无 |
+| `text_translate_source` | `x_first` 优先 X 自带翻译，失败/超时回退 AI；`llm` 使用 AI | `llm` |
+| `x_translate_fallback_providers` | X 翻译专用回退模型，按顺序尝试；留空沿用文字翻译模型及备用列表 | 空 |
 | `text_translate_fallback_providers` | 文字翻译回退模型列表（按顺序尝试） | 空 |
 | `image_translate_provider` | 图片翻译使用的 AI 提供商；此项和图片回退列表均留空时关闭图片翻译和 OCR | 无 |
 | `image_translate_fallback_providers` | 图片翻译回退模型列表；单独配置也会开启图片翻译，有图片主模型时留空沿用文字回退列表 | 空 |
@@ -186,6 +188,8 @@
 | `translation_language` | 翻译目标语言 | `中文` |
 
 ### Prompt 配置
+
+选择 `x_first` 需配置有效的 `twitter_auth_token` 和 `twitter_ct0`。普通推文和引用推文按 ID 翻译；Article 长文继续使用 AI 模型。X 内部接口不可用时自动回退 AI，全部失败时保留原文。自定义 Prompt 仅用于 AI 翻译，图片翻译仍由图片模型配置独立控制。
 
 | 配置项 | 说明 | 默认值 |
 |---|---|---|

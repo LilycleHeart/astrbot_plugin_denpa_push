@@ -259,6 +259,13 @@
                   <input class="input" id="cfg-proxy" type="text" placeholder="如 http://127.0.0.1:7890，留空直连" spellcheck="false" />
                 </div>
                 <div class="form-row">
+                  <label class="form-label">文字翻译来源</label>
+                  <select class="select" id="cfg-text_translate_source">
+                    <option value="llm">使用 AI 模型</option>
+                    <option value="x_first">优先 X 自带翻译，失败回退 AI 模型</option>
+                  </select>
+                </div>
+                <div class="form-row">
                   <label class="form-label">文字翻译提供商 ID</label>
                   <input class="input" id="cfg-text_translate_provider" type="text" placeholder="AstrBot AI 提供商 ID" spellcheck="false" />
                 </div>
@@ -298,6 +305,13 @@
               </div>
 
               <div class="form-row mt-m">
+                <label class="form-label">X 翻译回退模型 <span class="text-mono">按顺序尝试；留空沿用文字翻译模型及备用列表</span></label>
+                <div class="tag-editor" id="cfg-x_translate_fallback_providers-editor">
+                  <div class="tag-list" data-tags></div>
+                  <input class="input tag-input" type="text" placeholder="输入提供商 ID 后回车添加，可逗号分隔" spellcheck="false" data-tag-input />
+                </div>
+              </div>
+              <div class="form-row mt-s">
                 <label class="form-label">文字翻译回退模型 <span class="text-mono">主模型失败时按顺序尝试</span></label>
                 <div class="tag-editor" id="cfg-text_translate_fallback_providers-editor">
                   <div class="tag-list" data-tags></div>
@@ -526,6 +540,6 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <script type="module" src="./scripts/app.js?v=20260805a"></script>
+    <script type="module" src="./scripts/app.js?v=20261015a"></script>
   </body>
 </html>

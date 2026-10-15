@@ -1356,6 +1356,8 @@ class DenpaPushPlugin(Star):
         SCHEMA_KEYS = [
             "twitter_auth_token", "twitter_ct0", "poll_interval",
             "text_translate_provider", "image_translate_provider",
+            "text_translate_source",
+            "x_translate_fallback_providers",
             "text_translate_fallback_providers", "image_translate_fallback_providers",
             "image_translate_mode", "translation_language",
             "text_translate_prompt", "image_translate_prompt",
@@ -1368,6 +1370,7 @@ class DenpaPushPlugin(Star):
             "send_image_max_total_mb", "gif_convert_timeout",
         ]
         FALLBACK_KEYS = (
+            "x_translate_fallback_providers",
             "text_translate_fallback_providers",
             "image_translate_fallback_providers",
         )
@@ -1381,6 +1384,8 @@ class DenpaPushPlugin(Star):
                 data["history_retention_days"] = 30
             if data.get("history_auto_clean") in ("", None):
                 data["history_auto_clean"] = True
+            if data.get("text_translate_source") in ("", None):
+                data["text_translate_source"] = "llm"
             # 脱敏: token 只显示前6位
             for key in ("twitter_auth_token", "twitter_ct0"):
                 v = data.get(key, "")
@@ -1389,6 +1394,9 @@ class DenpaPushPlugin(Star):
             return json_response(data)
         else:
             payload = await request.json()
+            if ("text_translate_source" in payload
+                    and payload["text_translate_source"] not in ("llm", "x_first")):
+                return error_response("无效的文字翻译来源", status_code=400)
             try:
                 for k in SCHEMA_KEYS:
                     if k in payload:
@@ -3440,6 +3448,35 @@ class DenpaPushPlugin(Star):
         except Exception as e:
             logger.warning(f"[DenpaPush] token usage parse failed: {e}, usage={usage!r}")
 
+    async def _translate_text_with_x(self, data: dict, target_lang: str) -> str:
+        """按推文 ID 翻译正文与引用；全文无法覆盖时交回现有 LLM 流程。"""
+        quoted = data.get("quoted_tweet") or {}
+        if data.get("article") or quoted.get("article"):
+            return ""
+        items = [(data, "")]
+        if quoted.get("text", "").strip():
+            user = quoted.get("user") or {}
+            prefix = f"[引用 @{user.get('screen_name', '')} ({user.get('name', '')})]:\n"
+            items.append((quoted, prefix))
+        # 在发请求前确认每段都有 ID，避免丢失引用内容。
+        items = [(item, prefix) for item, prefix in items
+                 if re.sub(r"https?://\S+", "", item.get("text", "")).strip()]
+        if not items or any(
+            not (item.get("translation_tweet_id") or item.get("id"))
+            or (item.get("is_retweet") and not item.get("translation_tweet_id"))
+            for item, _ in items
+        ):
+            return ""
+        parts = []
+        for item, prefix in items:
+            translated = await self.twitter.translate_tweet(
+                item.get("translation_tweet_id") or item["id"], target_lang
+            )
+            if not isinstance(translated, str) or not translated.strip():
+                return ""
+            parts.append(prefix + translated.strip())
+        return "\n\n".join(parts)
+
     async def _translate_text(self, data: dict) -> str:
         import re as _re
 
@@ -3479,7 +3516,21 @@ class DenpaPushPlugin(Star):
             return "(无文字内容)"
 
         target_lang = self.config.get("translation_language", "中文")
-        provider_chain = await self._provider_chain("text")
+        if self.config.get("text_translate_source", "llm") == "x_first":
+            try:
+                translated = await asyncio.wait_for(
+                    self._translate_text_with_x(data, target_lang), timeout=15.0
+                )
+                if translated:
+                    return translated
+            except Exception as e:
+                # 不记录响应正文或凭据；失败后保留原有模型回退和原文兜底。
+                logger.warning(f"X translation unavailable, falling back to LLM: {type(e).__name__}")
+        provider_chain = []
+        if self.config.get("text_translate_source", "llm") == "x_first":
+            provider_chain = self._collect_fallback_providers("x_translate_fallback_providers")
+        if not provider_chain:
+            provider_chain = await self._provider_chain("text")
         if not provider_chain:
             return text
 

@@ -5,9 +5,11 @@ import asyncio
 import logging
 from pathlib import Path
 import re
+import sys
+import types
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 def load_translation_methods():
     """加载真实翻译方法，避免依赖 AstrBot、Twitter 客户端和本地测试桩。"""
@@ -21,6 +23,8 @@ def load_translation_methods():
         "_normalize_provider_id", "_normalize_fallback_list",
         "_collect_fallback_providers", "_get_provider_id", "_provider_chain",
         "_translate_text", "_translate_images", "_llm_timeout",
+        "_translate_text_with_x",
+        "_llm_generate_with_fallback", "_api_dashboard_config",
     }
     plugin.bases = []
     plugin.keywords = []
@@ -46,6 +50,7 @@ class TranslationBehaviorTests(unittest.IsolatedAsyncioTestCase):
             return_value=SimpleNamespace(completion_text="译文")
         )
         plugin._ocr_image = AsyncMock(return_value="image text")
+        plugin.twitter = SimpleNamespace(translate_tweet=AsyncMock(return_value="X 译文"))
         return plugin
 
     async def test_text_only_never_translates_images_or_runs_ocr(self):
@@ -145,6 +150,187 @@ class TranslationBehaviorTests(unittest.IsolatedAsyncioTestCase):
             "session-model", "text-backup"
         ])
         plugin.context.get_current_chat_provider_id.assert_awaited_once()
+
+
+    async def test_x_success_skips_llm_and_keeps_images_disabled(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "X 译文")
+        plugin.twitter.translate_tweet.assert_awaited_once_with("123", "中文")
+        plugin._llm_generate_with_fallback.assert_not_awaited()
+        plugin.context.get_current_chat_provider_id.assert_not_awaited()
+        self.assertEqual(await plugin._translate_images([{"media_url": "image"}]), "")
+        plugin._ocr_image.assert_not_awaited()
+
+    async def test_llm_mode_does_not_request_x(self):
+        for config in ({}, {"text_translate_source": "llm"}):
+            with self.subTest(config=config):
+                plugin = self.make_plugin(config)
+                self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "译文")
+                plugin.twitter.translate_tweet.assert_not_awaited()
+
+    async def test_x_failures_and_empty_results_fall_back(self):
+        for result in ("", "   ", None, RuntimeError("HTTP 403"), asyncio.TimeoutError()):
+            with self.subTest(result=result):
+                plugin = self.make_plugin({
+                    "text_translate_source": "x_first", "text_translate_provider": "text-model",
+                    "text_translate_fallback_providers": ["backup"],
+                })
+                if isinstance(result, Exception):
+                    plugin.twitter.translate_tweet.side_effect = result
+                else:
+                    plugin.twitter.translate_tweet.return_value = result
+                self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "译文")
+                call = plugin._llm_generate_with_fallback.await_args.kwargs
+                self.assertEqual(call["provider_ids"], ["text-model", "backup"])
+
+    async def test_x_timeout_cancels_request_before_llm_fallback(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        cancelled = asyncio.Event()
+
+        async def slow_translation(*args):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        plugin.twitter.translate_tweet.side_effect = slow_translation
+        real_wait_for = asyncio.wait_for
+
+        async def fast_wait_for(awaitable, timeout):
+            self.assertEqual(timeout, 15.0)
+            return await real_wait_for(awaitable, timeout=0.01)
+
+        with patch.object(asyncio, "wait_for", fast_wait_for):
+            self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "译文")
+        self.assertTrue(cancelled.is_set())
+
+    async def test_x_translates_quote_separately(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        plugin.twitter.translate_tweet.side_effect = ["正文", "引用译文"]
+        result = await plugin._translate_text({
+            "id": "123", "text": "Hello", "quoted_tweet": {
+                "id": "456", "text": "Quote", "user": {"screen_name": "user", "name": "Name"},
+            },
+        })
+        self.assertEqual(result, "正文\n\n[引用 @user (Name)]:\n引用译文")
+        self.assertEqual([c.args[0] for c in plugin.twitter.translate_tweet.await_args_list], ["123", "456"])
+        plugin._llm_generate_with_fallback.assert_not_awaited()
+
+    async def test_unavailable_quote_falls_back_without_losing_content(self):
+        for quote_id in ("", "456"):
+            with self.subTest(quote_id=quote_id):
+                plugin = self.make_plugin({"text_translate_source": "x_first"})
+                plugin.twitter.translate_tweet.side_effect = ["正文", RuntimeError("unavailable")]
+                await plugin._translate_text({
+                    "id": "123", "text": "Hello", "quoted_tweet": {"id": quote_id, "text": "Quote"},
+                })
+                prompt = plugin._llm_generate_with_fallback.await_args.kwargs["prompt"]
+                self.assertIn("Hello", prompt)
+                self.assertIn("Quote", prompt)
+
+    async def test_articles_and_missing_ids_use_llm(self):
+        for data in (
+            {"text": "Hello"},
+            {"id": "123", "text": "Hello", "article": {"title": "Title", "full_text": "Full article"}},
+            {"id": "123", "text": "Hello", "quoted_tweet": {
+                "id": "456", "article": {"title": "Title", "full_text": "Full quote"},
+            }},
+        ):
+            with self.subTest(data=data):
+                plugin = self.make_plugin({"text_translate_source": "x_first"})
+                self.assertEqual(await plugin._translate_text(data), "译文")
+                plugin.twitter.translate_tweet.assert_not_awaited()
+
+    async def test_retweet_uses_original_id(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        await plugin._translate_text({
+            "id": "123", "translation_tweet_id": "456", "is_retweet": True, "text": "Hello",
+        })
+        plugin.twitter.translate_tweet.assert_awaited_once_with("456", "中文")
+
+    async def test_no_models_retains_original_text_after_x_failure(self):
+        plugin = self.make_plugin({"text_translate_source": "x_first"})
+        plugin.twitter.translate_tweet.side_effect = RuntimeError("unavailable")
+        plugin.monitored_sessions = set()
+        self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "Hello")
+        plugin._llm_generate_with_fallback.assert_not_awaited()
+
+    async def test_custom_x_fallback_chain_overrides_text_models(self):
+        plugin = self.make_plugin({
+            "text_translate_source": "x_first", "text_translate_provider": "text-model",
+            "x_translate_fallback_providers": ["custom-1", "custom-2", "custom-1"],
+        })
+        plugin.twitter.translate_tweet.side_effect = RuntimeError("unavailable")
+        await plugin._translate_text({"id": "123", "text": "Hello"})
+        self.assertEqual(plugin._llm_generate_with_fallback.await_args.kwargs["provider_ids"], ["custom-1", "custom-2"])
+        plugin.context.get_current_chat_provider_id.assert_not_awaited()
+
+    async def test_real_fallback_loop_tries_custom_models_in_order(self):
+        plugin = self.make_plugin({
+            "text_translate_source": "x_first",
+            "x_translate_fallback_providers": ["one", "two", "three", "four"],
+        })
+        plugin.twitter.translate_tweet.side_effect = RuntimeError("unavailable")
+        del plugin._llm_generate_with_fallback
+        plugin._track_token_usage = Mock()
+        plugin._llm_generate = AsyncMock(side_effect=[
+            RuntimeError("failed"), None, SimpleNamespace(completion_text=" "),
+            SimpleNamespace(completion_text="备用译文"),
+        ])
+        self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "备用译文")
+        self.assertEqual([c.kwargs["provider_id"] for c in plugin._llm_generate.await_args_list], [
+            "one", "two", "three", "four",
+        ])
+        self.assertEqual(plugin._track_token_usage.call_count, 2)
+
+    async def test_all_custom_models_fail_preserves_original(self):
+        plugin = self.make_plugin({
+            "text_translate_source": "x_first", "x_translate_fallback_providers": ["one", "two"],
+        })
+        plugin.twitter.translate_tweet.side_effect = RuntimeError("unavailable")
+        del plugin._llm_generate_with_fallback
+        plugin._track_token_usage = Mock()
+        plugin._llm_generate = AsyncMock(side_effect=RuntimeError("failed"))
+        self.assertEqual(await plugin._translate_text({"id": "123", "text": "Hello"}), "Hello")
+
+    async def test_dashboard_defaults_and_custom_model_list_round_trip(self):
+        class Config(dict):
+            save_config = Mock()
+
+        plugin = self.make_plugin({})
+        plugin.config = Config()
+        plugin._apply_twitter_credentials = Mock()
+        web = types.ModuleType("astrbot.api.web")
+        web.json_response = lambda data: data
+        web.error_response = lambda message, status_code: (message, status_code)
+        web.request = SimpleNamespace(method="GET")
+        with patch.dict(sys.modules, {"astrbot.api.web": web}):
+            result = await plugin._api_dashboard_config()
+            self.assertEqual(result["text_translate_source"], "llm")
+            self.assertEqual(result["x_translate_fallback_providers"], [])
+            web.request = SimpleNamespace(method="POST", json=AsyncMock(return_value={
+                "text_translate_source": "x_first", "x_translate_fallback_providers": " one ;two;one ",
+            }))
+            self.assertEqual(await plugin._api_dashboard_config(), {"saved": True})
+            plugin.config.save_config.assert_called_once()
+            web.request = SimpleNamespace(method="GET")
+            result = await plugin._api_dashboard_config()
+            self.assertEqual(result["text_translate_source"], "x_first")
+            self.assertEqual(result["x_translate_fallback_providers"], ["one", "two"])
+            before = dict(plugin.config)
+            web.request = SimpleNamespace(method="POST", json=AsyncMock(return_value={
+                "text_translate_source": "invalid", "text_translate_provider": "should-not-change",
+            }))
+            self.assertEqual((await plugin._api_dashboard_config())[1], 400)
+            self.assertEqual(dict(plugin.config), before)
+
+    async def test_custom_x_fallbacks_do_not_affect_llm_mode(self):
+        plugin = self.make_plugin({
+            "text_translate_source": "llm", "text_translate_provider": "text-model",
+            "x_translate_fallback_providers": ["custom"],
+        })
+        await plugin._translate_text({"id": "123", "text": "Hello"})
+        self.assertEqual(plugin._llm_generate_with_fallback.await_args.kwargs["provider_ids"], ["text-model"])
 
 
 if __name__ == "__main__":

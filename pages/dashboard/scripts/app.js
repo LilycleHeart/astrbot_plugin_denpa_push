@@ -2078,10 +2078,12 @@ function renderLogs(data) {
 // 回退模型列表：配置项在 _conf_schema.json 中是 list/select_providers，
 // dashboard 用 tag 编辑器读写，保存时整体提交为数组。
 const FALLBACK_PROVIDER_KEYS = [
+  "x_translate_fallback_providers",
   "text_translate_fallback_providers",
   "image_translate_fallback_providers",
 ];
 const fallbackTags = {
+  x_translate_fallback_providers: [],
   text_translate_fallback_providers: [],
   image_translate_fallback_providers: [],
 };
@@ -2182,6 +2184,7 @@ async function loadPluginConfig() {
     set("cfg-poll_interval", cfg.poll_interval || 5);
     set("cfg-proxy", cfg.proxy || "");
     set("cfg-text_translate_provider", cfg.text_translate_provider || "");
+    set("cfg-text_translate_source", cfg.text_translate_source || "llm");
     set("cfg-image_translate_provider", cfg.image_translate_provider || "");
     set("cfg-image_translate_mode", cfg.image_translate_mode || "multimodal");
     set("cfg-translation_language", cfg.translation_language || "中文");
@@ -2394,6 +2397,7 @@ async function init() {
     const keys = [
       "twitter_auth_token", "twitter_ct0", "poll_interval",
       "text_translate_provider", "image_translate_provider",
+      "text_translate_source",
       "image_translate_mode", "translation_language",
       "text_translate_prompt", "image_translate_prompt",
       "color_source", "history_retention_days", "proxy",

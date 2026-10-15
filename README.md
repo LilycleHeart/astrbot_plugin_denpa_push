@@ -126,6 +126,8 @@ pip install easyocr
 | `twitter_auth_token` | Twitter Cookie 中的 `auth_token` |
 | `twitter_ct0` | Twitter Cookie 中的 `ct0` |
 | `text_translate_provider` | 文字翻译使用的 LLM Provider |
+| `text_translate_source` | `llm`（默认，使用 AI 模型）或 `x_first`（优先 X 自带翻译，失败回退 AI 模型） |
+| `x_translate_fallback_providers` | X 翻译专用回退模型，可自选多个并按顺序尝试；留空沿用文字翻译模型及备用列表 |
 | `text_translate_fallback_providers` | 文字翻译回退模型列表（主模型失败/超时/返回空时按顺序尝试） |
 | `image_translate_provider` | 图片翻译使用的 LLM Provider；此项和图片回退列表均留空时关闭图片翻译和 OCR |
 | `image_translate_fallback_providers` | 图片翻译回退模型列表；单独配置也会开启图片翻译，已配置图片主模型时留空沿用文字回退列表 |

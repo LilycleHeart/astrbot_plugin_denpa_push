@@ -1,6 +1,9 @@
 import asyncio
+import html
 import json
+import re
 from typing import Optional
+from urllib.parse import unquote
 
 import httpx
 from twikit import Client
@@ -181,6 +184,78 @@ class TwitterClient:
     async def get_tweet_by_id(self, tweet_id: str):
         await self.ensure_ready()
         return await self._call(self.client.get_tweet_by_id(tweet_id))
+
+    @staticmethod
+    def _translation_language(language: str) -> str:
+        """把常用语言名称或语言代码转换为 X 的目标语言。未知名称交给 LLM。"""
+        value = str(language or "").strip().lower().replace("_", "-")
+        aliases = {
+            "中文": "zh-cn", "简体中文": "zh-cn", "简体": "zh-cn",
+            "chinese": "zh-cn", "zh": "zh-cn", "zh-hans": "zh-cn",
+            "繁体中文": "zh-tw", "繁體中文": "zh-tw", "繁体": "zh-tw",
+            "繁體": "zh-tw", "zh-hant": "zh-tw", "zh-hk": "zh-tw",
+            "英语": "en", "英文": "en", "english": "en",
+            "日语": "ja", "日文": "ja", "日本語": "ja", "japanese": "ja",
+            "韩语": "ko", "韩文": "ko", "한국어": "ko", "korean": "ko",
+            "法语": "fr", "french": "fr", "德语": "de", "german": "de",
+            "西班牙语": "es", "spanish": "es", "俄语": "ru", "russian": "ru",
+            "葡萄牙语": "pt", "portuguese": "pt",
+        }
+        value = aliases.get(value, value)
+        return value if re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", value) else ""
+
+    @staticmethod
+    def _translation_response_text(raw: str) -> str:
+        """读取 JSON 或逐行 JSON 译文；拒绝错误响应和不完整流。"""
+        try:
+            payloads = [json.loads(raw)]
+        except json.JSONDecodeError:
+            payloads = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        parts = []
+        for payload in payloads:
+            if not isinstance(payload, dict) or payload.get("errors") or payload.get("error"):
+                raise ValueError("X translation returned an error")
+            result = payload.get("result", payload)
+            if not isinstance(result, dict):
+                raise ValueError("Unexpected X translation result")
+            text = result.get("text") or result.get("translated_text")
+            if isinstance(text, str):
+                parts.append(text)
+        text = html.unescape("".join(parts)).strip()
+        if not text:
+            raise ValueError("X translation returned no text")
+        return text
+
+    async def translate_tweet(self, tweet_id: str, language: str) -> str:
+        """调用 X 网页端 Grok 翻译。使用现有登录态、代理、并发闸门和超时。"""
+        target = self._translation_language(language)
+        tweet_id = str(tweet_id or "").strip()
+        if not target or not re.fullmatch(r"[0-9]+", tweet_id):
+            raise ValueError("Unsupported translation language or tweet ID")
+        if not self._auth_token or not self._ct0:
+            raise ValueError("X translation requires auth_token and ct0")
+        # 内部接口可能变更或受账号权限限制，调用方负责回退到 LLM。
+        response = await self._call(
+            self._get_http().post(
+                "https://api.x.com/2/grok/translation.json",
+                headers={
+                    "Authorization": f"Bearer {unquote(_BEARER)}",
+                    "X-Twitter-Active-User": "yes",
+                    "X-Twitter-Auth-Type": "OAuth2Session",
+                    "X-Twitter-Client-Language": target,
+                    "Origin": "https://x.com",
+                    "Referer": f"https://x.com/i/status/{tweet_id}",
+                },
+                json={
+                    "content_type": "POST", "id": tweet_id,
+                    "dst_lang": "zh" if target in ("zh-cn", "zh-tw") else target,
+                },
+                timeout=15.0,
+            ),
+            timeout=15.0,
+        )
+        response.raise_for_status()
+        return self._translation_response_text(response.text)
 
     def _get_http(self) -> httpx.AsyncClient:
         """共享的 GraphQL 客户端(带代理、连接池上限与超时), 跨调用复用连接。"""
@@ -426,6 +501,7 @@ class TwitterClient:
         # Resolve retweet/repost content: use the original tweet's text and media
         retweeted = getattr(tweet, "retweeted_tweet", None)
         if retweeted is not None:
+            data["translation_tweet_id"] = getattr(retweeted, "id", "")
             rt_text = getattr(retweeted, "full_text", retweeted.text or "")
             if rt_text and len(rt_text) > len(data["text"]):
                 data["text"] = rt_text
